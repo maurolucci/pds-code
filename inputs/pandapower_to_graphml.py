@@ -73,6 +73,6 @@ if __name__ == '__main__':
                 outgraph.add_edges_from(graph.edges)
                 # mark zero injection
                 for n in outgraph:
-                    outgraph.nodes[n]['zero_injection'] = 1 * (n in load_gen)
+                    outgraph.nodes[n]['zero_injection'] = 1 * (n not in load_gen)
 
                 nx.write_graphml(outgraph, outname)
