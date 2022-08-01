@@ -21,6 +21,8 @@ find_package(range-v3 REQUIRED)
 
 add_executable(pds main.cpp include/pds.hpp include/gurobi_solve.cpp include/gurobi_solve.hpp)
 
+add_library(graphml src/graphml.cpp)
+
 target_link_libraries(pds PUBLIC OGDF)
 target_link_libraries(pds PUBLIC Boost::graph range-v3 gurobi::gurobi_cxx)
 target_link_libraries(pds PUBLIC pdslib)
