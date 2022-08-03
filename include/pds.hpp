@@ -5,13 +5,18 @@
 #ifndef PDS_PDS_HPP
 #define PDS_PDS_HPP
 
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/graphml.hpp>
 #include <boost/property_map/dynamic_property_map.hpp>
+#include <boost/graph/connected_components.hpp>
 
+#include <range/v3/all.hpp>
+
+#include <iostream>
 #include <fstream>
+#include <optional>
 
 #include "utility.hpp"
+#include "map.hpp"
+#include "graph.hpp"
 
 template<class T>
 struct PrintType;
@@ -28,58 +33,244 @@ enum class PmuState {
 };
 
 struct Bus {
-    std::string id;
+    std::string name;
+    long id;
     bool zero_injection;
 };
 
-using PowerGrid = boost::adjacency_list<boost::listS, boost::listS, boost::undirectedS, Bus>;
+using PowerGrid = pds::AdjGraph<boost::listS, boost::setS, boost::undirectedS, Bus>;//boost::adjacency_list<boost::listS, boost::setS, boost::undirectedS, Bus>;
 
-PowerGrid read_graphml(const std::string& filename, bool all_zero_injection = false) {
+PowerGrid import_graphml(const std::string& filename, bool all_zero_injection = false);
+
+template<class ActiveProperty, class ObservedProperty>
+class PdsState {
+public:
+    using Vertex = PowerGrid::vertex_descriptor;
+private:
+    pds::map<Vertex, size_t> unobserved_degree_map;
+    boost::associative_property_map<decltype(unobserved_degree_map)> unobserved_degree;
+    pds::set<Vertex> deleted;
+    ActiveProperty active;
+    ObservedProperty observed;
     PowerGrid graph;
-    boost::dynamic_properties attr(boost::ignore_other_properties);
-    std::vector<long> long_zi(num_vertices(graph));
-    //typename boost::property_map<PowerGrid, boost::vertex_index_t>::type index = get(boost::vertex_index, graph); //
-    boost::associative_property_map<std::map<PowerGrid::vertex_descriptor, long>> zero_injection;
-    attr.property("zero_injection", zero_injection);//make_vector_property_map(long_zi, graph));
-    std::ifstream graph_in(filename);
-    boost::read_graphml(graph_in, graph, attr);
-    graph_in.close();
-    for (auto it = vertices(graph).first; it != vertices(graph).second; ++it) {
-        auto v = *it;
-        graph[v].zero_injection = true;//zero_injection[v];
+public:
+    void observe(Vertex vertex) {
+        observed[vertex] = true;
+        for (auto w: graph.adjacent_vertices(vertex)) {
+            // TODO
+        }
     }
-    return graph;
+
+    bool set_active(Vertex vertex) {
+        if (!active[vertex]) {
+            active[vertex] = PmuState::Active;
+            observe(vertex);
+            for (const auto w: graph.adjacent_vertices(vertex)) {
+                observe(w);
+            }
+            return true;
+        }
+        return false;
+    }
+};
+
+namespace detail {
+template<class ZeroInjectionProperty, class ActivePropertyMap, class ObservedPropertyMap>
+class Presolver {
+public:
+    using Vertex = PowerGrid::vertex_descriptor;
+private:
+    pds::map<Vertex, size_t> unobserved_degree_map;
+    boost::associative_property_map<decltype(unobserved_degree_map)> unobserved_degree;
+    pds::set<Vertex> deleted;
+    pds::map<Vertex, Vertex> parent;
+    PowerGrid& graph;
+    ZeroInjectionProperty& zero_injection;
+    ActivePropertyMap& active;
+    ObservedPropertyMap& observed;
+
+
+    void handle_degree_one(const Vertex& vertex) {
+        assert(unobserved_degree[vertex] == 1);
+        for (const auto& w: graph.adjacent_vertices(vertex)) {
+            if (unobserved_degree[w] > 2) {
+                if (zero_injection[w]) {
+                    set_active(w);
+                } else {
+                    mark_deleted(vertex);
+                    set_inactive(vertex);
+                    zero_injection[w] = true;
+                }
+            }
+        }
+    }
+
+    Vertex recurseDeg2Path(const Vertex& start, std::vector<Vertex>& path) {
+        auto neigh = graph.adjacent_vertices(start)
+                     | ranges::views::filter([this, &path](const auto& w) { return path.back() != w; })
+                     | ranges::to<std::vector>();
+        if (neigh.size() == 1 && zero_injection[start]) { // end of a path
+            path.push_back(start);
+            return recurseDeg2Path(neigh[0], path);
+        } else if (neigh.size() == 0){
+            path.push_back(start);
+            return start;
+        } else {
+            return start;
+        }
+    }
+
+    void handle_path(const Vertex& vertex) {
+        if (unobserved_degree[vertex] <= 2) return;
+        auto deg2neigh = graph.adjacent_vertices(vertex)
+                         | ranges::views::filter([this](const auto& w) { return unobserved_degree[w] <= 2 && zero_injection[w]; })
+                         | ranges::to<std::vector>();
+        for (auto neigh: deg2neigh) {
+            std::vector<Vertex> path = {vertex};
+            auto last = recurseDeg2Path(neigh, path);
+            std::cout << "found path of length " << path.size() << std::endl;
+            if (last == vertex) {
+                set_active(vertex);
+                for (size_t i = 1; i < path.size(); ++i) {
+                    set_inactive(path[i]);
+                }
+                path.pop_back();
+            }
+            for (size_t i = 1; i < path.size() - 1; ++i) {
+                mark_deleted(path[i]);
+                set_inactive(path[i]);
+            }
+            if (path.back() != vertex && !graph.edge(vertex, path.back())) {
+                graph.template add_edge(vertex, path.back());
+                if (!observed[vertex]) add_unobserved_neighbor(path.back());
+                if (!observed[path.back()]) add_unobserved_neighbor(vertex);
+            }
+        }
+    }
+
+    inline void remove_unobserved_neighbor(const Vertex& vertex) {
+        unobserved_degree[vertex] -= 1;
+    }
+
+    inline void add_unobserved_neighbor(const Vertex& vertex) {
+        unobserved_degree[vertex] += 1;
+    }
+
+    inline void mark_deleted(const Vertex& vertex) {
+        deleted.insert(vertex);
+        observe(vertex);
+        //for (const auto& u: range_pair(adjacent_vertices(vertex, graph))) {
+        //    for (const auto& v: range_pair(adjacent_vertices(vertex, graph))) {
+        //        if (u != v && !boost::edge(u, v, graph).second) {
+        //            boost::add_edge(u, v, graph);
+        //            if (!observed[u]) {
+        //                add_unobserved_neighbor(v);
+        //            }
+        //            if (!observed[v]) {
+        //                add_unobserved_neighbor(u);
+        //            }
+        //        }
+        //    }
+        //}
+        //clear_vertex(vertex, graph);
+    }
+
+    void observe(const Vertex& vertex) {
+        if (!observed[vertex]) {
+            for (const auto &w: graph.adjacent_vertices(vertex)) {
+                remove_unobserved_neighbor(w);
+            }
+            observed[vertex] = true;
+        }
+    }
+
+    void set_inactive(const Vertex& vertex) {
+        assert(active[vertex] != PmuState::Active);
+        if (active[vertex] == PmuState::Blank) {
+            active[vertex] = PmuState::Inactive;
+        }
+    }
+
+    void set_active(const Vertex& vertex) {
+        assert(active[vertex] != PmuState::Inactive);
+        if (active[vertex] == PmuState::Blank) {
+            active[vertex] = PmuState::Active;
+            for (const auto& w: graph.adjacent_vertices(vertex)) {
+                if (!observed[vertex]) remove_unobserved_neighbor(w);
+                observe(w);
+            }
+            observed[vertex] = true;
+        }
+    }
+
+public:
+    Presolver(
+            PowerGrid& graph,
+            ZeroInjectionProperty& zero_injection,
+            ActivePropertyMap& active,
+            ObservedPropertyMap& observed
+    ) : graph(graph), zero_injection(zero_injection), active(active), observed(observed),
+        unobserved_degree_map(), unobserved_degree(unobserved_degree_map), deleted(),
+        parent(ranges::to<decltype(parent)>(
+                graph.vertices()
+                | ranges::views::transform([](auto v){return std::make_pair(v, v);})
+        ))
+    { }
+
+    void run() {
+        pds::map<Vertex, size_t> component_map;
+        pds::map<Vertex, unsigned char> color_map;
+        size_t num_components = boost::connected_components(
+                graph,
+                boost::associative_property_map(component_map),
+                boost::color_map(boost::associative_property_map(color_map)));
+        assert(num_components == 1); // for now we don't support multiple components
+        for (const auto& v: graph.vertices()) {
+            unobserved_degree[v] = ranges::distance(
+                    graph.adjacent_vertices(v) | ranges::views::filter([this](const auto& w){ return !deleted.contains(w) && !observed[w]; })
+            );
+        }
+        for (const auto& v: range_pair(vertices(graph))) {
+            if (unobserved_degree[v] == 1) {
+                //handle_degree_one(v);
+            }
+            handle_path(v);
+        }
+    }
+};
+}
+
+template<class ZeroInjectionProperty, class ActivePropertyMap, class ObservedPropertyMap>
+void presolve(PowerGrid& graph, ZeroInjectionProperty& zero_injection, ActivePropertyMap& active, ObservedPropertyMap& observed) {
+    detail::Presolver presolver(graph, zero_injection, active, observed);
+    presolver.run();
 }
 
 template<typename T> struct PrintType;
 template<class Graph, class ActivePropertyMap, class ObservedPropertyMap>
-bool dominate(const Graph& graph, const ActivePropertyMap& active, ObservedPropertyMap& observed) {
-    typename boost::property_map<Graph, boost::vertex_index_t>::type index = get(boost::vertex_index, graph);
-    std::for_each(vertices(graph).first, vertices(graph).second, [&] (const auto& v) {
-        auto x = index[v];
-
+ObservedPropertyMap dominate(const Graph& graph, const ActivePropertyMap& active, ObservedPropertyMap observed) {
+    for (auto v: graph.vertices()) {
         if (active[v] == PmuState::Active) {
             observed[v] = true;
             auto adjacent = boost::adjacent_vertices(v, graph);
             for (auto it = adjacent.first; it != adjacent.second; ++it) {
-                auto windex = index[*it];
                 observed[*it] = true;
             }
         }
-    });
-    return true;
+    }
+    return observed;
 }
 
-template<class Graph, class ObservedPropertyMap>
-std::vector<typename Graph::vertex_descriptor> propagation_targets_k(
-        Graph& graph,
-        const typename Graph::vertex_descriptor& vertex,
+template<class ObservedPropertyMap>
+std::vector<PowerGrid::vertex_descriptor> propagation_targets_k(
+        PowerGrid& graph,
+        const PowerGrid::vertex_descriptor& vertex,
         ObservedPropertyMap& observed,
         size_t max_unobserved = 1)
 {
     if (!observed[vertex]) return {};
-    std::vector<typename Graph::vertex_descriptor> targets;
-    for (const auto& w: range_pair(adjacent_vertices(vertex, graph))) {
+    std::vector<PowerGrid::vertex_descriptor> targets;
+    for (const auto& w: graph.adjacent_vertices(vertex)) {
         if (!observed[w]) {
             if (targets.size() >= max_unobserved) {
                 return {};
@@ -91,36 +282,37 @@ std::vector<typename Graph::vertex_descriptor> propagation_targets_k(
     return targets;
 }
 
-template<class Graph, class ObservedPropertyMap>
-bool propagate(const Graph& graph, ObservedPropertyMap& observed, size_t max_unobserved = 1) {
-    typename boost::property_map<Graph, boost::vertex_index_t>::type index = get(boost::vertex_index, graph);
-    boost::vector_property_map<size_t, decltype(index)> unobserved_degree(num_vertices(graph), index);
-    std::vector<typename Graph::vertex_descriptor> queue;
-    for (const auto& v: range_pair(vertices(graph))) {
-        if (!observed[v]) {
-            for (const auto& w: range_pair(adjacent_vertices(v, graph))) {
-                unobserved_degree[w] += 1;
-            }
+template<class ActivePropertyMap>
+std::vector<PowerGrid::vertex_descriptor> activeVertices(const PowerGrid& graph, const ActivePropertyMap& active) {
+    return ranges::to<std::vector>(graph.vertices() | ranges::views::filter([&active](const auto& v) { return active[v] == pds::PmuState::Active; }));
+}
+
+template<class ZeroInjectionProperty, class ObservedPropertyMap>
+bool propagate(const PowerGrid& graph, const ZeroInjectionProperty& zero_injection, ObservedPropertyMap observed, size_t max_unobserved = 1) {
+    pds::map<PowerGrid::vertex_descriptor, size_t> unobserved_degree_map;
+    auto unobserved_degree = boost::associative_property_map(unobserved_degree_map);
+    std::vector<PowerGrid::vertex_descriptor> queue;
+    for (const auto& v: graph.vertices()) {
+        for (const auto& w: graph.adjacent_vertices(v)) {
+            unobserved_degree[v] += !observed[w];
         }
-    }
-    for (const auto& v: range_pair(vertices(graph))) {
-        if (observed[v] && unobserved_degree[v] > 0 && unobserved_degree[v] <= max_unobserved) {
+        if (zero_injection[v] && observed[v] && unobserved_degree[v] > 0 && unobserved_degree[v] <= max_unobserved) {
             queue.push_back(v);
         }
     }
     while (!queue.empty()) {
         auto v = queue.back();
         queue.pop_back();
-        for (const auto& w: range_pair(adjacent_vertices(v, graph))) {
+        for (const auto& w: graph.adjacent_vertices(v)) {
             if (!observed[w]) {
                 observed[w] = true;
-                if (observed[w] && unobserved_degree[w] > 0 && unobserved_degree[w] <= max_unobserved) {
+                if (zero_injection[w] && observed[w] && unobserved_degree[w] > 0 && unobserved_degree[w] <= max_unobserved) {
                     queue.push_back(w);
                 }
-                for (const auto& u: range_pair(adjacent_vertices(w, graph))) {
+                for (const auto& u: graph.adjacent_vertices(w)) {
                     unobserved_degree[u] -= 1;
                     auto deg = unobserved_degree[u];
-                    if (observed[u] && deg > 0 && deg == max_unobserved) {
+                    if (zero_injection[u] && observed[u] && deg > 0 && deg == max_unobserved) {
                         queue.push_back(u);
                     }
                 }
@@ -130,12 +322,13 @@ bool propagate(const Graph& graph, ObservedPropertyMap& observed, size_t max_uno
     return true;
 }
 
-template<class Graph, class ObservedPropertyMap>
-bool observed(const Graph& graph, const ObservedPropertyMap& observed) {
-    return std::all_of(boost::vertices(graph).first, boost::vertices(graph).second, [&] (const auto& v) {
+template<class ObservedPropertyMap>
+bool observed(const PowerGrid& graph, const ObservedPropertyMap& observed) {
+    return ranges::all_of(graph.vertices(), [&] (const auto& v) {
         return observed[v];
     });
 }
-}
+
+} // namespace pds
 
 #endif //PDS_PDS_HPP

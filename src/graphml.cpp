@@ -14,7 +14,6 @@
 #include <boost/foreach.hpp>
 #include <boost/optional.hpp>
 #include <boost/throw_exception.hpp>
-#include <boost/graph/graphml.hpp>
 #include <boost/graph/dll_import_export.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
@@ -22,10 +21,12 @@
 #include <string>
 #include <vector>
 
-using namespace boost;
+#include "graphml/graphml.hpp"
 
 namespace
 {
+
+using namespace pds;
 
 class graphml_reader
 {
@@ -82,6 +83,15 @@ public:
             boost::property_tree::xml_parser::no_comments
                 | boost::property_tree::xml_parser::trim_whitespace);
         ptree gml = pt.get_child(path("graphml"));
+
+        m_keys["name"] = node_key;
+        m_key_type["name"] = "string";
+        m_key_name["name"] = "name";
+
+        m_keys["id"] = node_key;
+        m_key_type["id"] = "long";
+        m_key_name["id"] = "id";
+
         // Search for attributes
         BOOST_FOREACH (const ptree::value_type& child, gml)
         {
@@ -118,6 +128,7 @@ public:
             m_keys[id] = kind;
             m_key_name[id] = name;
             m_key_type[id] = type;
+
             boost::optional< std::string > default_
                 = child.second.get_optional< std::string >(path("default"));
             if (default_)
@@ -171,11 +182,11 @@ public:
                 {
                     if (is_directed)
                     {
-                        BOOST_THROW_EXCEPTION(directed_graph_error());
+                        BOOST_THROW_EXCEPTION(boost::directed_graph_error());
                     }
                     else
                     {
-                        BOOST_THROW_EXCEPTION(undirected_graph_error());
+                        BOOST_THROW_EXCEPTION(boost::undirected_graph_error());
                     }
                 }
                 size_t old_edges_size = m_edge.size();
@@ -214,11 +225,14 @@ private:
         if (m_vertex.find(v) == m_vertex.end())
         {
             m_vertex[v] = m_g.do_add_vertex();
+            m_vertex_index.emplace(v, m_vertex_index.size());
             is_new = true;
         }
 
         if (is_new)
         {
+            handle_node_property("name", v, v);
+            handle_node_property("id", v, std::to_string(m_vertex_index[v]));
             std::map< std::string, std::string >::iterator iter;
             for (iter = m_key_default.begin(); iter != m_key_default.end();
                  ++iter)
@@ -229,23 +243,23 @@ private:
         }
     }
 
-    any get_vertex_descriptor(const std::string& v) { return m_vertex[v]; }
+    boost::any get_vertex_descriptor(const std::string& v) { return m_vertex[v]; }
 
     void handle_edge(const std::string& u, const std::string& v)
     {
         handle_vertex(u);
         handle_vertex(v);
 
-        any source, target;
+        boost::any source, target;
         source = get_vertex_descriptor(u);
         target = get_vertex_descriptor(v);
 
-        any edge;
+        boost::any edge;
         bool added;
         boost::tie(edge, added) = m_g.do_add_edge(source, target);
         if (!added)
         {
-            BOOST_THROW_EXCEPTION(bad_parallel_edge(u, v));
+            BOOST_THROW_EXCEPTION(boost::bad_parallel_edge(u, v));
         }
 
         size_t e = m_edge.size();
@@ -290,19 +304,19 @@ private:
     }
 
     mutate_graph& m_g;
-    std::map< std::string, key_kind > m_keys;
-    std::map< std::string, std::string > m_key_name;
-    std::map< std::string, std::string > m_key_type;
-    std::map< std::string, std::string > m_key_default;
-    std::map< std::string, any > m_vertex;
-    std::vector< any > m_edge;
+    std::map<std::string, key_kind > m_keys;
+    std::map<std::string, std::string > m_key_name;
+    std::map<std::string, std::string > m_key_type;
+    std::map<std::string, std::string > m_key_default;
+    std::map<std::string, boost::any > m_vertex;
+    std::map<std::string, size_t> m_vertex_index;
+    std::vector< boost::any > m_edge;
 };
 
 }
 
-namespace boost
-{
-void BOOST_GRAPH_DECL read_graphml(
+namespace pds {
+void read_graphml(
     std::istream& in, mutate_graph& g, size_t desired_idx)
 {
     graphml_reader reader(g);
