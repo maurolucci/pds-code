@@ -60,11 +60,11 @@ void processBoost(const std::string& filename) {
     }
     {
         pds::PowerGrid grid(graph);
-        pds::map<std::string, pds::PmuState> active_data;
+        pds::map<long, pds::PmuState> active_data;
         {
-            auto active = boost::compose_property_map(boost::associative_property_map(active_data), get(&pds::Bus::name, grid));
-            pds::map<std::string, bool> observed_data;
-            auto observed = boost::compose_property_map(boost::associative_property_map(observed_data), get(&pds::Bus::name, grid));
+            auto active = boost::compose_property_map(boost::associative_property_map(active_data), get(&pds::Bus::id, grid));
+            pds::map<long, bool> observed_data;
+            auto observed = boost::compose_property_map(boost::associative_property_map(observed_data), get(&pds::Bus::id, grid));
             auto zero_injection = get(&pds::Bus::zero_injection, graph);
             std::cout << "before presolving: " << std::endl;
             printResult(grid, active, observed);
@@ -72,32 +72,20 @@ void processBoost(const std::string& filename) {
             std::cout << "after presolving: " << std::endl;
             printResult(grid, active, observed);
         }
-        auto active = boost::compose_property_map(boost::associative_property_map(active_data), get(&pds::Bus::name, graph));
+        auto active = boost::compose_property_map(boost::associative_property_map(active_data), get(&pds::Bus::id, graph));
         pds::solve_pds(grid, active);
-        pds::map<std::string, bool> observed_map;
-        auto observed = boost::compose_property_map(boost::associative_property_map(observed_map), get(&pds::Bus::name, graph));
+        pds::map<long, bool> observed_map;
+        auto observed = boost::compose_property_map(boost::associative_property_map(observed_map), get(&pds::Bus::id, graph));
         pds::dominate(graph, active, observed);
         pds::propagate(graph, get(&pds::Bus::zero_injection, graph),observed);
         printResult(graph, active, observed);
-    }
-    if (false) {
-        std::cout << "take 2:" << std::endl;
-        pds::map<decltype(graph)::vertex_descriptor, pds::PmuState> active_data;
-        auto active = boost::associative_property_map(active_data);
-        pds::map<decltype(graph)::vertex_descriptor, bool> observed_data;
-        auto observed = boost::associative_property_map(observed_data);
-        for (const auto& v: pds::range_pair(vertices(graph))) {
-            std::vector<int> pmus{5, 11, 55};
-            if (ranges::contains(
-                    pmus | ranges::views::transform([](int i) -> std::string { return std::to_string(i);}),
-                    graph[v].name)
-            ) {
-                active[v] = pds::PmuState::Active;
+        pds::PdsState state(graph);
+        for (auto v: state.graph().vertices()) {
+            if (active_data[state.graph()[v].id] == pds::PmuState::Active) {
+                state.set_active(v);
             }
         }
-        pds::dominate(graph, active, observed);
-        pds::propagate(graph, get(&pds::Bus::zero_injection, graph), observed);
-        printResult(graph, active, observed);
+        std::cout << "blub " << state.all_observed() << std::endl;
     }
 }
 
