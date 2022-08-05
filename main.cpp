@@ -80,11 +80,17 @@ void processBoost(const std::string& filename) {
         pds::propagate(graph, get(&pds::Bus::zero_injection, graph),observed);
         printResult(graph, active, observed);
         pds::PdsState state(graph);
-        for (auto v: state.graph().vertices()) {
-            if (active_data[state.graph()[v].id] == pds::PmuState::Active) {
+        for (auto v: state.vertices()) {
+            if (active_data[state[v].id] == pds::PmuState::Active) {
                 state.set_active(v);
             }
         }
+        for (auto v: state.vertices()) {
+            if (!state.is_observed(v)) {
+                std::cout << "unobserved " << state.vertex_id(v) << std::endl;
+            }
+        }
+        std::cout << "#unobserved: " << ranges::distance(state.vertices() | ranges::views::filter([&state](auto v) { return state.is_observed(v);})) << std::endl;
         std::cout << "blub " << state.all_observed() << std::endl;
     }
 }

@@ -42,35 +42,35 @@ using PowerGrid = pds::AdjGraph<boost::listS, boost::setS, boost::undirectedS, B
 
 PowerGrid import_graphml(const std::string& filename, bool all_zero_injection = false);
 
-class PdsState : PowerGrid {
+class PdsState : public PowerGrid {
 public:
     using Vertex = PowerGrid::vertex_descriptor;
     using Edge = PowerGrid::edge_descriptor;
     using VertexID = decltype(Bus::id);
 private:
-    pds::map<VertexID, size_t> m_unobserved_degree;
+    pds::map<VertexID, int> m_unobserved_degree;
     pds::set<VertexID> m_deleted;
     pds::set<VertexID> m_observed;
     pds::map<VertexID, PmuState> m_active;
 
     void propagate(Vertex vertex) {
-        if (m_observed.contains(vertex_id(vertex)) && (*this)[vertex].zero_injection && m_unobserved_degree[vertex_id(vertex)] == 1) {
+        if (is_observed(vertex) && zero_injection(vertex) && m_unobserved_degree[vertex_id(vertex)] == 1) {
             for (auto w: adjacent_vertices(vertex)) {
-                if (!m_observed.contains(vertex_id(w))) {
-                    observe(w);
-                }
+                observe(w);
             }
         }
     }
 
     void observe(Vertex vertex) {
-        m_observed.insert(vertex_id(vertex));
-        for (auto w: adjacent_vertices(vertex)) {
-            m_unobserved_degree[vertex_id(w)] -= 1;
-            propagate(w);
+        if (!is_observed(vertex)) {
+            m_observed.insert(vertex_id(vertex));
+            for (auto w: adjacent_vertices(vertex)) {
+                m_unobserved_degree[vertex_id(w)] -= 1;
+                assert(m_unobserved_degree[vertex_id(w)] >= 0);;
+                propagate(w);
+            }
         }
     }
-
 public:
     PdsState() = default;
     PdsState(PowerGrid&& graph) : PowerGrid(graph) {
@@ -79,6 +79,7 @@ public:
             m_active.emplace(vertex_id(v), PmuState::Blank);
         }
     }
+
     PdsState(const PowerGrid& graph) : PowerGrid(graph) {
         for (auto v: graph.vertices()) {
             m_unobserved_degree.emplace(vertex_id(v), degree(v));
@@ -86,16 +87,20 @@ public:
         }
     }
 
-    VertexID vertex_id(Vertex vertex) const {
+    inline VertexID vertex_id(Vertex vertex) const {
         return (*this)[vertex].id;
     }
 
-    bool zero_injection(Vertex vertex) const {
+    inline bool zero_injection(Vertex vertex) const {
         return (*this)[vertex].zero_injection;
     }
 
-    PmuState active_state(Vertex vertex) const {
+    inline PmuState active_state(Vertex vertex) const {
         return m_active.at(vertex_id(vertex));
+    }
+
+    inline bool is_observed(Vertex vertex) const {
+        return m_observed.contains(vertex_id(vertex));
     }
 
     bool set_active(Vertex vertex) {
@@ -119,7 +124,7 @@ public:
         }
     }
 
-    bool all_observed() const {
+    inline bool all_observed() const {
         return ranges::all_of(vertices(), [this](auto v) { return m_observed.contains(vertex_id(v)); });
     }
 
