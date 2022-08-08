@@ -140,7 +140,7 @@ inline auto dominate(const PowerGrid& graph, const map<PowerGrid::vertex_descrip
     return observed;
 }
 
-inline bool propagate(const PowerGrid& graph, set<PowerGrid::vertex_descriptor> observed, size_t max_unobserved = 1) {
+inline bool propagate(const PowerGrid& graph, set<PowerGrid::vertex_descriptor>& observed, size_t max_unobserved = 1) {
     pds::map<PowerGrid::vertex_descriptor, size_t> unobserved_degree;
     std::vector<PowerGrid::vertex_descriptor> queue;
     for (const auto& v: graph.vertices()) {

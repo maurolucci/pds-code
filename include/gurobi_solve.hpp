@@ -7,7 +7,6 @@
 
 #include <gurobi_c++.h>
 #include <range/v3/all.hpp>
-#include <boost/graph/adjacency_list.hpp>
 
 #include "pds.hpp"
 
@@ -22,19 +21,19 @@ inline bool solve_pds(const PowerGrid &graph, map<PowerGrid::vertex_descriptor, 
     //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
     //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
     //GRBVar *si_p = model.addVars(num_vertices(graph));
-    std::map<PowerGrid::vertex_descriptor, GRBVar> xi;
-    std::map<PowerGrid::vertex_descriptor, GRBVar> si;
-    std::map<std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
+    map<PowerGrid::vertex_descriptor, GRBVar> xi;
+    map<PowerGrid::vertex_descriptor, GRBVar> si;
+    map<std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
     const double M = 2 * graph.numVertices();
     {
         GRBLinExpr objective{};
-        for (auto [i, v]: graph.vertices() | r3::views::enumerate) {
+        for (auto v: graph.vertices()) {
             xi[v] = model.addVar(0.0, M, 1.0, GRB_BINARY);
             // si[v] >= 1 && si[v] <= num_vertices(graph)
             si[v] = model.addVar(1.0, M, 0.0, GRB_CONTINUOUS);
             objective += xi[v];
         }
-        for (auto [i, e]: graph.edges() | r3::views::enumerate) {
+        for (auto e: graph.edges()) {
             auto v = graph.source(e);
             auto w = graph.target(e);
             pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY);//pij_p[2 * i];
