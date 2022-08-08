@@ -1,22 +1,15 @@
 //
-// Created by max on 02.08.22.
+// Created by max on 08.08.22.
 //
 
 #ifndef PDS_MAP_HPP
 #define PDS_MAP_HPP
 
-#include <unordered_map>
-#include <unordered_set>
-
-#include <ankerl/unordered_dense.h>
+#include "setgraph/utility.hpp"
 
 namespace pds {
-template<class K, class V>
-using map = ankerl::unordered_dense::map<K, V>;
-
-template<class K>
-using set = ankerl::unordered_dense::set<K>;
-
+using setgraph::map;
+using setgraph::set;
 }
 
 #endif //PDS_MAP_HPP

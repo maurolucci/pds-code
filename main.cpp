@@ -14,13 +14,16 @@ auto make_vector_property_map(T&& vec, Graph graph) {
     return boost::make_iterator_property_map(vec.begin(), get(boost::vertex_index, graph));
 }
 
-template<class ActiveMap, class ObservedMap>
-void printResult(const pds::PowerGrid& graph, const ActiveMap& active, const ObservedMap& observed) {
+void printResult(
+        const pds::PowerGrid& graph,
+        const pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>& active,
+        const pds::set<pds::PowerGrid::vertex_descriptor>& observed
+) {
     bool sep = false;
     size_t active_count = 0, inactive_count = 0, zero_injection_count = 0;
     std::cout << "active nodes: [";
     for (const auto &v: graph.vertices()) {
-        switch (active[v]) {
+        switch (active.at(v)) {
             case pds::PmuState::Active:
                 if (sep) std::cout << ", ";
                 sep = true;
@@ -36,7 +39,7 @@ void printResult(const pds::PowerGrid& graph, const ActiveMap& active, const Obs
         zero_injection_count += graph[v].zero_injection;
     }
     std::cout << "]\n";
-    std::cout << "graph (m=" << graph.num_edges() << ", n=" << graph.num_vertices()
+    std::cout << "graph (m=" << graph.numEdges() << ", n=" << graph.numVertices()
               << ", #active=" << active_count
               << ", #inactive=" << inactive_count
               << ", #zero_injection=" << zero_injection_count << ")\n";
@@ -45,52 +48,30 @@ void printResult(const pds::PowerGrid& graph, const ActiveMap& active, const Obs
 
 void processBoost(const std::string& filename) {
     auto graph = pds::import_graphml(filename);
-    for (auto it = vertices(graph).first; it != vertices(graph).second; ++it) {
-        auto v = *it;
+    for (auto v: graph.vertices()) {
         graph[v].zero_injection = true;//zero_injection[v];
     }
     {
-        pds::map<decltype(graph)::vertex_descriptor, pds::PmuState> active_data;
-        auto active = boost::associative_property_map(active_data);
-        pds::solve_pds(graph, active);
-        pds::map<decltype(graph)::vertex_descriptor, bool> observed_data;
-        pds::dominate(graph, active, boost::associative_property_map(observed_data));
-        pds::propagate(graph, graph.getProperty(&pds::Bus::zero_injection), boost::associative_property_map(observed_data));
-        printResult(graph, active, boost::associative_property_map(observed_data));
-    }
-    {
         pds::PowerGrid grid(graph);
-        pds::map<long, pds::PmuState> active_data;
-        {
-            auto active = boost::compose_property_map(boost::associative_property_map(active_data), get(&pds::Bus::id, grid));
-            pds::map<long, bool> observed_data;
-            auto observed = boost::compose_property_map(boost::associative_property_map(observed_data), get(&pds::Bus::id, grid));
-            auto zero_injection = get(&pds::Bus::zero_injection, graph);
-            std::cout << "before presolving: " << std::endl;
-            printResult(grid, active, observed);
-            pds::presolve(grid, zero_injection, active, observed);
-            std::cout << "after presolving: " << std::endl;
-            printResult(grid, active, observed);
-        }
-        auto active = boost::compose_property_map(boost::associative_property_map(active_data), get(&pds::Bus::id, graph));
+        auto active = graph.vertices()
+        | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
+        | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
+        //{
+        //    pds::set<pds::PowerGrid::vertex_descriptor> observed_data;
+        //    std::cout << "before presolving: " << std::endl;
+        //    printResult(grid, active_data, observed_data);
+        //    pds::presolve(grid, zero_injection, active, observed);
+        //    std::cout << "after presolving: " << std::endl;
+        //    printResult(grid, active, observed);
+        //}
         pds::solve_pds(grid, active);
-        pds::map<long, bool> observed_map;
-        auto observed = boost::compose_property_map(boost::associative_property_map(observed_map), get(&pds::Bus::id, graph));
+        pds::set<pds::PowerGrid::vertex_descriptor> observed;
+        printResult(graph, active, observed);
         pds::dominate(graph, active, observed);
-        pds::propagate(graph, get(&pds::Bus::zero_injection, graph),observed);
+        pds::propagate(graph,observed);
         printResult(graph, active, observed);
         pds::PdsState state(graph);
-        for (auto v: state.vertices()) {
-            if (active_data[state[v].id] == pds::PmuState::Active) {
-                state.set_active(v);
-            }
-        }
-        for (auto v: state.vertices()) {
-            if (!state.is_observed(v)) {
-                std::cout << "unobserved " << state.vertex_id(v) << std::endl;
-            }
-        }
-        std::cout << "#unobserved: " << ranges::distance(state.vertices() | ranges::views::filter([&state](auto v) { return state.is_observed(v);})) << std::endl;
+        std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.is_observed(v);})) << std::endl;
         std::cout << "blub " << state.all_observed() << std::endl;
     }
 }

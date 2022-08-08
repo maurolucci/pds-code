@@ -22,12 +22,13 @@ target_compile_options(pdslib PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:
         /W4>)
 
-target_link_libraries(pdslib PUBLIC unordered_dense::unordered_dense)
+add_subdirectory(contrib/setgraph)
+target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense)
 
 find_package(Gurobi REQUIRED)
 find_package(range-v3 REQUIRED)
 
-add_executable(pds main.cpp include/pds.hpp include/gurobi_solve.cpp include/gurobi_solve.hpp include/map.hpp include/graph.hpp)
+add_executable(pds main.cpp include/pds.hpp include/gurobi_solve.cpp include/gurobi_solve.hpp include/map.hpp)
 
 target_link_libraries(pds PUBLIC Boost::graph range-v3 gurobi::gurobi_cxx)
 target_link_libraries(pds PUBLIC pdslib)

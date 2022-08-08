@@ -9,25 +9,11 @@
 #include <range/v3/all.hpp>
 #include <boost/graph/adjacency_list.hpp>
 
-#include "utility.hpp"
 #include "pds.hpp"
 
 namespace pds {
 
-template<class Graph, class ActivePropertyMap>
-bool block_deg2(Graph& graph, ActivePropertyMap& active) {
-    bool has_deg3 = ranges::any_of(
-            graph.vertices(),
-            [&graph](const auto& v) { return graph.degree(v) > 3; });
-    for (const auto& v: graph.vertices()) {
-        if (has_deg3 && graph.degree(v) == 2) {
-            active[v] = PmuState::Inactive;
-        }
-    }
-}
-
-template<class Graph, class ActivePropertyMap>
-bool solve_pds(const Graph &graph, ActivePropertyMap active) {
+inline bool solve_pds(const PowerGrid &graph, map<PowerGrid::vertex_descriptor, PmuState> &active) {
     namespace r3 = ranges;
     auto env = GRBEnv();
     auto model = GRBModel(env);
@@ -36,10 +22,10 @@ bool solve_pds(const Graph &graph, ActivePropertyMap active) {
     //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
     //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
     //GRBVar *si_p = model.addVars(num_vertices(graph));
-    std::map<typename Graph::vertex_descriptor, GRBVar> xi;
-    std::map<typename Graph::vertex_descriptor, GRBVar> si;
-    std::map<std::pair<typename Graph::vertex_descriptor, typename Graph::vertex_descriptor>, GRBVar> pij;
-    const double M = 2 * graph.num_vertices();
+    std::map<PowerGrid::vertex_descriptor, GRBVar> xi;
+    std::map<PowerGrid::vertex_descriptor, GRBVar> si;
+    std::map<std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
+    const double M = 2 * graph.numVertices();
     {
         GRBLinExpr objective{};
         for (auto [i, v]: graph.vertices() | r3::views::enumerate) {
@@ -59,7 +45,7 @@ bool solve_pds(const Graph &graph, ActivePropertyMap active) {
 
     for (auto v: graph.vertices()) {
         model.addConstr(si[v] >= 1);
-        for (auto w: r3::concat_view(graph.adjacent_vertices(v), r3::single_view{v})) {
+        for (auto w: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
             switch (active[v]) {
             case PmuState::Blank:
                 model.addConstr(si[v] <= xi[w] + M * (1 - xi[w]));
@@ -76,7 +62,7 @@ bool solve_pds(const Graph &graph, ActivePropertyMap active) {
         GRBLinExpr outObserved;
         // v is observed by at most one neighbor w1
         GRBLinExpr inObserved;
-        for (auto w: graph.adjacent_vertices(v)) {
+        for (auto w: graph.neighbors(v)) {
             observingNeighbors += xi[w];
             if (graph[w].zero_injection) {
                 observingNeighbors += pij[{w, v}];
@@ -91,7 +77,7 @@ bool solve_pds(const Graph &graph, ActivePropertyMap active) {
         model.addConstr(inObserved <= 1);
         model.addConstr(outObserved <= 1);
 
-        model.addConstr(si[v] <= graph.num_vertices());
+        model.addConstr(si[v] <= graph.numVertices());
 
         if (active[v] == PmuState::Active) {
             model.addConstr(xi[v] == 1);
@@ -104,11 +90,11 @@ bool solve_pds(const Graph &graph, ActivePropertyMap active) {
         auto v = graph.source(e);
         auto w = graph.target(e);
         model.addConstr(pij[{v, w}] + pij[{w, v}] <= 1);
-        for (auto t: r3::concat_view(graph.adjacent_vertices(w), r3::single_view{w})) {
+        for (auto t: r3::concat_view(graph.neighbors(w), r3::single_view{w})) {
             if (t != v)
                 model.addConstr(si[v] >= si[t] + 1 - M * (1 - pij[{w, v}]));
         }
-        for (auto t: r3::concat_view(graph.adjacent_vertices(v), r3::single_view{v})) {
+        for (auto t: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
             if (t != w)
                 model.addConstr(si[w] >= si[t] + 1 - M * (1 - pij[{v, w}]));
         }
