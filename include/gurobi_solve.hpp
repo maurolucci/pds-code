@@ -36,27 +36,27 @@ inline bool solve_pds(const PowerGrid &graph, map<PowerGrid::vertex_descriptor, 
         for (auto e: graph.edges()) {
             auto v = graph.source(e);
             auto w = graph.target(e);
-            pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY);//pij_p[2 * i];
-            pij[{w, v}] = model.addVar(0.0, M, 0.0, GRB_BINARY);//pij_p[2 * i + 1];
+            pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i];
+            pij[{w, v}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i + 1];
         }
         //model.setObjective(objective, GRB_MINIMIZE);
     }
 
     for (auto v: graph.vertices()) {
-        model.addConstr(si[v] >= 1);
+        model.addConstr(si.at(v) >= 1);
         for (auto w: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
-            switch (active[v]) {
+            switch (active.at(v)) {
             case PmuState::Blank:
-                model.addConstr(si[v] <= xi[w] + M * (1 - xi[w]));
+                model.addConstr(si.at(v) <= xi.at(w) + M * (1 - xi.at(w)));
                 break;
             case PmuState::Inactive:
-                model.addConstr(si[v] <= M);
+                model.addConstr(si.at(v) <= M);
                 break;
             case PmuState::Active:
-                model.addConstr(si[v] <= 1);
+                model.addConstr(si.at(v) <= 1);
             }
         }
-        GRBLinExpr observingNeighbors = xi[v];
+        GRBLinExpr observingNeighbors = xi.at(v);
         // v observes at most one neighbor w1
         GRBLinExpr outObserved;
         // v is observed by at most one neighbor w1

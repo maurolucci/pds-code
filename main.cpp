@@ -102,8 +102,31 @@ void processBoost(const std::string& filename) {
         pds::propagate(graph, observed);
         printResult(graph, active, observed);
         pds::PdsState state(graph);
+        for (auto v: graph.vertices()) {
+            if (active.at(v) == pds::PmuState::Active) {
+                state.setActive(v);
+            }
+        }
         std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.is_observed(v);})) << std::endl;
-        std::cout << "blub " << state.all_observed() << std::endl;
+    }
+    {
+        pds::PdsState state(graph);
+        while (state.collapseLeaves()) { }
+        while (state.collapseDegreeTwo()) { }
+        auto active = graph.vertices()
+                      | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
+                      | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
+        //try {
+            pds::solve_pds(state.graph(), active);
+        //} catch (GRBException ex) {
+        //    std::cerr << "gurobi exception: " << ex.getErrorCode() << " (" << ex.getMessage() << ")\n";
+        //    throw ex;
+        //}
+        pds::set<pds::PowerGrid::vertex_descriptor> observed;
+        pds::dominate(graph, active, observed);
+        pds::propagate(graph, observed);
+        printResult(graph, active, observed);
+        std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.is_observed(v);})) << std::endl;
     }
 }
 
