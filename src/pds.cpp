@@ -14,7 +14,7 @@ PowerGrid import_graphml(const std::string& filename, bool all_zero_injection) {
     PowerGrid graph;
     boost::dynamic_properties attr(boost::ignore_other_properties);
     //typename boost::property_map<PowerGrid, boost::vertex_index_t>::type index = get(boost::vertex_index, graph); //
-    std::map<PowerGrid::vertex_descriptor, long> zero_injection_data;
+    map<PowerGrid::vertex_descriptor, long> zero_injection_data;
     boost::associative_property_map zero_injection(zero_injection_data);
     //auto index_map = boost::get(boost::vertex_index, graph);
     //std::vector<long> long_zi;

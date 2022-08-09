@@ -35,12 +35,11 @@ PowerGrid import_graphml(const std::string& filename, bool all_zero_injection = 
 class PdsState {
 public:
     using Vertex = PowerGrid::vertex_descriptor;
-    using VertexID = decltype(Bus::id);
 private:
-    pds::map<VertexID, int> m_unobserved_degree;
-    pds::set<VertexID> m_deleted;
-    pds::set<VertexID> m_observed;
-    pds::map<VertexID, PmuState> m_active;
+    pds::map<Vertex, int> m_unobserved_degree;
+    pds::set<Vertex> m_deleted;
+    pds::set<Vertex> m_observed;
+    pds::map<Vertex, PmuState> m_active;
     PowerGrid m_graph;
 
     inline void propagate(Vertex vertex) {
@@ -62,6 +61,25 @@ private:
             propagate(vertex);
         }
     }
+
+    inline bool disableLowDegreeRecursive(
+            PowerGrid::vertex_descriptor start,
+            set<PowerGrid::vertex_descriptor>& seen
+    ) {
+        bool changed = false;
+        seen.insert(start);
+        if (m_graph.degree(start) <= 2 && zero_injection(start) && m_active.at(start) != PmuState::Active) {
+            setInactive(start);
+            changed = true;
+        }
+        for (auto w: m_graph.neighbors(start)) {
+            if (!seen.contains(w)) {
+                changed |= disableLowDegreeRecursive(w, seen);
+            }
+        }
+        return changed;
+    }
+
 public:
     PdsState() = default;
     PdsState(PowerGrid&& graph) : m_graph(graph) {
@@ -90,9 +108,17 @@ public:
         return m_observed.contains(vertex);
     }
 
+    inline const set<Vertex>& observed() const {
+        return m_observed;
+    }
+
+    inline const map<Vertex, PmuState> active() const {
+        return m_active;
+    }
+
     bool setActive(Vertex vertex) {
         if (m_active.at(vertex) != PmuState::Active) {
-            m_active.emplace(vertex, PmuState::Active);
+            m_active[vertex] = PmuState::Active;
             observe(vertex);
             for (auto w: m_graph.neighbors(vertex)) {
                 observe(w);
@@ -128,22 +154,22 @@ public:
         bool changed = false;
         auto vertices = m_graph.vertices() | ranges::to<std::vector>();
         for (auto v: vertices) {
-            if (m_graph.degree(v) == 1) {
-                if (!is_observed(v)) {
-                    bool non_zi_neighbor = false;
-                    for (auto w: m_graph.neighbors(v)) {
-                        if (!m_graph[w].zero_injection) {
-                            non_zi_neighbor = true;
-                        }
+            if (m_graph.degree(v) == 1
+                && m_active.at(v) != PmuState::Active
+            ) {
+                Vertex neighbor;
+                for (auto w: m_graph.neighbors(v)) {
+                    neighbor = w;
+                }
+                if (m_graph.degree(neighbor) == 2 && m_graph[neighbor].zero_injection) {
+                    if (!zero_injection(v)) {
+                        m_graph[neighbor].zero_injection = false;
                     }
-                    if (non_zi_neighbor) {
-                        for (auto w: m_graph.neighbors(v)) {
-                            m_graph[w].zero_injection = true;
-                        }
+                } else {
+                    if (m_graph[neighbor].zero_injection) {
+                        m_graph[neighbor].zero_injection = false;
                     } else {
-                        for (auto w: m_graph.neighbors(v)) {
-                            setActive(w);
-                        }
+                        setActive(neighbor);
                     }
                 }
                 m_graph.removeVertex(v);
@@ -156,14 +182,28 @@ public:
         return changed;
     }
 
+    inline bool disableLowDegree() {
+        bool changed = false;
+        set<PowerGrid::vertex_descriptor> seen;
+        for (auto v: m_graph.vertices()) {
+            if (m_graph.degree(v) >= 3) {
+                changed = disableLowDegreeRecursive(v, seen);
+            }
+        }
+        return changed;
+    }
+
     inline bool collapseDegreeTwo() {
         bool changed = false;
         auto vertices = m_graph.vertices() | ranges::to<std::vector>();
         for (auto v: vertices) {
-            if (m_graph.degree(v) == 2 && m_graph[v].zero_injection) {
+            if (m_graph.degree(v) == 2 && zero_injection(v)) {
                 std::vector<Vertex> neighbors = m_graph.neighbors(v) | ranges::to<std::vector>();
                 auto [x, y] = std::tie(neighbors[0], neighbors[1]);
-                if (!m_graph.edge(x, y) && m_graph.degree(x) <= 2 && m_graph.degree(y) <= 2) {
+                if (
+                        !m_graph.edge(x, y)
+                        && ((zero_injection(x) && m_graph.degree(x) <= 2)
+                        || (zero_injection(y) && m_graph.degree(y) <= 2))) {
                     m_graph.addEdge(x, y);
                     m_graph.removeVertex(v);
                 }

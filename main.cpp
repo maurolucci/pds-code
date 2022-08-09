@@ -8,6 +8,7 @@
 
 #include "pds.hpp"
 #include "gurobi_solve.hpp"
+#include "draw_grid.hpp"
 
 template<class T, class Graph>
 auto make_vector_property_map(T&& vec, Graph graph) {
@@ -86,11 +87,9 @@ void printGraph(
 }
 
 void processBoost(const std::string& filename) {
-    auto graph = pds::import_graphml(filename);
-    printGraph(graph);
-    for (auto v: graph.vertices()) {
-        graph[v].zero_injection = true;//zero_injection[v];
-    }
+    auto graph = pds::import_graphml(filename, true);
+    //printGraph(graph);
+    auto layout = pds::layoutGraph(graph);
     {
         auto active = graph.vertices()
         | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
@@ -101,30 +100,31 @@ void processBoost(const std::string& filename) {
         pds::dominate(graph, active, observed);
         pds::propagate(graph, observed);
         printResult(graph, active, observed);
+        pds::drawGrid(graph, active, observed, "out/4_solve_input.svg", layout);
+    }
+    {
         pds::PdsState state(graph);
-        for (auto v: graph.vertices()) {
+        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/0_input.svg", layout);
+        //state.disableLowDegree();
+        while (state.collapseLeaves()) { }
+        //state.disableLowDegree();
+        while (state.collapseDegreeTwo()) { }
+        state.disableLowDegree();
+        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/1_preprocessed.svg", layout);
+        auto active = graph.vertices()
+                      | ranges::views::transform([&](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, state.active_state(v));})
+                      | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
+        pds::solve_pds(state.graph(), active);
+        for (auto v: state.graph().vertices()) {
             if (active.at(v) == pds::PmuState::Active) {
                 state.setActive(v);
             }
         }
-        std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.is_observed(v);})) << std::endl;
-    }
-    {
-        pds::PdsState state(graph);
-        while (state.collapseLeaves()) { }
-        while (state.collapseDegreeTwo()) { }
-        auto active = graph.vertices()
-                      | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
-                      | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
-        //try {
-            pds::solve_pds(state.graph(), active);
-        //} catch (GRBException ex) {
-        //    std::cerr << "gurobi exception: " << ex.getErrorCode() << " (" << ex.getMessage() << ")\n";
-        //    throw ex;
-        //}
+        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/2_solved_preprocessed.svg", layout);
         pds::set<pds::PowerGrid::vertex_descriptor> observed;
         pds::dominate(graph, active, observed);
         pds::propagate(graph, observed);
+        pds::drawGrid(graph, active, observed, "out/3_solved.svg", layout);
         printResult(graph, active, observed);
         std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.is_observed(v);})) << std::endl;
     }
