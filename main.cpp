@@ -5,6 +5,7 @@
 #include <boost/property_map/compose_property_map.hpp>
 
 #include <string>
+#include <fmt/format.h>
 
 #include "pds.hpp"
 #include "gurobi_solve.hpp"
@@ -90,7 +91,7 @@ void processBoost(const std::string& filename) {
     auto graph = pds::import_graphml(filename, true);
     //printGraph(graph);
     auto layout = pds::layoutGraph(graph);
-    {
+    if (graph.numVertices() < 2000) {
         auto active = graph.vertices()
         | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
         | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
@@ -104,17 +105,29 @@ void processBoost(const std::string& filename) {
     }
     {
         pds::PdsState state(graph);
+        bool drawReductionSteps = true;
+        auto drawState = [&,counter=0](std::string name) mutable {
+            if (drawReductionSteps) {
+                pds::drawGrid(state.graph(), state.active(), state.observed(), fmt::format("out/red_{:04}_{}.svg", counter, name), layout);
+                ++counter;
+            }
+        };
         pds::drawGrid(state.graph(), state.active(), state.observed(), "out/0_input.svg", layout);
-        //state.disableLowDegree();
-        while (state.collapseLeaves()) { }
-        //state.disableLowDegree();
-        while (state.collapseDegreeTwo()) { }
-        state.disableLowDegree();
+        state.disableLowDegree(); drawState("low_degree");
+        while (state.collapseLeaves()) { drawState("leaves"); }
+        state.disableLowDegree(); drawState("low_degree");
+        while (state.collapseDegreeTwo()) { drawState("path"); }
+        state.disableLowDegree(); drawState("low_degree");
+        while (state.collapseObservationNeighborhoods()) { drawState("observation_neighborhood"); }
         pds::drawGrid(state.graph(), state.active(), state.observed(), "out/1_preprocessed.svg", layout);
         auto active = graph.vertices()
-                      | ranges::views::transform([&](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, state.active_state(v));})
+                      | ranges::views::transform([&](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v,
+                                                                                                                  state.activeState(
+                                                                                                                          v));})
                       | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
-        pds::solve_pds(state.graph(), active);
+        if (!pds::solve_pds(state.graph(), active)) {
+            std::cout << "infeasible" << std::endl;
+        }
         for (auto v: state.graph().vertices()) {
             if (active.at(v) == pds::PmuState::Active) {
                 state.setActive(v);
@@ -126,7 +139,8 @@ void processBoost(const std::string& filename) {
         pds::propagate(graph, observed);
         pds::drawGrid(graph, active, observed, "out/3_solved.svg", layout);
         printResult(graph, active, observed);
-        std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.is_observed(v);})) << std::endl;
+        std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.isObserved(
+                v);})) << std::endl;
     }
 }
 
