@@ -41,9 +41,9 @@ DefaultDrawingOptions::DefaultDrawingOptions() :
         observedColor(Color::fromRGB(53, 221, 95)),
         activeColor(Color::fromRGB(221, 53, 95)),
         nodeSize(8),
-        nodeThickness(3),
+        nodeThickness(2),
         lineThickness(2),
-        nonZeroInjectionShape(Shape::Rectangle),
+        nonZeroInjectionShape(Shape::Triangle),
         zeroInjectionShape(Shape::Circle)
 { }
 
@@ -71,7 +71,7 @@ NodeStyle DefaultDrawingOptions::nodeStyle(pds::style::NodeState node) const {
     };
 }
 
-EdgeStyle DefaultDrawingOptions::edgeStyle(pds::style::NodeState _source, pds::style::NodeState _target) const {
+EdgeStyle DefaultDrawingOptions::edgeStyle(pds::style::NodeState _s, pds::style::NodeState _t) const {
     return {.color=Color::fromRGB(0, 0, 0, 255), .thickness=lineThickness};
 }
 

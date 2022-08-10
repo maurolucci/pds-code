@@ -33,7 +33,6 @@ PowerGrid import_graphml(const std::string& filename, bool all_zero_injection) {
     graph_in.close();
     for (auto v: graph.vertices()) {
         graph[v].zero_injection = zero_injection[v] || all_zero_injection;
-        std::cout << "node id=" << graph[v].name << std::endl;
     }
     return graph;
 }
