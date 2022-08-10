@@ -18,23 +18,34 @@ FetchContent_Declare(
         URL https://ogdf.uos.de/wp-content/uploads/2022/02/ogdf.v2022.02.zip
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-FetchContent_MakeAvailable(unordered_dense OGDF)
+FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG c4ee726 # 9.0.0
+)
+FetchContent_MakeAvailable(unordered_dense OGDF fmt)
+# No warnings from OGDF headers
+get_target_property(TMP_OGDF_INCLUDE_DIRS OGDF INTERFACE_INCLUDE_DIRECTORIES)
+target_include_directories(OGDF SYSTEM INTERFACE ${TMP_OGDF_INCLUDE_DIRS})
+
+add_subdirectory(contrib/setgraph)
+find_package(Gurobi REQUIRED)
+find_package(range-v3 REQUIRED)
 
 add_library(pdslib STATIC src/pds.cpp src/graphml.cpp src/draw_grid.cpp)
-target_include_directories(pdslib PUBLIC include)
+target_include_directories(pdslib PUBLIC include PRIVATE Boost::graph)
+target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
+target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
 target_compile_options(pdslib PRIVATE
         $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
         -Wall -Wextra>
         $<$<CXX_COMPILER_ID:MSVC>:
         /W4>)
 
-add_subdirectory(contrib/setgraph)
-target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
+add_library(pdslib-gurobi src/gurobi_solve.cpp)
+target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 
-find_package(Gurobi REQUIRED)
-find_package(range-v3 REQUIRED)
 
-add_executable(pds main.cpp include/pds.hpp include/gurobi_solve.cpp include/gurobi_solve.hpp include/map.hpp include/draw_grid.hpp)
+add_executable(pds main.cpp)
 
-target_link_libraries(pds PUBLIC Boost::graph range-v3 gurobi::gurobi_cxx)
-target_link_libraries(pds PUBLIC pdslib)
+target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt)

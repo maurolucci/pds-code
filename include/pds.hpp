@@ -11,6 +11,9 @@
 #include <fstream>
 #include <optional>
 
+#include <fmt/core.h>
+#include <fmt/ranges.h>
+
 #include "map.hpp"
 #include <setgraph/graph.hpp>
 
@@ -32,6 +35,40 @@ using PowerGrid = setgraph::SetGraph<Bus, setgraph::Empty, setgraph::EdgeDirecti
 
 PowerGrid import_graphml(const std::string& filename, bool all_zero_injection = false);
 
+bool propagate(const PowerGrid&, set<PowerGrid::vertex_descriptor>&, size_t = 1);
+
+inline set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid& graph, const set<PowerGrid::vertex_descriptor>& starts) {
+    set<PowerGrid::vertex_descriptor> observed;
+    for (auto v: starts) {
+        observed.insert(v);
+        for (auto w: graph.neighbors(v)) {
+            observed.insert(w);
+        }
+    }
+    propagate(graph, observed);
+    return observed;
+}
+
+template<class T>
+size_t intersectionSize(const set<T>& first, const set<T>& second) {
+    size_t count = 0;
+    for (auto x: first) {
+        if (second.contains(x)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+template<class T>
+bool isSuperset(const set <T> &container, const set <T> &other) {
+    if (other.size() > container.size()) return false;
+    for (auto x: other) {
+        if (!container.contains(x)) return false;
+    }
+    return true;
+}
+
 class PdsState {
 public:
     using Vertex = PowerGrid::vertex_descriptor;
@@ -43,7 +80,7 @@ private:
     PowerGrid m_graph;
 
     inline void propagate(Vertex vertex) {
-        if (is_observed(vertex) && zero_injection(vertex) && m_unobserved_degree[vertex] == 1) {
+        if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
             for (auto w: m_graph.neighbors(vertex)) {
                 observe(w);
             }
@@ -51,7 +88,7 @@ private:
     }
 
     void observe(Vertex vertex) {
-        if (!is_observed(vertex)) {
+        if (!isObserved(vertex)) {
             m_observed.insert(vertex);
             for (auto w: m_graph.neighbors(vertex)) {
                 m_unobserved_degree[w] -= 1;
@@ -68,7 +105,7 @@ private:
     ) {
         bool changed = false;
         seen.insert(start);
-        if (m_graph.degree(start) <= 2 && zero_injection(start) && m_active.at(start) != PmuState::Active) {
+        if (m_graph.degree(start) <= 2 && isZeroInjection(start) && !isActive(start)) {
             setInactive(start);
             changed = true;
         }
@@ -96,15 +133,27 @@ public:
         }
     }
 
-    inline bool zero_injection(Vertex vertex) const {
+    inline bool isZeroInjection(Vertex vertex) const {
         return m_graph[vertex].zero_injection;
     }
 
-    inline PmuState active_state(Vertex vertex) const {
+    inline PmuState activeState(Vertex vertex) const {
         return m_active.at(vertex);
     }
 
-    inline bool is_observed(Vertex vertex) const {
+    inline bool isActive(Vertex vertex) const {
+        return activeState(vertex) == PmuState::Active;
+    }
+
+    inline bool isBlank(Vertex vertex) const {
+        return activeState(vertex) == PmuState::Blank;
+    }
+
+    inline bool isInactive(Vertex vertex) const {
+        return activeState(vertex) == PmuState::Inactive;
+    }
+
+    inline bool isObserved(Vertex vertex) const {
         return m_observed.contains(vertex);
     }
 
@@ -117,7 +166,7 @@ public:
     }
 
     bool setActive(Vertex vertex) {
-        if (m_active.at(vertex) != PmuState::Active) {
+        if (!isActive(vertex)) {
             m_active[vertex] = PmuState::Active;
             observe(vertex);
             for (auto w: m_graph.neighbors(vertex)) {
@@ -128,10 +177,10 @@ public:
     }
 
     bool setInactive(Vertex vertex) {
-        assert(active_state(vertex) != PmuState::Active);
-        if (active_state(vertex) != PmuState::Inactive) {
+        assert(!isActive(vertex));
+        if (!isInactive(vertex)) {
             m_active[vertex] = PmuState::Inactive;
-            assert(active_state(vertex) == PmuState::Inactive);
+            assert(activeState(vertex) == PmuState::Inactive);
             return true;
         } else {
             return false;
@@ -155,14 +204,14 @@ public:
         auto vertices = m_graph.vertices() | ranges::to<std::vector>();
         for (auto v: vertices) {
             if (m_graph.degree(v) == 1
-                && m_active.at(v) != PmuState::Active
+                && !isActive(v)
             ) {
                 Vertex neighbor;
                 for (auto w: m_graph.neighbors(v)) {
                     neighbor = w;
                 }
                 if (m_graph.degree(neighbor) == 2 && m_graph[neighbor].zero_injection) {
-                    if (!zero_injection(v)) {
+                    if (!isZeroInjection(v)) {
                         m_graph[neighbor].zero_injection = false;
                     }
                 } else {
@@ -174,7 +223,7 @@ public:
                 }
                 m_graph.removeVertex(v);
                 changed = true;
-            } else if (m_unobserved_degree.at(v) == 0 && m_active.at(v) == PmuState::Blank && is_observed(v)) {
+            } else if (m_unobserved_degree.at(v) == 0 && m_active.at(v) == PmuState::Blank && isObserved(v)) {
                 setInactive(v);
                 changed = true;
             }
@@ -197,21 +246,55 @@ public:
         bool changed = false;
         auto vertices = m_graph.vertices() | ranges::to<std::vector>();
         for (auto v: vertices) {
-            if (m_graph.degree(v) == 2 && zero_injection(v)) {
+            if (m_graph.degree(v) == 2 && isZeroInjection(v)) {
                 std::vector<Vertex> neighbors = m_graph.neighbors(v) | ranges::to<std::vector>();
                 auto [x, y] = std::tie(neighbors[0], neighbors[1]);
                 if (
                         !m_graph.edge(x, y)
-                        && ((zero_injection(x) && m_graph.degree(x) <= 2)
-                        || (zero_injection(y) && m_graph.degree(y) <= 2))) {
+                        && ((isZeroInjection(x) && m_graph.degree(x) <= 2)
+                        || (isZeroInjection(y) && m_graph.degree(y) <= 2))) {
                     m_graph.addEdge(x, y);
                     m_graph.removeVertex(v);
+                }
+                //if (m_active.at(x) != PmuState::Active && m_active.at(y) != PmuState::Active && !zero_injection(x) && !isZeroInjection(y)) {
+                //    if (isObserved(v)) {
+                //        if (m_observed.contains(x)) {
+                //            setActive(y);
+                //        } else if (m_observed.contains(y)) {
+                //            setActive(x);
+                //        }
+                //    }
+                //}
+            }
+        }
+        return changed;
+    }
+
+    inline bool collapseObservationNeighborhoods() {
+        bool changed = false;
+        map<Vertex, set<Vertex>> observedVertices;
+        for (auto v: m_graph.vertices()) {
+            observedVertices.emplace(v, observationNeighborhood(m_graph, {v}));
+        }
+        for (auto v: m_graph.vertices()) {
+            if (!isInactive(v)) {
+                for (auto w: m_graph.vertices()) {
+                    if (v != w && isBlank(w)) {
+                        if (observedVertices.at(v).contains(w)) {
+                            if (isSuperset(observedVertices.at(v), observedVertices.at(w))) {
+                                fmt::print("{} {}\n", observedVertices.at(v), observedVertices.at(w));
+                                setInactive(w);
+                                changed = true;
+                            }
+                        }
+                    }
                 }
             }
         }
         return changed;
     }
 };
+
 
 inline auto dominate(const PowerGrid& graph, const map<PowerGrid::vertex_descriptor, PmuState>& active, set<PowerGrid::vertex_descriptor>& observed) {
     for (auto v: graph.vertices()) {
@@ -225,7 +308,7 @@ inline auto dominate(const PowerGrid& graph, const map<PowerGrid::vertex_descrip
     return observed;
 }
 
-inline bool propagate(const PowerGrid& graph, set<PowerGrid::vertex_descriptor>& observed, size_t max_unobserved = 1) {
+inline bool propagate(const PowerGrid& graph, set<PowerGrid::vertex_descriptor>& observed, size_t max_unobserved) {
     pds::map<PowerGrid::vertex_descriptor, size_t> unobserved_degree;
     std::vector<PowerGrid::vertex_descriptor> queue;
     for (const auto& v: graph.vertices()) {
