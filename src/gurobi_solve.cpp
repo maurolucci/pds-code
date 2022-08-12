@@ -6,12 +6,13 @@
 #include <gurobi_c++.h>
 
 namespace pds {
-bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuState> &active, bool output) {
+bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuState> &active, bool output, double timeLimit) {
     namespace r3 = ranges;
     auto env = GRBEnv();
     auto model = GRBModel(env);
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
     //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
     //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
     //GRBVar *si_p = model.addVars(num_vertices(graph));

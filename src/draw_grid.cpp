@@ -71,7 +71,7 @@ NodeStyle DefaultDrawingOptions::nodeStyle(pds::style::NodeState node) const {
     };
 }
 
-EdgeStyle DefaultDrawingOptions::edgeStyle(pds::style::NodeState _s, pds::style::NodeState _t) const {
+EdgeStyle DefaultDrawingOptions::edgeStyle(pds::style::NodeState, pds::style::NodeState) const {
     return {.color=Color::fromRGB(0, 0, 0, 255), .thickness=lineThickness};
 }
 
@@ -157,12 +157,24 @@ void drawGrid(const PowerGrid &graph,
         };
     };
     double minx = std::numeric_limits<double>::max(), maxx = 0, miny = std::numeric_limits<double>::max(), maxy = 0;
+    double centerx = 0.0, centery = 0.0;
+    for (auto [v, coord]: layout) {
+        centerx += coord.x;
+        centery += coord.y;
+    }
+    centerx /= layout.size();
+    centery /= layout.size();
     double maxSize = 0;
     for (auto v: graph.vertices()) {
         auto node = G.newNode();
         id_to_node.emplace(v, node);
-        GA.x(node) = layout.at(v).x;
-        GA.y(node) = layout.at(v).y;
+        if (layout.contains(v)) {
+            GA.x(node) = layout.at(v).x;
+            GA.y(node) = layout.at(v).y;
+        } else {
+            GA.x(node) = centerx;
+            GA.y(node) = centery;
+        }
         auto nodeStyle = style.nodeStyle(nodeState(v));
         GA.fillColor(node) = style::toOgdf(nodeStyle.fillColor);
         GA.strokeColor(node) = style::toOgdf(nodeStyle.drawColor);

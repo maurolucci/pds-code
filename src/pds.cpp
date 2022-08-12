@@ -13,18 +13,12 @@ namespace pds {
 PowerGrid import_graphml(const std::string& filename, bool all_zero_injection) {
     PowerGrid graph;
     boost::dynamic_properties attr(boost::ignore_other_properties);
-    //typename boost::property_map<PowerGrid, boost::vertex_index_t>::type index = get(boost::vertex_index, graph); //
     map<PowerGrid::vertex_descriptor, long> zero_injection_data;
     boost::associative_property_map zero_injection(zero_injection_data);
-    //auto index_map = boost::get(boost::vertex_index, graph);
-    //std::vector<long> long_zi;
-    //auto zero_injection = boost::make_iterator_property_map(long_zi.begin())
     auto id_map = [&graph](const PowerGrid::vertex_descriptor& vertex) -> long& { return graph[vertex].id;};
     auto name_map = [&graph](PowerGrid::vertex_descriptor vertex) -> std::string& { return graph[vertex].name; };
     boost::function_property_map<decltype(id_map), PowerGrid::vertex_descriptor> id(id_map);
     boost::function_property_map<decltype(name_map), PowerGrid::vertex_descriptor> name(name_map);
-    //auto id_property = graph.getProperty(&Bus::id);
-    //auto name_property = graph.getProperty(&Bus::name);
     attr.property("zero_injection", zero_injection);//make_vector_property_map(long_zi, graph));
     attr.property("name", name);
     attr.property("id", id);
@@ -35,6 +29,363 @@ PowerGrid import_graphml(const std::string& filename, bool all_zero_injection) {
         graph[v].zero_injection = zero_injection[v] || all_zero_injection;
     }
     return graph;
+}
+
+set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph, const set<PowerGrid::vertex_descriptor> &starts) {
+    set<PowerGrid::vertex_descriptor> observed;
+    for (auto v: starts) {
+        observed.insert(v);
+        for (auto w: graph.neighbors(v)) {
+            observed.insert(w);
+        }
+    }
+    propagate(graph, observed);
+    return observed;
+}
+
+void PdsState::propagate(PdsState::Vertex vertex) {
+    if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
+        for (auto w: m_graph.neighbors(vertex)) {
+            observe(w);
+        }
+    }
+}
+
+void PdsState::observe(PdsState::Vertex vertex) {
+    if (!isObserved(vertex)) {
+        m_observed.insert(vertex);
+        for (auto w: m_graph.neighbors(vertex)) {
+            m_unobserved_degree[w] -= 1;
+            assert(m_unobserved_degree[w] >= 0);
+            propagate(w);
+        }
+        propagate(vertex);
+    }
+}
+
+bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, set<PdsState::Vertex> &seen) {
+    bool changed = false;
+    seen.insert(start);
+    if (m_graph.degree(start) <= 2 && isZeroInjection(start) && !isActive(start)) {
+        setInactive(start);
+        changed = true;
+    }
+    for (auto w: m_graph.neighbors(start)) {
+        if (!seen.contains(w)) {
+            changed |= disableLowDegreeRecursive(w, seen);
+        }
+    }
+    return changed;
+}
+
+bool PdsState::setBlank(PdsState::Vertex vertex) {
+    assert(!isActive(vertex));
+    m_active[vertex] = PmuState::Blank;
+    return m_observed.size() == m_graph.numVertices();
+}
+
+bool PdsState::setActive(PdsState::Vertex vertex) {
+    m_active[vertex] = PmuState::Active;
+    observe(vertex);
+    for (auto w: m_graph.neighbors(vertex)) {
+        observe(w);
+    }
+    return m_observed.size() == m_graph.numVertices();
+}
+
+bool PdsState::setInactive(PdsState::Vertex vertex) {
+    assert(!isActive(vertex));
+    if (!isInactive(vertex)) {
+        m_active[vertex] = PmuState::Inactive;
+        assert(activeState(vertex) == PmuState::Inactive);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+bool PdsState::collapseLeaves() {
+    bool changed = false;
+    auto vertices = m_graph.vertices() | ranges::to<std::vector>();
+    for (auto v: vertices) {
+        if (m_graph.degree(v) == 1
+                && !isActive(v)
+                ) {
+            Vertex neighbor;
+            for (auto w: m_graph.neighbors(v)) {
+                neighbor = w;
+            }
+            if (m_graph.degree(neighbor) == 2 && m_graph[neighbor].zero_injection) {
+                if (!isZeroInjection(v)) {
+                    m_graph[neighbor].zero_injection = false;
+                }
+            } else {
+                if (m_graph[neighbor].zero_injection) {
+                    m_graph[neighbor].zero_injection = false;
+                } else {
+                    setActive(neighbor);
+                }
+            }
+            m_graph.removeVertex(v);
+            changed = true;
+        } else if (m_unobserved_degree.at(v) == 0 && isBlank(v) && isObserved(v)) {
+            setInactive(v);
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+bool PdsState::disableLowDegree() {
+    bool changed = false;
+    set<PdsState::Vertex> seen;
+    for (auto v: m_graph.vertices()) {
+        if (m_graph.degree(v) >= 3) {
+            changed = disableLowDegreeRecursive(v, seen);
+        }
+    }
+    return changed;
+}
+bool PdsState::reduceObservedNonZi() {
+    bool changed = false;
+    auto vertices = m_graph.vertices() | ranges::to<std::vector>();
+    for (auto v: vertices) {
+        if (isObserved(v) && isInactive(v) && !isZeroInjection(v)) {
+            m_graph.removeVertex(v);
+            changed = true;
+        }
+    }
+    if (changed) {
+        for (auto v: m_graph.vertices()) {
+            if (isInactive(v)) {
+                setBlank(v);
+            }
+        }
+    }
+    return changed;
+}
+
+bool PdsState::collapseDegreeTwo() {
+    bool changed = false;
+    auto vertices = m_graph.vertices() | ranges::to<std::vector>();
+    for (auto v: vertices) {
+        if (m_graph.degree(v) == 2 && isZeroInjection(v)) {
+            std::vector<Vertex> neighbors = m_graph.neighbors(v) | ranges::to<std::vector>();
+            auto [x, y] = std::tie(neighbors[0], neighbors[1]); { }
+            if (!m_graph.edge(x, y)) {
+                if (isInactive(v)) {
+                    if((isZeroInjection(x) && m_graph.degree(x) <= 2) || (isZeroInjection(y) && m_graph.degree(y) <= 2)) {
+                        m_graph.addEdge(x, y);
+                        m_graph.removeVertex(v);
+                        changed = true;
+                    }
+                }
+                for (auto [s, t]: {std::tie(x, y), std::tie(y, x)}) {
+                    if (!isZeroInjection(s) && isInactive(s) && !isZeroInjection(t) && isBlank(t)) {
+                        setActive(t);
+                        changed = true;
+                    }
+                }
+            } else {
+                if (m_graph.degree(x) == 2 && isBlank(y)) {
+                    setActive(y);
+                    changed = true;
+                } else if (m_graph.degree(y) == 2 && isBlank(x)) {
+                    setActive(x);
+                    changed = true;
+                }
+            }
+        }
+    }
+    return changed;
+}
+
+bool PdsState::disableObservationNeighborhood() {
+    bool changed = false;
+    map<Vertex, set<Vertex>> observedVertices;
+    set<Vertex> active;
+    for (auto v: m_graph.vertices()) {
+        if (isActive(v)) active.insert(v);
+    }
+    for (auto v: m_graph.vertices()) {
+        if (!isActive(v)) {
+            active.insert(v);
+            observedVertices.emplace(v, observationNeighborhood(m_graph, active));
+            active.erase(v);
+        } else {
+            observedVertices.emplace(v, observationNeighborhood(m_graph, active));
+        }
+    }
+    for (auto v: m_graph.vertices()) {
+        if (!isInactive(v)) {
+            for (auto w: m_graph.vertices()) {
+                if (v != w && isBlank(w)) {
+                    if (observedVertices.at(v).contains(w)) {
+                        if (isSuperset(observedVertices.at(v), observedVertices.at(w))) {
+                            setInactive(w);
+                            changed = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return changed;
+}
+
+bool PdsState::collapseObservedEdges() {
+    bool changed = false;
+    auto edges = m_graph.edges() | ranges::to<std::vector>();
+    auto dummy = m_graph.addVertex();
+    auto oneActive = dummy;
+    for (auto v: m_graph.vertices()) {
+        if (v == dummy) continue;
+        if (isActive(v)) oneActive = v;
+    }
+    for (auto e: edges) {
+        auto [s, t] = m_graph.endpoints(e);
+        if (isObserved(s) && isObserved(t) && !isActive(s) && !isActive(t)) {
+            m_graph.removeEdge(e);
+            changed = true;
+            if (s != oneActive) {
+                m_graph.addEdge(s, oneActive);
+            }
+            if (t != oneActive) {
+                m_graph.addEdge(t, oneActive);
+            }
+        }
+    }
+    if (m_graph.degree(dummy) > 0) {
+        setActive(dummy);
+    } else {
+        m_graph.removeVertex(dummy);
+    }
+    return changed;
+}
+
+bool isBlockingVertex(const PdsState& state, PdsState::Vertex vertex) {
+    return !state.isZeroInjection(vertex) && state.isObserved(vertex) && state.isInactive(vertex);
+}
+
+inline bool isBlockedEdge(const PdsState& state, PdsState::Vertex source, PdsState::Vertex target) {
+    return state.isObserved(source) && state.isObserved(target)
+        && !state.isActive(source) && !state.isActive(target)
+        && !(state.isZeroInjection(source) && state.isZeroInjection(target));
+}
+
+void recurseComponent(
+        PdsState::Vertex start,
+        const PdsState& state,
+        set<PdsState::Vertex>& seen,
+        set<PdsState::Vertex>& currentComponent,
+        bool nonZiSeparators
+) {
+    if (seen.contains(start)) return;
+    seen.insert(start);
+    currentComponent.insert(start);
+    for (auto w: state.graph().neighbors(start)) {
+        if (!state.isActive(w)) {
+            if (!seen.contains(w) && (!nonZiSeparators || !isBlockedEdge(state, start, w))) {
+                recurseComponent(w, state, seen, currentComponent, nonZiSeparators);
+            }
+        } else {
+            currentComponent.insert(w);
+        }
+    }
+}
+
+std::vector<PdsState> PdsState::subproblems(bool nonZiSeparators) const {
+    std::vector<PdsState> components;
+    set<Vertex> seen;
+    for (auto v: m_graph.vertices()) {
+        if (!isActive(v) && !seen.contains(v)) {
+            set<Vertex> currentComponent;
+            recurseComponent(v, *this, seen, currentComponent, nonZiSeparators);
+            PowerGrid subgraph{graph()};
+            for (auto x: subgraph.vertices()) {
+                if (!currentComponent.contains(x)) {
+                    subgraph.removeVertex(x);
+                }
+            }
+            auto dummy = subgraph.addVertex();
+            auto oneActive = dummy;
+            PdsState subproblem(std::move(subgraph));
+            for (auto x: subproblem.graph().vertices()) {
+                if (x == dummy) continue;
+                if (isActive(x)) {
+                    subproblem.setActive(x);
+                    oneActive = x;
+                } else if (isInactive(x)) {
+                    subproblem.setInactive(x);
+                }
+            }
+            bool dummyNeeded = false;
+            for (auto x: subproblem.graph().vertices()) {
+                if (x == dummy) continue;
+                if (isObserved(x) && !subproblem.isObserved(x)) {
+                    subproblem.m_graph.addEdge(x, oneActive);
+                    dummyNeeded = true;
+                }
+            }
+            subproblem.setActive(oneActive);
+            if (oneActive != dummy || !dummyNeeded) {
+                subproblem.m_graph.removeVertex(dummy);
+            }
+            components.emplace_back(std::move(subproblem));
+        }
+    }
+    return components;
+}
+
+void dominate(const PowerGrid &graph, const map<PowerGrid::vertex_descriptor, PmuState> &active, set<PowerGrid::vertex_descriptor> &observed) {
+    for (auto v: graph.vertices()) {
+        if (active.at(v) == PmuState::Active) {
+            observed.insert(v);
+            for (auto w: graph.neighbors(v)) {
+                observed.insert(w);
+            }
+        }
+    }
+}
+
+bool propagate(const PowerGrid &graph, set<PowerGrid::vertex_descriptor> &observed, size_t max_unobserved) {
+    pds::map<PowerGrid::vertex_descriptor, size_t> unobserved_degree;
+    std::vector<PowerGrid::vertex_descriptor> queue;
+    for (const auto& v: graph.vertices()) {
+        unobserved_degree[v] = 0;
+        for (const auto& w: graph.neighbors(v)) {
+            unobserved_degree[v] += !observed.contains(w);
+        }
+        if (graph[v].zero_injection && observed.contains(v) && unobserved_degree.at(v) > 0 && unobserved_degree.at(v) <= max_unobserved) {
+            queue.push_back(v);
+        }
+    }
+    while (!queue.empty()) {
+        auto v = queue.back();
+        queue.pop_back();
+        for (const auto& w: graph.neighbors(v)) {
+            if (!observed.contains(w)) {
+                observed.insert(w);
+                if (graph[w].zero_injection && observed.contains(w) && unobserved_degree.at(w) > 0 && unobserved_degree.at(w) <= max_unobserved) {
+                    queue.push_back(w);
+                }
+                for (const auto& u: graph.neighbors(w)) {
+                    unobserved_degree[u] -= 1;
+                    auto deg = unobserved_degree.at(u);
+                    if (graph[u].zero_injection && observed.contains(u) && deg > 0 && deg == max_unobserved) {
+                        queue.push_back(u);
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
+bool observed(const PowerGrid &graph, const set<PowerGrid::vertex_descriptor> &observed) {
+    return ranges::all_of(graph.vertices(), [&] (const auto& v) {
+        return observed.contains(v);
+    });
 }
 
 }

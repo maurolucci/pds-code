@@ -6,6 +6,8 @@
 
 #include <string>
 #include <fmt/format.h>
+#include <fmt/chrono.h>
+#include <chrono>
 
 #include "pds.hpp"
 #include "gurobi_solve.hpp"
@@ -21,15 +23,17 @@ void printResult(
         const pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>& active,
         const pds::set<pds::PowerGrid::vertex_descriptor>& observed
 ) {
-    bool sep = false;
     size_t active_count = 0, inactive_count = 0, zero_injection_count = 0, observed_count = 0;
-    std::cout << "active nodes: [";
+    auto filter_active = [&active](auto v) -> bool {
+        return active.at(v) == pds::PmuState::Active;
+    };
+    if (false) {
+        auto active = graph.vertices() | ranges::views::filter(filter_active) | ranges::to<std::vector>();
+        fmt::print("active nodes: {}\n", active);
+    }
     for (const auto &v: graph.vertices()) {
         switch (active.at(v)) {
             case pds::PmuState::Active:
-                if (sep) std::cout << ", ";
-                sep = true;
-                std::cout << graph[v].name;
                 ++active_count;
                 break;
             case pds::PmuState::Inactive:
@@ -41,36 +45,16 @@ void printResult(
         zero_injection_count += graph[v].zero_injection;
         observed_count += observed.contains(v);
     }
-    std::cout << "]\n";
-    std::cout << "graph (m=" << graph.numEdges() << ", n=" << graph.numVertices()
-              << ", #active=" << active_count
-              << ", #inactive=" << inactive_count
-              << ", #observed=" << observed_count
-              << ", #zero_injection=" << zero_injection_count << ")\n";
+    fmt::print(
+                "graph (m={}, m={}, #active={}, #inactive={}, #observed={}, #zero_injection={})\n",
+                graph.numVertices(),
+                graph.numEdges(),
+                active_count,
+                inactive_count,
+                observed_count,
+                zero_injection_count);
     bool feasible = pds::observed(graph, observed);
-    std::cout << "feasible: " << std::boolalpha << feasible << std::endl;
-    if (!feasible) {
-        bool sep = false;
-        std::cout << "active: [";
-        for (const auto& v: graph.vertices()) {
-            if (active.at(v) == pds::PmuState::Active) {
-                if (sep) std::cout << ", ";
-                sep = true;
-                std::cout << graph[v].name;
-            }
-        }
-        std::cout << "]\n";
-        sep = false;
-        std::cout << "unobserved: [";
-        for (auto v: graph.vertices()) {
-            if (!observed.contains(v)) {
-                if (sep) std::cout << ", ";
-                sep = true;
-                std::cout << graph[v].name;
-            }
-        }
-        std::cout << "]\n";
-    }
+    fmt::print("feasible: {}\n", feasible);
 }
 
 void printGraph(
@@ -87,15 +71,35 @@ void printGraph(
     std::cout << "}\n";
 }
 
+auto now() {
+    return std::chrono::high_resolution_clock::now();
+}
+
+template<typename T>
+auto ms(T time) {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(time);
+}
+
 void processBoost(const std::string& filename) {
+    fmt::print("loading graph...\n");
+    auto t0 = now();
     auto graph = pds::import_graphml(filename, true);
+    auto t1 = now();
+    fmt::print("graph loaded in {}\n", ms(t1 - t0)); std::fflush(nullptr);
     //printGraph(graph);
+    fmt::print("computing layout...\n");
     auto layout = pds::layoutGraph(graph);
-    if (graph.numVertices() < 2000) {
+    auto t2 = now();
+    fmt::print("layout computed in {}\n", ms(t2 - t1));
+    if (graph.numVertices() < 1000) {
+        fmt::print("solve exact\n");
+        auto t3 = now();
         auto active = graph.vertices()
         | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
         | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
         pds::solve_pds(graph, active);
+        auto t4 = now();
+        fmt::print("solved in {}", ms(t4 - t3));
         pds::set<pds::PowerGrid::vertex_descriptor> observed;
         printResult(graph, active, observed);
         pds::dominate(graph, active, observed);
@@ -104,29 +108,54 @@ void processBoost(const std::string& filename) {
         pds::drawGrid(graph, active, observed, "out/4_solve_input.svg", layout);
     }
     {
+        fmt::print("solve with reductions\n");
         pds::PdsState state(graph);
         bool drawReductionSteps = true;
         auto drawState = [&,counter=0](std::string name) mutable {
             if (drawReductionSteps) {
-                pds::drawGrid(state.graph(), state.active(), state.observed(), fmt::format("out/red_{:04}_{}.svg", counter, name), layout);
+                pds::drawGrid(state.graph(), state.active(), state.observed(), fmt::format("out/1_red_{:04}_{}.svg", counter, name), layout);
                 ++counter;
             }
         };
         pds::drawGrid(state.graph(), state.active(), state.observed(), "out/0_input.svg", layout);
-        state.disableLowDegree(); drawState("low_degree");
-        while (state.collapseLeaves()) { drawState("leaves"); }
-        state.disableLowDegree(); drawState("low_degree");
-        while (state.collapseDegreeTwo()) { drawState("path"); }
-        state.disableLowDegree(); drawState("low_degree");
-        while (state.collapseObservationNeighborhoods()) { drawState("observation_neighborhood"); }
-        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/1_preprocessed.svg", layout);
-        auto active = graph.vertices()
-                      | ranges::views::transform([&](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v,
-                                                                                                                  state.activeState(
-                                                                                                                          v));})
-                      | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
+        fmt::print("applying reductions\n");
+        auto t_startReduction = now();
+        bool changed;
+        do {
+            changed = false;
+            //if (state.disableLowDegree()) { drawState("low_degree"); changed = true; }
+            //while (state.collapseDegreeTwo()) { drawState("path"); changed = true; }
+            while (state.collapseLeaves()) { drawState("leaves"); changed = true; }
+            if (state.disableLowDegree()) { drawState("low_degree"); changed = true; }
+            if (state.reduceObservedNonZi()) { drawState("non_zi"); changed = true; }
+            //if (state.collapseObservedEdges()) { drawState("observed_edges"); changed = true; }
+            while (state.disableObservationNeighborhood()) { drawState("observation_neighborhood"); changed = true; }
+        } while (changed);
+        auto t_endReduction = now();
+        fmt::print("reductions took {}\n", ms(t_endReduction - t_startReduction));
+        printResult(state.graph(), state.active(), state.observed());
+        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/1_red_preprocessed.svg", layout);
+        if (false) {
+            auto subproblems = state.subproblems(true);
+            ranges::sort(subproblems,
+                         [](const pds::PdsState &left, const pds::PdsState &right) -> bool {
+                             return left.graph().numVertices() < right.graph().numVertices();
+                         });
+            for (size_t i = 0, j = 0; auto &subproblem: subproblems) {
+                if (subproblem.allObserved()) {
+                    pds::drawGrid(subproblem.graph(), subproblem.active(), subproblem.observed(),
+                                  fmt::format("out/comp_solved_{:03}.svg", i), layout);
+                    ++i;
+                } else {
+                    pds::drawGrid(subproblem.graph(), subproblem.active(), subproblem.observed(),
+                                  fmt::format("out/comp_unsolved_{:03}.svg", j), layout);
+                    ++j;
+                }
+            }
+        }
+        auto active = state.active();
         if (!pds::solve_pds(state.graph(), active)) {
-            std::cout << "infeasible" << std::endl;
+            fmt::print("infeasible\n");
         }
         for (auto v: state.graph().vertices()) {
             if (active.at(v) == pds::PmuState::Active) {
@@ -139,8 +168,8 @@ void processBoost(const std::string& filename) {
         pds::propagate(graph, observed);
         pds::drawGrid(graph, active, observed, "out/3_solved.svg", layout);
         printResult(graph, active, observed);
-        std::cout << "#unobserved: " << ranges::distance(state.graph().vertices() | ranges::views::filter([&state](auto v) { return !state.isObserved(
-                v);})) << std::endl;
+        auto isUnobserved = [&state] (auto v) -> bool { return !state.isObserved(v); };
+        fmt::print("#unobserved = {}", ranges::distance(state.graph().vertices() | ranges::views::filter(isUnobserved)));
     }
 }
 
