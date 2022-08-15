@@ -64,9 +64,12 @@ void PdsState::observe(PdsState::Vertex vertex) {
 }
 
 bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, set<PdsState::Vertex> &seen) {
+    auto hasBlankNeighbor = [this] (auto v) {
+        return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w) || isBlank(w);} );
+    };
     bool changed = false;
     seen.insert(start);
-    if (m_graph.degree(start) <= 2 && isZeroInjection(start) && !isActive(start)) {
+    if (m_graph.degree(start) <= 2 && hasBlankNeighbor(start) && isZeroInjection(start) && !isActive(start)) {
         setInactive(start);
         changed = true;
     }
@@ -207,26 +210,28 @@ bool PdsState::disableObservationNeighborhood() {
     for (auto v: m_graph.vertices()) {
         if (isActive(v)) active.insert(v);
     }
+    auto activeNeighborhood = observationNeighborhood(m_graph, active);
     for (auto v: m_graph.vertices()) {
-        if (!isActive(v)) {
-            active.insert(v);
-            cachedNeighborhood.emplace(v, observationNeighborhood(m_graph, active));
-            active.erase(v);
-        } else {
-            cachedNeighborhood.emplace(v, observationNeighborhood(m_graph, active));
+        if (isBlank(v)) {
+            if (isSuperset(activeNeighborhood, m_graph.neighbors(v))) {
+                setInactive(v);
+                changed = true;
+            } else {
+                active.insert(v);
+                cachedNeighborhood.emplace(v, observationNeighborhood(m_graph, active));
+                active.erase(v);
+            }
         }
     }
     auto vertices = m_graph.vertices() | ranges::to<std::vector>();
     ranges::sort(vertices, [this](auto left, auto right) -> bool { return m_graph.degree(left) > m_graph.degree(right);});
     for (auto v: vertices) {
-        if (!isInactive(v)) {
-            for (auto w: m_graph.vertices()) {
+        if (isBlank(v)) {
+            for (auto w: cachedNeighborhood.at(v)) {
                 if (v != w && isBlank(w)) {
-                    if (cachedNeighborhood.at(v).contains(w)) {
-                        if (isSuperset(cachedNeighborhood.at(v), cachedNeighborhood.at(w))) {
-                            setInactive(w);
-                            changed = true;
-                        }
+                    if (isSuperset(cachedNeighborhood.at(v), m_graph.neighbors(w))) {
+                        setInactive(w);
+                        changed = true;
                     }
                 }
             }
