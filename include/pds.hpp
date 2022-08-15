@@ -139,7 +139,11 @@ public:
 
     bool disableObservationNeighborhood();
 
+    bool activateNecessaryNodes();
+
     bool collapseObservedEdges();
+
+    bool solveTrivial();
 
     std::vector<PdsState> subproblems(bool nonZiSeparators = false) const;
 

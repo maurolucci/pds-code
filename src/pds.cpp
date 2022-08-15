@@ -202,7 +202,7 @@ bool PdsState::collapseDegreeTwo() {
 
 bool PdsState::disableObservationNeighborhood() {
     bool changed = false;
-    map<Vertex, set<Vertex>> observedVertices;
+    map<Vertex, set<Vertex>> cachedNeighborhood;
     set<Vertex> active;
     for (auto v: m_graph.vertices()) {
         if (isActive(v)) active.insert(v);
@@ -210,24 +210,46 @@ bool PdsState::disableObservationNeighborhood() {
     for (auto v: m_graph.vertices()) {
         if (!isActive(v)) {
             active.insert(v);
-            observedVertices.emplace(v, observationNeighborhood(m_graph, active));
+            cachedNeighborhood.emplace(v, observationNeighborhood(m_graph, active));
             active.erase(v);
         } else {
-            observedVertices.emplace(v, observationNeighborhood(m_graph, active));
+            cachedNeighborhood.emplace(v, observationNeighborhood(m_graph, active));
         }
     }
-    for (auto v: m_graph.vertices()) {
+    auto vertices = m_graph.vertices() | ranges::to<std::vector>();
+    ranges::sort(vertices, [this](auto left, auto right) -> bool { return m_graph.degree(left) > m_graph.degree(right);});
+    for (auto v: vertices) {
         if (!isInactive(v)) {
             for (auto w: m_graph.vertices()) {
                 if (v != w && isBlank(w)) {
-                    if (observedVertices.at(v).contains(w)) {
-                        if (isSuperset(observedVertices.at(v), observedVertices.at(w))) {
+                    if (cachedNeighborhood.at(v).contains(w)) {
+                        if (isSuperset(cachedNeighborhood.at(v), cachedNeighborhood.at(w))) {
                             setInactive(w);
                             changed = true;
                         }
                     }
                 }
             }
+        }
+    }
+    return changed;
+}
+
+bool PdsState::activateNecessaryNodes() {
+    bool changed = false;
+    set<Vertex> blankActive;
+    for (auto v: m_graph.vertices()) {
+        if (!isInactive(v)) blankActive.insert(v);
+    }
+    for (auto v: m_graph.vertices()) {
+        if (isBlank(v)) {
+            blankActive.erase(v);
+            auto observed = observationNeighborhood(m_graph, blankActive);
+            if (ranges::any_of(m_graph.vertices(), [&observed](auto v) -> bool { return !observed.contains(v);})) {
+                setActive(v);
+                changed = true;
+            }
+            blankActive.insert(v);
         }
     }
     return changed;
@@ -247,11 +269,12 @@ bool PdsState::collapseObservedEdges() {
         if (isObserved(s) && isObserved(t) && !isActive(s) && !isActive(t)) {
             m_graph.removeEdge(e);
             changed = true;
+            auto hasObservedNeighbor = [this](Vertex v) -> bool { return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w);});};
             if (s != oneActive) {
-                m_graph.addEdge(s, oneActive);
+                if (!hasObservedNeighbor(s)) m_graph.addEdge(s, oneActive);
             }
             if (t != oneActive) {
-                m_graph.addEdge(t, oneActive);
+                if (!hasObservedNeighbor(t)) m_graph.addEdge(t, oneActive);
             }
         }
     }
@@ -292,6 +315,17 @@ void recurseComponent(
             currentComponent.insert(w);
         }
     }
+}
+
+bool PdsState::solveTrivial() {
+    if (!allObserved()) {
+        auto blank_filter = [this] (Vertex v) -> bool { return isBlank(v); };
+        auto possibleLocations = m_graph.vertices() | ranges::views::filter(blank_filter) | ranges::to<std::vector>();
+        if (possibleLocations.size() == 1) {
+            setActive(possibleLocations[0]);
+        }
+    }
+    return allObserved();
 }
 
 std::vector<PdsState> PdsState::subproblems(bool nonZiSeparators) const {
