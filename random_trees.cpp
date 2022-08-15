@@ -1,0 +1,179 @@
+//
+// Created by max on 15.08.22.
+//
+
+#include <setgraph/graph.hpp>
+#include <setgraph/boost_adapter.hpp>
+#include <boost/property_map/property_map.hpp>
+#include <boost/property_map/dynamic_property_map.hpp>
+#include <range/v3/all.hpp>
+#include <boost/graph/graphml.hpp>
+
+#include <boost/program_options.hpp>
+
+#include <fmt/format.h>
+
+using Graph = setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
+using Vertex = Graph::vertex_descriptor;
+
+Graph randomTree(size_t n) {
+    Graph graph;
+    if (n == 0) { return graph; }
+    std::vector<Vertex> graphVertices;
+    std::minstd_rand rng;
+    graphVertices.push_back(graph.addVertex());
+    for (size_t x = 1; x < n; ++x) {
+        auto u = graphVertices[std::uniform_int_distribution(size_t{0}, graphVertices.size() - 1)(rng)];
+        auto v = graph.template addVertex();
+        graphVertices.push_back(v);
+        graph.addEdge(u, v);
+    }
+    return graph;
+}
+
+template<typename L, typename R>
+bool intersects(const L& lhs, const R& rhs) {
+    if (lhs.size() < rhs.size()) {
+        intersects(rhs, lhs);
+    } else {
+        for (auto x: rhs) {
+            if (lhs.contains(x)) return true;
+        }
+    }
+    return false;
+}
+
+void dfs(const Graph& graph, Vertex start, setgraph::map<Vertex, Vertex>& parent, setgraph::map<Vertex, size_t>& distance) {
+    if (!parent.contains(start)) {
+        parent[start] = start;
+        distance[start] = 0;
+    }
+    for (auto w: graph.neighbors(start)) {
+        if (!parent.contains(w)) {
+            parent[w] = start;
+            distance[w] = distance[start] + 1;
+            dfs(graph, w, parent, distance);
+        }
+    }
+}
+
+std::optional<Vertex> lowestCommonAncestor(Vertex first, Vertex second, const setgraph::map<Vertex, Vertex>& parent, const setgraph::map<Vertex, size_t>& distance) {
+    while (first != second) {
+        if (parent.at(first) == first && parent.at(second) == second) return {};
+        if ((distance.at(first) < distance.at(second) && parent.at(second) != second) || parent.at(first) == first) {
+            second = parent.at(second);
+        } else {
+            first = parent.at(first);
+        }
+    }
+    return first;
+}
+
+Graph randomCactus(size_t n) {
+    auto graph = randomTree(n);
+    setgraph::map<Vertex, Vertex> parent;
+    setgraph::map<Vertex, size_t> distance;
+    auto vertices = graph.vertices() | ranges::to<std::vector>();
+    dfs(graph, vertices.front(), parent, distance);
+    std::minstd_rand rng;
+    for (auto v: vertices) {
+        if (distance[v] % 2) {
+            auto neighbors = graph.neighbors(v) | ranges::to<std::vector>();
+            graph.clearVertex(v);
+            ranges::shuffle(neighbors, rng);
+            for (size_t i = 1; i < neighbors.size(); ++i) {
+                graph.addEdge(neighbors[i-1], neighbors[i]);
+            }
+            graph.addEdge(v, neighbors.back());
+            graph.addEdge(v, neighbors.front());
+        }
+    }
+    return graph;
+}
+
+//Graph randomCactus(size_t n, double p = 0.1) {
+//    auto graph = randomTree(n);
+//    if (n == 0) return graph;
+//    setgraph::map<Graph::vertex_descriptor, setgraph::set<size_t>> onCycle;
+//    std::minstd_rand rng;
+//    const auto N = graph.numVertices();
+//    std::uniform_int_distribution endpoint(size_t{0}, N - 1);
+//    auto vertices = graph.vertices() | ranges::to<std::vector>();
+//    setgraph::map<Vertex, Vertex> parent;
+//    setgraph::map<Vertex, size_t> distance;
+//    dfs(graph, vertices.front(), parent, distance);
+//    size_t cycle = 1;
+//    for (size_t i = 0; i < static_cast<size_t>(N * p); ++i) {
+//        auto u = endpoint(rng);
+//        auto v = endpoint(rng);
+//        auto x = vertices[u];
+//        auto y = vertices[v];
+//        if (!intersects(onCycle[x], onCycle[y])) {
+//            auto lca = lowestCommonAncestor(x, y, parent, distance).value();
+//            graph.addEdge(x, y);
+//            while (x != lca) {
+//                onCycle[x].insert(cycle);
+//                x = parent[x];
+//            }
+//            while (y != lca) {
+//                onCycle[y].insert(cycle);
+//                y = parent[y];
+//            }
+//            onCycle[lca].insert(cycle);
+//            ++cycle;
+//        }
+//    }
+//    return graph;
+//}
+
+namespace po = boost::program_options;
+
+void writeGraph(const Graph& graph, std::ostream& out) {
+    setgraph::map<Vertex, long> zeroInjection;
+    for (auto v: graph.vertices()) {
+        zeroInjection[v] = 1;
+    }
+    boost::associative_property_map ziMap(zeroInjection);
+    boost::dynamic_properties properties(boost::ignore_other_properties);
+    properties.property("zero_injection", ziMap);
+    setgraph::map<Vertex, size_t> vertexIndex;
+    for (size_t i = 0; auto v: graph.vertices()) {
+        vertexIndex.insert({v, i});
+        ++i;
+    }
+    boost::write_graphml(out, graph, boost::associative_property_map(vertexIndex), properties);
+}
+
+int main(int argc, char** argv) {
+    po::options_description desc("options");
+    std::string graphType;
+    std::string outFile;
+    size_t n = 0;
+    desc.add_options()
+            ("help,h", "show this help")
+            ("type,t", po::value(&graphType)->default_value("tree"), "graph type")
+            ("size,n", po::value(&n)->default_value(100), "number of vertices")
+            ("out,o", po::value(&outFile)->default_value("-"), "out file name")
+            ;
+    po::positional_options_description positional;
+    positional.add("size", -1);
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(positional).run(), vm);
+    po::notify(vm);
+    if (vm.count("help")) {
+        std::cout << desc << std::endl;
+        return 1;
+    }
+
+    using Graph = setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
+    using Vertex = Graph::vertex_descriptor;
+    Graph graph;
+    if (graphType == "tree") { graph = randomTree(n);}
+    else if (graphType == "cactus") { graph = randomCactus(n); }
+
+    std::optional<std::ofstream> outStream;
+    if (outFile != "-") {
+        outStream.emplace(std::ofstream(outFile));
+    }
+    writeGraph(graph, outStream.has_value() ? outStream.value() : std::cout);
+}

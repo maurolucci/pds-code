@@ -4,7 +4,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(Boost 1.70 REQUIRED COMPONENTS graph)
+find_package(Boost 1.70 REQUIRED COMPONENTS graph program_options)
 
 include(FetchContent)
 set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE OPT_IN)
@@ -47,5 +47,7 @@ target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 
 
 add_executable(pds main.cpp)
-
 target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt)
+
+add_executable(random_tree random_trees.cpp)
+target_link_libraries(random_tree PUBLIC pdslib Boost::program_options)
