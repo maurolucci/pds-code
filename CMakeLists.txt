@@ -38,7 +38,7 @@ target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
 target_compile_options(pdslib PRIVATE
         $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-        -Wall -Wextra>
+        -Wall -Wextra -Werror>
         $<$<CXX_COMPILER_ID:MSVC>:
         /W4>)
 

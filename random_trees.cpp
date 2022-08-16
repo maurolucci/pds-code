@@ -16,11 +16,11 @@
 using Graph = setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
 using Vertex = Graph::vertex_descriptor;
 
-Graph randomTree(size_t n) {
+template<std::uniform_random_bit_generator Rng = std::minstd_rand>
+Graph randomTree(size_t n, Rng rng = Rng()) {
     Graph graph;
     if (n == 0) { return graph; }
     std::vector<Vertex> graphVertices;
-    std::minstd_rand rng;
     graphVertices.push_back(graph.addVertex());
     for (size_t x = 1; x < n; ++x) {
         auto u = graphVertices[std::uniform_int_distribution(size_t{0}, graphVertices.size() - 1)(rng)];
@@ -69,23 +69,32 @@ std::optional<Vertex> lowestCommonAncestor(Vertex first, Vertex second, const se
     return first;
 }
 
-Graph randomCactus(size_t n) {
-    auto graph = randomTree(n);
-    setgraph::map<Vertex, Vertex> parent;
-    setgraph::map<Vertex, size_t> distance;
-    auto vertices = graph.vertices() | ranges::to<std::vector>();
-    dfs(graph, vertices.front(), parent, distance);
-    std::minstd_rand rng;
-    for (auto v: vertices) {
-        if (distance[v] % 2) {
-            auto neighbors = graph.neighbors(v) | ranges::to<std::vector>();
-            graph.clearVertex(v);
-            ranges::shuffle(neighbors, rng);
-            for (size_t i = 1; i < neighbors.size(); ++i) {
-                graph.addEdge(neighbors[i-1], neighbors[i]);
-            }
-            graph.addEdge(v, neighbors.back());
-            graph.addEdge(v, neighbors.front());
+template<std::uniform_random_bit_generator Rng = std::minstd_rand>
+Graph randomCactus(size_t n, Rng rng = Rng()) {
+    Graph graph;
+    if (n == 0) { return graph; }
+    std::vector<Vertex> graphVertices;
+    std::set<Vertex> blocks;
+    graphVertices.push_back(graph.addVertex());
+    n -= 1;
+    while (n > 0)  {
+        auto u = graphVertices[std::uniform_int_distribution(size_t{0}, graphVertices.size() - 1)(rng)];
+        auto v = graph.template addVertex();
+        graphVertices.push_back(v);
+        graph.addEdge(u, v);
+        if (!blocks.contains(u)) {
+            blocks.insert(v);
+        } else {
+            --n;
+        }
+    }
+    for (auto v: blocks) {
+        auto neighbors = graph.neighbors(v) | ranges::to<std::vector>();
+        graph.removeVertex(v);
+        ranges::shuffle(neighbors, rng);
+        auto d = neighbors.size();
+        for (size_t i = 0; i < neighbors.size(); ++i) {
+            graph.addEdge(neighbors[i], neighbors[(i+1) % d]);
         }
     }
     return graph;
@@ -153,6 +162,7 @@ int main(int argc, char** argv) {
             ("help,h", "show this help")
             ("type,t", po::value(&graphType)->default_value("tree"), "graph type")
             ("size,n", po::value(&n)->default_value(100), "number of vertices")
+            ("seed,s", po::value<size_t>(), "random seed")
             ("out,o", po::value(&outFile)->default_value("-"), "out file name")
             ;
     po::positional_options_description positional;
@@ -168,8 +178,9 @@ int main(int argc, char** argv) {
     using Graph = setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
     using Vertex = Graph::vertex_descriptor;
     Graph graph;
-    if (graphType == "tree") { graph = randomTree(n);}
-    else if (graphType == "cactus") { graph = randomCactus(n); }
+    std::minstd_rand rng(vm.count("seed") ? vm["seed"].as<size_t>() : size_t{std::random_device()()});
+    if (graphType == "tree") { graph = randomTree(n, rng);}
+    else if (graphType == "cactus") { graph = randomCactus(n, rng); }
 
     std::optional<std::ofstream> outStream;
     if (outFile != "-") {
