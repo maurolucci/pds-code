@@ -43,6 +43,28 @@ set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph
     return observed;
 }
 
+void PdsState::addEdge(Vertex source, Vertex target) {
+    if (!m_graph.edge(source, target)) {
+        m_graph.addEdge(source, target);
+        if (!isObserved(source)) {
+            m_unobserved_degree[target] += 1;
+        }
+        if (!isObserved(target)) {
+            m_unobserved_degree[source] += 1;
+        }
+    }
+}
+
+void PdsState::removeVertex(Vertex v) {
+    if (!isObserved(v)) {
+        for (auto w: m_graph.neighbors(v)) {
+            m_unobserved_degree[w] -= 1;
+            propagate(w);
+        }
+    }
+    m_graph.removeVertex(v);
+}
+
 void PdsState::propagate(PdsState::Vertex vertex) {
     if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
         for (auto w: m_graph.neighbors(vertex)) {
@@ -129,7 +151,7 @@ bool PdsState::collapseLeaves() {
                     setActive(neighbor);
                 }
             }
-            m_graph.removeVertex(v);
+            removeVertex(v);
             changed = true;
         } else if (m_unobserved_degree.at(v) == 0 && isBlank(v) && isObserved(v)) {
             setInactive(v);
@@ -149,20 +171,14 @@ bool PdsState::disableLowDegree() {
     }
     return changed;
 }
+
 bool PdsState::reduceObservedNonZi() {
     bool changed = false;
     auto vertices = m_graph.vertices() | ranges::to<std::vector>();
     for (auto v: vertices) {
         if (isObserved(v) && isInactive(v) && !isZeroInjection(v)) {
-            m_graph.removeVertex(v);
+            removeVertex(v);
             changed = true;
-        }
-    }
-    if (changed) {
-        for (auto v: m_graph.vertices()) {
-            if (isInactive(v)) {
-                setBlank(v);
-            }
         }
     }
     return changed;
@@ -178,8 +194,8 @@ bool PdsState::collapseDegreeTwo() {
             if (!m_graph.edge(x, y)) {
                 if (isInactive(v)) {
                     if((isZeroInjection(x) && m_graph.degree(x) <= 2) || (isZeroInjection(y) && m_graph.degree(y) <= 2)) {
-                        m_graph.addEdge(x, y);
-                        m_graph.removeVertex(v);
+                        addEdge(x, y);
+                        removeVertex(v);
                         changed = true;
                     }
                 }
@@ -260,33 +276,51 @@ bool PdsState::activateNecessaryNodes() {
     return changed;
 }
 
-bool PdsState::collapseObservedEdges() {
-    bool changed = false;
-    auto edges = m_graph.edges() | ranges::to<std::vector>();
-    auto dummy = m_graph.addVertex();
-    auto oneActive = dummy;
-    for (auto v: m_graph.vertices()) {
-        if (v == dummy) continue;
-        if (isActive(v)) oneActive = v;
+map<PdsState::Vertex, PdsState::Vertex> findClosestActive(const PdsState& state) {
+    using Vertex = PdsState::Vertex;
+    std::deque<Vertex> queue;
+    map<Vertex, Vertex> closestActive;
+    for (auto v: state.graph().vertices()) {
+        if (state.isActive(v)) {
+            closestActive.emplace(v, v);
+            queue.push_back(v);
+        }
     }
-    for (auto e: edges) {
-        auto [s, t] = m_graph.endpoints(e);
-        if (isObserved(s) && isObserved(t) && !isActive(s) && !isActive(t)) {
-            m_graph.removeEdge(e);
-            changed = true;
-            auto hasObservedNeighbor = [this](Vertex v) -> bool { return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w);});};
-            if (s != oneActive) {
-                if (!hasObservedNeighbor(s)) m_graph.addEdge(s, oneActive);
-            }
-            if (t != oneActive) {
-                if (!hasObservedNeighbor(t)) m_graph.addEdge(t, oneActive);
+    while (!queue.empty()) {
+        auto v = queue.front();
+        queue.pop_front();
+        for (auto w: state.graph().neighbors(v)) {
+            if (!closestActive.contains(w)) {
+                closestActive.emplace(w, closestActive[v]);
+                queue.push_back(w);
             }
         }
     }
-    if (m_graph.degree(dummy) > 0) {
-        setActive(dummy);
-    } else {
-        m_graph.removeVertex(dummy);
+    return closestActive;
+}
+
+bool PdsState::collapseObservedEdges() {
+    bool changed = false;
+    auto isObservedEdge = [this](PowerGrid::edge_descriptor e) {
+        auto [s, t] = m_graph.endpoints(e);
+        return isObserved(s) && isObserved(t);
+    };
+    auto edges = m_graph.edges() | ranges::views::filter(isObservedEdge) | ranges::to<std::vector>();
+    if (edges.empty()) return false;
+    auto closestActive = findClosestActive(*this);
+
+    for (auto e: edges) {
+        auto [s, t] = m_graph.endpoints(e);
+        if (s == closestActive.at(t) || t == closestActive.at(s)) continue;
+        m_graph.removeEdge(e);
+        changed = true;
+        auto hasObservedNeighbor = [this](Vertex v) -> bool { return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w);});};
+        if (!isActive(s)) {
+            if (!hasObservedNeighbor(s)) addEdge(s, closestActive.at(s));
+        }
+        if (!isActive(t)) {
+            if (!hasObservedNeighbor(t)) addEdge(t, closestActive.at(t));
+        }
     }
     return changed;
 }
@@ -362,13 +396,13 @@ std::vector<PdsState> PdsState::subproblems(bool nonZiSeparators) const {
             for (auto x: subproblem.graph().vertices()) {
                 if (x == dummy) continue;
                 if (isObserved(x) && !subproblem.isObserved(x)) {
-                    subproblem.m_graph.addEdge(x, oneActive);
+                    subproblem.addEdge(x, oneActive);
                     dummyNeeded = true;
                 }
             }
             subproblem.setActive(oneActive);
             if (oneActive != dummy || !dummyNeeded) {
-                subproblem.m_graph.removeVertex(dummy);
+                subproblem.removeVertex(dummy);
             }
             components.emplace_back(std::move(subproblem));
         }

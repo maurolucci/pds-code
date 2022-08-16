@@ -99,6 +99,9 @@ public:
     PdsState& operator=(const PdsState&) = default;
     PdsState& operator=(PdsState&&) = default;
 
+    void addEdge(Vertex source, Vertex target);
+    void removeVertex(Vertex v);
+
     inline bool isZeroInjection(Vertex vertex) const { return m_graph[vertex].zero_injection; }
 
     inline PmuState activeState(Vertex vertex) const { return m_active.at(vertex); }
