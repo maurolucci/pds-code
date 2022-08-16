@@ -1,8 +1,5 @@
 #include <iostream>
 
-#include <boost/graph/graphml.hpp>
-#include <boost/property_map/function_property_map.hpp>
-#include <boost/property_map/compose_property_map.hpp>
 
 #include <string>
 #include <fmt/format.h>
@@ -13,11 +10,6 @@
 #include "pds.hpp"
 #include "gurobi_solve.hpp"
 #include "draw_grid.hpp"
-
-template<class T, class Graph>
-auto make_vector_property_map(T&& vec, Graph graph) {
-    return boost::make_iterator_property_map(vec.begin(), get(boost::vertex_index, graph));
-}
 
 void printResult(
         const pds::PowerGrid& graph,
@@ -81,14 +73,21 @@ auto ms(T time) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(time);
 }
 
-bool applyReductions(pds::PdsState& state, const std::function<void(const pds::PdsState&, std::string)>& callback) {
+bool simpleReductions(pds::PdsState& state, const std::function<void(const pds::PdsState&, std::string)>& callback) {
     bool changed = false;
+    if (state.disableLowDegree()) { callback(state, "low_degree"); changed = true; }
     while (state.collapseLeaves()) { callback(state, "leaves"); changed = true; }
     if (state.reduceObservedNonZi()) { callback(state, "non_zi"); changed = true; }
-    while (state.disableObservationNeighborhood()) { callback(state, "observation_neighborhood"); changed = true; }
-    while (state.activateNecessaryNodes()) { callback(state, "necessary_nodes"); changed = true; }
     while (state.collapseDegreeTwo()) { callback(state, "path"); changed = true; }
     if (state.collapseObservedEdges()) { callback(state, "observed_edges"); changed = true; }
+    return changed;
+}
+
+bool applyReductions(pds::PdsState& state, const std::function<void(const pds::PdsState&, std::string)>& callback) {
+    bool changed = false;
+    while (simpleReductions(state, callback)) { changed = true; }
+    if (state.disableObservationNeighborhood()) { callback(state, "observation_neighborhood"); changed = true; }
+    if (state.activateNecessaryNodes()) { callback(state, "necessary_nodes"); changed = true; }
     return changed;
 }
 
