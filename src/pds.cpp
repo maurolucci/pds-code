@@ -91,7 +91,7 @@ bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, set<PdsState::V
     };
     bool changed = false;
     seen.insert(start);
-    if (m_graph.degree(start) <= 2 && hasBlankNeighbor(start) && isZeroInjection(start) && !isActive(start)) {
+    if (m_graph.degree(start) <= 2 && hasBlankNeighbor(start) && isZeroInjection(start) && isBlank(start)) {
         setInactive(start);
         changed = true;
     }
@@ -232,10 +232,6 @@ bool PdsState::disableObservationNeighborhood() {
             if (isSuperset(activeNeighborhood, m_graph.neighbors(v))) {
                 setInactive(v);
                 changed = true;
-            } else {
-                active.insert(v);
-                cachedNeighborhood.emplace(v, observationNeighborhood(m_graph, active));
-                active.erase(v);
             }
         }
     }
@@ -243,9 +239,12 @@ bool PdsState::disableObservationNeighborhood() {
     ranges::sort(vertices, [this](auto left, auto right) -> bool { return m_graph.degree(left) > m_graph.degree(right);});
     for (auto v: vertices) {
         if (isBlank(v)) {
-            for (auto w: cachedNeighborhood.at(v)) {
+            active.insert(v);
+            auto observation = observationNeighborhood(m_graph, active);
+            active.erase(v);
+            for (auto w: observation) {
                 if (v != w && isBlank(w)) {
-                    if (isSuperset(cachedNeighborhood.at(v), m_graph.neighbors(w))) {
+                    if (isSuperset(observation, m_graph.neighbors(w))) {
                         setInactive(w);
                         changed = true;
                     }
