@@ -1,11 +1,14 @@
 #include <iostream>
 
+#include <boost/program_options.hpp>
 
 #include <string>
 #include <fmt/format.h>
 #include <fmt/chrono.h>
 #include <chrono>
 #include <functional>
+
+#include <filesystem>
 
 #include "pds.hpp"
 #include "gurobi_solve.hpp"
@@ -214,8 +217,216 @@ void processBoost(const std::string& filename) {
     }
 }
 
+struct DrawOptions {
+    bool drawInput;
+    bool drawSolution;
+    bool drawReductions;
+    bool drawSubproblems;
+
+    bool drawAny() { return drawInput || drawSolution || drawReductions || drawSubproblems; }
+};
+
+int run(int argc, const char** argv) {
+    using namespace pds;
+    using std::string, std::vector;
+    using namespace std::string_literals;
+    namespace po = boost::program_options;
+    namespace fs = std::filesystem;
+    po::options_description desc("options");
+    desc.add_options()
+            ("help,h", "show this help")
+            ("graph,f", po::value<string>(), "input graph")
+            ("outdir,o", po::value<string>()->default_value("out"), "output directory")
+            (
+                    "solve",
+                    po::value<string>()->default_value("subproblem"),
+                    "gurobi solve method. Can be any of [none,full,subproblem]"
+            )
+            ("print-solve", "print intermediate solve state")
+            ("print-state,p", "print solve state after each step")
+            ("time-limit,t", po::value<double>()->default_value(600.0), "time limit for gurobi in seconds")
+            ("reductions,r", "apply reductions before exact solving")
+            (
+                    "all-zi,z",
+                    po::value<bool>()->default_value(false)->implicit_value(true),
+                    "consider all vertices zero-inection"
+            )
+            (
+                    "draw,d",
+                    po::value<vector<string>>()->default_value({"none"s}, "none")->implicit_value({"all"s}, "all")->composing(),
+                    "can be one of [none,all,input,solution,reductions,subproblems]"
+            )
+            ;
+    po::positional_options_description pos;
+    pos.add("graph", 1);
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        desc.print(std::cout);
+        return 1;
+    }
+
+    auto outdir = vm["outdir"].as<string>();
+    switch (fs::status(outdir).type()) {
+        case fs::file_type::none:
+        case fs::file_type::not_found:
+            fs::create_directories(outdir);
+            break;
+        case fs::file_type::directory:
+        case fs::file_type::symlink:
+            break;
+        default:
+            fmt::print(stderr, "could not create output directory '{}'", outdir);
+            return 1;
+    }
+
+    DrawOptions drawOptions{};
+    auto drawOption = vm["draw"].as<vector<string>>();
+    for (auto d: drawOption) {
+        if (d == "none") {
+            drawOptions.drawSubproblems = drawOptions.drawReductions = drawOptions.drawSolution = drawOptions.drawInput = false;
+        } else if (d == "all") {
+            drawOptions.drawSubproblems = drawOptions.drawReductions = drawOptions.drawSolution = drawOptions.drawInput = true;
+        } else if (d == "input") {
+            drawOptions.drawInput = true;
+        } else if (d == "solution") {
+            drawOptions.drawSolution = true;
+        } else if (d == "reductions") {
+            drawOptions.drawReductions = true;
+        } else if (d == "subproblems") {
+            drawOptions.drawSubproblems = true;
+        } else {
+            fmt::print(stderr, "invalid draw option {}\n", d);
+            return 1;
+        }
+    }
+
+    if (!set<string>{"none"s, "full"s, "subproblem"s}.contains(vm["solve"].as<string>())) {
+        fmt::print(stderr, "invalid solve option: {}\n", vm["solve"].as<string>());
+        return 1;
+    }
+
+    if (!vm.count("graph")) {
+        fmt::print(stderr, "no input given\n");
+        return 1;
+    }
+
+    PdsState state(import_graphml(vm["graph"].as<string>(), vm["all-zi"].as<bool>()));
+    auto input = state;
+
+    map<PowerGrid::vertex_descriptor, Coordinate> layout;
+    if (drawOptions.drawAny()) {
+        fmt::print("computing layout\n");
+        auto t0 = now();
+        layout = pds::layoutGraph(state.graph());
+        auto t1 = now();
+        fmt::print("computed layout in {}\n", ms(t1-t0));
+    }
+
+    if (drawOptions.drawInput) {
+        drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/0_input.svg", outdir), layout);
+    }
+    auto printState = [&](const PdsState& state) {
+        if (vm.count("print-state")) printResult(state.graph(), state.active(), state.observed());
+    };
+    fmt::print("input:\n");
+    printState(state);
+
+    auto tSolveStart = now();
+    size_t counter = 0;
+
+    if (vm.count("reductions")) {
+        auto drawCallback = [&](const pds::PdsState &state, const std::string &name) mutable {
+            if (drawOptions.drawReductions) {
+                pds::drawGrid(state.graph(),
+                              state.active(),
+                              state.observed(),
+                              fmt::format("{}/1_red_{:04}_{}.svg", outdir, counter, name),
+                              layout);
+                ++counter;
+            }
+        };
+
+        fmt::print("applying reductions\n");
+        while (applyReductions(state, drawCallback)) { };
+        auto tReductions = now();
+        printState(state);
+        fmt::print("reductions took {}\n", ms(tReductions - tSolveStart));
+    }
+
+    vector subproblems = state.subproblems(true);
+    if (drawOptions.drawSubproblems) {
+        ranges::sort(subproblems,
+                     [](const pds::PdsState &left, const pds::PdsState &right) -> bool {
+                         return left.graph().numVertices() < right.graph().numVertices();
+                     });
+        for (size_t i = 0; auto &subproblem: subproblems) {
+            if (!subproblem.allObserved()) {
+                pds::drawGrid(
+                        subproblem.graph(), subproblem.active(), subproblem.observed(),
+                        fmt::format("{}/comp_{:03}_0unsolved.svg", outdir, i), layout);
+                ++i;
+            }
+        }
+    }
+
+    for (size_t i = 0; auto &subproblem: subproblems) {
+        auto tSub = now();
+        //if (vm.count("reductions")) {
+        //    applyReductions(state, [](const auto&, const auto&) {});
+        //    if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
+        //        pds::drawGrid(
+        //                subproblem.graph(), subproblem.active(), subproblem.observed(),
+        //                fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
+        //    }
+        //    printState(state);
+        //}
+        if (!subproblem.solveTrivial()) {
+            fmt::print("solving subproblem {}\n", i);
+            printState(state);
+            if (vm["solve"].as<string>() == "subproblem") {
+                solve_pds(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
+                for (auto v: subproblem.graph().vertices()) {
+                    if (subproblem.isActive(v)) {
+                        state.setActive(v);
+                    }
+                }
+                auto tSubEnd = now();
+                fmt::print("solved subproblem {} in {}", i, ms(tSubEnd - tSub));
+            }
+            if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
+                pds::drawGrid(
+                        subproblem.graph(), subproblem.active(), subproblem.observed(),
+                        fmt::format("{}/comp_{:03}_2solved.svg", outdir, i), layout);
+            }
+            ++i;
+        }
+    }
+
+    if (vm["solve"].as<string>() == "full") {
+        solve_pds(state, vm.count("print-solve"), vm["time-limit"].as<double>());
+    }
+    for (auto v: state.graph().vertices()) {
+        if (state.isActive(v)) {
+            input.setActive(v);
+        }
+    }
+    auto tSolveEnd = now();
+    if (drawOptions.drawSolution) {
+        drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
+        drawGrid(input.graph(), input.active(), input.observed(), fmt::format("{}/3_solved.svg", outdir), layout);
+    }
+    fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
+    printState(state);
+
+    return 0;
+}
+
 int main(int argc, const char** argv) {
-    std::string filename = argv[1];
-    processBoost(filename);
+    //std::string filename = argv[1];
+    //processBoost(filename);
+    run(argc, argv);
     return 0;
 }

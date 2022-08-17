@@ -47,7 +47,7 @@ target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 
 
 add_executable(pds main.cpp)
-target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt)
+target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::program_options)
 
 add_executable(random_tree random_trees.cpp)
 target_link_libraries(random_tree PUBLIC pdslib Boost::program_options)

@@ -6,6 +6,18 @@
 #include <gurobi_c++.h>
 
 namespace pds {
+bool solve_pds(PdsState& state, bool output, double timeLimit) {
+    auto active = state.active();
+    auto observed = state.observed();
+    bool result = solve_pds(state.graph(), active, output, timeLimit);
+    for (auto v: state.graph().vertices()) {
+        if (active[v] == PmuState::Active) {
+            state.setActive(v);
+        }
+    }
+    return result;
+}
+
 bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuState> &active, bool output, double timeLimit) {
     namespace r3 = ranges;
     auto env = GRBEnv();
