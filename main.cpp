@@ -374,15 +374,15 @@ int run(int argc, const char** argv) {
 
     for (size_t i = 0; auto &subproblem: subproblems) {
         auto tSub = now();
-        //if (vm.count("reductions")) {
-        //    applyReductions(state, [](const auto&, const auto&) {});
-        //    if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
-        //        pds::drawGrid(
-        //                subproblem.graph(), subproblem.active(), subproblem.observed(),
-        //                fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
-        //    }
-        //    printState(state);
-        //}
+        if (vm.count("reductions")) {
+            applyReductions(subproblem, [](const auto&, const auto&) {});
+            if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
+                pds::drawGrid(
+                        subproblem.graph(), subproblem.active(), subproblem.observed(),
+                        fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
+            }
+            printState(state);
+        }
         if (!subproblem.solveTrivial()) {
             fmt::print("solving subproblem {}\n", i);
             printState(state);
