@@ -44,6 +44,7 @@ set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph
 }
 
 void PdsState::addEdge(Vertex source, Vertex target) {
+    assert(source != target);
     if (!m_graph.edge(source, target)) {
         m_graph.addEdge(source, target);
         if (!isObserved(source)) {
