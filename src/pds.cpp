@@ -133,19 +133,17 @@ bool PdsState::collapseLeaves() {
     bool changed = false;
     auto vertices = m_graph.vertices() | ranges::to<std::vector>();
     for (auto v: vertices) {
-        if (m_graph.degree(v) == 1
-                && !isActive(v)
-                ) {
+        if (m_graph.degree(v) == 1 && !isActive(v)) {
             Vertex neighbor;
             for (auto w: m_graph.neighbors(v)) {
                 neighbor = w;
             }
-            if (m_graph.degree(neighbor) == 2 && m_graph[neighbor].zero_injection) {
+            if (m_graph.degree(neighbor) == 2 && isZeroInjection(neighbor)) {
                 if (!isZeroInjection(v)) {
                     m_graph[neighbor].zero_injection = false;
                 }
             } else {
-                if (m_graph[neighbor].zero_injection) {
+                if (isZeroInjection(neighbor)) {
                     m_graph[neighbor].zero_injection = false;
                 } else {
                     setActive(neighbor);
@@ -156,6 +154,8 @@ bool PdsState::collapseLeaves() {
         } else if (m_unobserved_degree.at(v) == 0 && isBlank(v) && isObserved(v)) {
             setInactive(v);
             changed = true;
+        } else if (m_graph.degree(v) == 0 && !isObserved(v) && isBlank(v)) {
+            setActive(v);
         }
     }
     return changed;
