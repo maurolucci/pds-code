@@ -63,7 +63,7 @@ class PdsState {
 public:
     using Vertex = PowerGrid::vertex_descriptor;
 private:
-    pds::map<Vertex, int> m_unobserved_degree;
+    pds::map<Vertex, ssize_t> m_unobserved_degree;
     pds::set<Vertex> m_deleted;
     pds::set<Vertex> m_observed;
     pds::map<Vertex, PmuState> m_active;
@@ -80,19 +80,9 @@ private:
 
 public:
     PdsState() = default;
-    explicit PdsState(PowerGrid&& graph) : m_graph(graph) {
-        for (auto v: graph.vertices()) {
-            m_unobserved_degree.emplace(v, m_graph.degree(v));
-            m_active.emplace(v, PmuState::Blank);
-        }
-    }
+    explicit PdsState(PowerGrid&& graph);
 
-    explicit PdsState(const PowerGrid& graph) : m_graph(graph) {
-        for (auto v: graph.vertices()) {
-            m_unobserved_degree.emplace(v, m_graph.degree(v));
-            m_active.emplace(v, PmuState::Blank);
-        }
-    }
+    explicit PdsState(const PowerGrid& graph);
 
     PdsState(const PdsState&) = default;
     PdsState(PdsState&&) = default;

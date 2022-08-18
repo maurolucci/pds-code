@@ -2,13 +2,28 @@
 // Created by max on 01.08.22.
 //
 
-#include <setgraph/boost_adapter.hpp>
+#include "setgraph/boost_adapter.hpp"
 #include "pds.hpp"
 #include "graphml/graphml.hpp"
 
 #include <boost/property_map/function_property_map.hpp>
 
 namespace pds {
+
+template<class... T>
+void unused(T&&...) { }
+
+//void validateState(const PdsState& state) {
+//    auto active = state.active()
+//            | ranges::views::filter([](const auto& xy) { return xy.second == PmuState::Active; })
+//            | ranges::views::transform([](const auto& xy) { return xy.first; })
+//            | ranges::to<set<PdsState::Vertex>>();
+//    auto observed = observationNeighborhood(state.graph(), active);
+//    for (auto v: state.graph().vertices()) {
+//        unused(v);
+//        assert(observed.contains(v) == state.isObserved(v));
+//    }
+//}
 
 PowerGrid import_graphml(const std::string& filename, bool all_zero_injection) {
     PowerGrid graph;
@@ -43,6 +58,16 @@ set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph
     return observed;
 }
 
+PdsState::PdsState(const pds::PowerGrid &graph) : PdsState(PowerGrid{graph}) { }
+
+PdsState::PdsState(PowerGrid&& graph) : m_graph(graph) {
+    for (auto v: m_graph.vertices()) {
+        m_graph.removeEdge(v, v);
+        m_unobserved_degree[v] = m_graph.degree(v);
+        m_active.emplace(v, PmuState::Blank);
+    }
+}
+
 void PdsState::addEdge(Vertex source, Vertex target) {
     assert(source != target);
     if (!m_graph.edge(source, target)) {
@@ -60,7 +85,6 @@ void PdsState::removeVertex(Vertex v) {
     if (!isObserved(v)) {
         for (auto w: m_graph.neighbors(v)) {
             m_unobserved_degree[w] -= 1;
-            propagate(w);
         }
     }
     m_graph.removeVertex(v);

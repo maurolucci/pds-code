@@ -32,7 +32,7 @@ add_subdirectory(contrib/setgraph)
 find_package(Gurobi REQUIRED)
 find_package(range-v3 REQUIRED)
 
-add_library(pdslib STATIC src/pds.cpp src/graphml.cpp src/draw_grid.cpp)
+add_library(pdslib STATIC src/pds/pds.cpp src/pds/graphml.cpp src/pds/draw_grid.cpp)
 target_include_directories(pdslib PUBLIC include PRIVATE Boost::graph)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
@@ -42,7 +42,7 @@ target_compile_options(pdslib PRIVATE
         $<$<CXX_COMPILER_ID:MSVC>:
         /W4>)
 
-add_library(pdslib-gurobi src/gurobi_solve.cpp)
+add_library(pdslib-gurobi src/pds/gurobi_solve.cpp)
 target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 
 
