@@ -381,7 +381,6 @@ int run(int argc, const char** argv) {
                         subproblem.graph(), subproblem.active(), subproblem.observed(),
                         fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
             }
-            printState(state);
         }
         if (!subproblem.solveTrivial()) {
             fmt::print("solving subproblem {}\n", i);
@@ -394,7 +393,7 @@ int run(int argc, const char** argv) {
                     }
                 }
                 auto tSubEnd = now();
-                fmt::print("solved subproblem {} in {}", i, ms(tSubEnd - tSub));
+                fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
             }
             if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
                 pds::drawGrid(
