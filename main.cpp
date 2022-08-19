@@ -11,6 +11,7 @@
 #include <filesystem>
 
 #include "pds.hpp"
+#include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
 #include "draw_grid.hpp"
 
