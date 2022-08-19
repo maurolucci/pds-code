@@ -240,7 +240,7 @@ int run(int argc, const char** argv) {
             (
                     "solve",
                     po::value<string>()->default_value("subproblem"),
-                    "gurobi solve method. Can be any of [none,full,subproblem]"
+                    "gurobi solve method. Can be any of [none,greedy,full,subproblem]"
             )
             ("print-solve", "print intermediate solve state")
             ("print-state,p", "print solve state after each step")
@@ -303,7 +303,7 @@ int run(int argc, const char** argv) {
         }
     }
 
-    if (!set<string>{"none"s, "full"s, "subproblem"s}.contains(vm["solve"].as<string>())) {
+    if (!set<string>{"none"s, "greedy"s, "full"s, "subproblem"s}.contains(vm["solve"].as<string>())) {
         fmt::print(stderr, "invalid solve option: {}\n", vm["solve"].as<string>());
         return 1;
     }
@@ -337,17 +337,18 @@ int run(int argc, const char** argv) {
     auto tSolveStart = now();
     size_t counter = 0;
 
+    auto drawCallback = [&](const pds::PdsState &state, const std::string &name) mutable {
+        if (drawOptions.drawReductions) {
+            pds::drawGrid(state.graph(),
+                          state.active(),
+                          state.observed(),
+                          fmt::format("{}/1_red_{:04}_{}.svg", outdir, counter, name),
+                          layout);
+            ++counter;
+        }
+    };
+
     if (vm.count("reductions")) {
-        auto drawCallback = [&](const pds::PdsState &state, const std::string &name) mutable {
-            if (drawOptions.drawReductions) {
-                pds::drawGrid(state.graph(),
-                              state.active(),
-                              state.observed(),
-                              fmt::format("{}/1_red_{:04}_{}.svg", outdir, counter, name),
-                              layout);
-                ++counter;
-            }
-        };
 
         fmt::print("applying reductions\n");
         while (applyReductions(state, drawCallback)) { };
@@ -406,6 +407,8 @@ int run(int argc, const char** argv) {
 
     if (vm["solve"].as<string>() == "full") {
         solve_pds(state, vm.count("print-solve"), vm["time-limit"].as<double>());
+    } else if (vm["solve"].as<string>() == "greedy") {
+        solveGreedy(state);
     }
     for (auto v: state.graph().vertices()) {
         if (state.isActive(v)) {
