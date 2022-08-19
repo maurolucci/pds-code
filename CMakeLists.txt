@@ -51,3 +51,6 @@ target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::program_op
 
 add_executable(random_tree random_trees.cpp)
 target_link_libraries(random_tree PUBLIC pdslib Boost::program_options)
+
+add_executable(shave shave_graph.cpp)
+target_link_libraries(shave PUBLIC pdslib fmt::fmt Boost::program_options)
