@@ -5,4 +5,11 @@
 #ifndef PDS_UTILITY_HPP
 #define PDS_UTILITY_HPP
 
+namespace pds {
+
+template<class... T>
+void unused(T&&...) { }
+
+}
+
 #endif //PDS_UTILITY_HPP

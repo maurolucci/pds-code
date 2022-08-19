@@ -7,11 +7,9 @@
 #include "graphml/graphml.hpp"
 
 #include <boost/property_map/function_property_map.hpp>
+#include "utility.hpp"
 
 namespace pds {
-
-template<class... T>
-void unused(T&&...) { }
 
 //void validateState(const PdsState& state) {
 //    auto active = state.active()

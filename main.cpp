@@ -384,7 +384,7 @@ int run(int argc, const char** argv) {
         }
         if (!subproblem.solveTrivial()) {
             fmt::print("solving subproblem {}\n", i);
-            printState(state);
+            printState(subproblem);
             if (vm["solve"].as<string>() == "subproblem") {
                 solve_pds(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
                 for (auto v: subproblem.graph().vertices()) {

@@ -15,6 +15,7 @@
 #include <fmt/ranges.h>
 
 #include "map.hpp"
+#include "utility.hpp"
 #include <setgraph/graph.hpp>
 
 namespace pds {
@@ -36,6 +37,8 @@ using PowerGrid = setgraph::SetGraph<Bus, setgraph::Empty, setgraph::EdgeDirecti
 PowerGrid import_graphml(const std::string& filename, bool all_zero_injection = false);
 
 void exportGraphml(const PowerGrid& grid, std::ostream& out);
+
+set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph, const set<PowerGrid::vertex_descriptor> &starts);
 
 bool propagate(const PowerGrid&, set<PowerGrid::vertex_descriptor>&, size_t = 1);
 
