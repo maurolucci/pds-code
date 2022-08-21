@@ -123,6 +123,14 @@ public:
         return ranges::all_of(m_graph.vertices(), [this](auto v) { return m_observed.contains(v); });
     }
 
+    size_t numObserved() const {
+        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isObserved(v); }));
+    }
+
+    size_t numActive() const {
+        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); }));
+    }
+
     inline const PowerGrid& graph() const { return m_graph; }
 
     inline PowerGrid && graph() { return std::move(m_graph); }

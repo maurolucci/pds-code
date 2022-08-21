@@ -241,7 +241,7 @@ int run(int argc, const char** argv) {
             (
                     "solve",
                     po::value<string>()->default_value("subproblem"),
-                    "gurobi solve method. Can be any of [none,greedy,full,subproblem]"
+                    "gurobi solve method. Can be any of [none,greedy,greedy-degree,branching,full,subproblem]"
             )
             ("print-solve", "print intermediate solve state")
             ("print-state,p", "print solve state after each step")
@@ -304,8 +304,10 @@ int run(int argc, const char** argv) {
         }
     }
 
-    if (!set<string>{"none"s, "greedy"s, "full"s, "subproblem"s}.contains(vm["solve"].as<string>())) {
-        fmt::print(stderr, "invalid solve option: {}\n", vm["solve"].as<string>());
+    string solve = vm["solve"].as<string>();
+
+    if (!set<string>{"none"s, "greedy"s, "greedy-degree"s, "greedy-median"s, "branching"s, "full"s, "subproblem"s}.contains(solve)) {
+        fmt::print(stderr, "invalid solve option: {}\n", solve);
         return 1;
     }
 
@@ -374,21 +376,25 @@ int run(int argc, const char** argv) {
         }
     }
 
-    for (size_t i = 0; auto &subproblem: subproblems) {
-        auto tSub = now();
-        if (vm.count("reductions")) {
-            applyReductions(subproblem, [](const auto&, const auto&) {});
-            if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
-                pds::drawGrid(
-                        subproblem.graph(), subproblem.active(), subproblem.observed(),
-                        fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
+    if (solve == "subproblem" || solve == "branching") {
+        for (size_t i = 0; auto &subproblem: subproblems) {
+            auto tSub = now();
+            if (vm.count("reductions")) {
+                applyReductions(subproblem, [](const auto &, const auto &) {});
+                if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
+                    pds::drawGrid(
+                            subproblem.graph(), subproblem.active(), subproblem.observed(),
+                            fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
+                }
             }
-        }
-        if (!subproblem.solveTrivial()) {
-            fmt::print("solving subproblem {}\n", i);
-            printState(subproblem);
-            if (vm["solve"].as<string>() == "subproblem") {
-                solve_pds(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
+            if (!subproblem.solveTrivial()) {
+                fmt::print("solving subproblem {}\n", i);
+                printState(subproblem);
+                if (solve == "subproblem") {
+                    solve_pds(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
+                } else if (solve == "branching") {
+                    solveBranching(subproblem, vm.count("reductions"));
+                }
                 for (auto v: subproblem.graph().vertices()) {
                     if (subproblem.isActive(v)) {
                         state.setActive(v);
@@ -396,20 +402,24 @@ int run(int argc, const char** argv) {
                 }
                 auto tSubEnd = now();
                 fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
+                if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
+                    pds::drawGrid(
+                            subproblem.graph(), subproblem.active(), subproblem.observed(),
+                            fmt::format("{}/comp_{:03}_2solved.svg", outdir, i), layout);
+                }
+                ++i;
             }
-            if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
-                pds::drawGrid(
-                        subproblem.graph(), subproblem.active(), subproblem.observed(),
-                        fmt::format("{}/comp_{:03}_2solved.svg", outdir, i), layout);
-            }
-            ++i;
         }
     }
 
-    if (vm["solve"].as<string>() == "full") {
+    if (solve == "full") {
         solve_pds(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (vm["solve"].as<string>() == "greedy") {
-        solveGreedy(state);
+    } else if (solve == "greedy") {
+        solveGreedy(state, true, greedy_strategies::largestObservationNeighborhood);
+    } else if (solve == "greedy-degree") {
+        solveGreedy(state, true, greedy_strategies::largestDegree);
+    } else if (solve == "greedy-median") {
+        solveGreedy(state, true, greedy_strategies::medianDegree);
     }
     for (auto v: state.graph().vertices()) {
         if (state.isActive(v)) {
