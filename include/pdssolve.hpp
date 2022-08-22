@@ -131,13 +131,12 @@ Bounds sensorBounds(const PdsState& state) {
 }
 
 bool isFeasible(const PdsState& state) {
-    auto copy = state;
+    using Vertex = PdsState::Vertex;
+    set<Vertex> active;
     for (auto v: state.graph().vertices()) {
-        if (!state.isInactive(v)) {
-            copy.setActive(v);
-        }
+        if (!state.isInactive(v)) { active.insert(v); }
     }
-    return copy.allObserved();
+    return observationNeighborhood(state.graph(), active).size() == state.graph().numVertices();
 }
 
 template<
