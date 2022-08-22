@@ -75,9 +75,12 @@ set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph
     return observed;
 }
 
+PdsState::PdsState() : PdsState(PowerGrid{}) { }
+
 PdsState::PdsState(const pds::PowerGrid &graph) : PdsState(PowerGrid{graph}) { }
 
 PdsState::PdsState(PowerGrid&& graph) : m_graph(graph) {
+    createCheckpoint();
     for (auto v: m_graph.vertices()) {
         m_graph.removeEdge(v, v);
         m_unobserved_degree[v] = m_graph.degree(v);
@@ -110,6 +113,38 @@ void PdsState::removeVertex(Vertex v) {
     m_graph.removeVertex(v);
 }
 
+void PdsState::createCheckpoint() {
+    m_checkpoints.emplace_back(m_steps_observed.size(), m_steps_pmu.size());
+}
+
+std::span<PdsState::Vertex> PdsState::observedSinceCheckpoint() {
+    return std::span(m_steps_observed).subspan(m_checkpoints.back().first);
+}
+
+void PdsState::restoreLastCheckpoint() {
+    auto [nObserved, nPmu] = m_checkpoints.back();
+            m_checkpoints.pop_back();
+            while (m_steps_observed.size() > nObserved) {
+        auto v = m_steps_observed.back();
+        m_steps_observed.pop_back();
+        auto it = m_observed.find(v);
+        if (it != m_observed.end()) {
+            m_observed.erase(it);
+            for (auto w: m_graph.neighbors(v)) {
+                m_unobserved_degree[w] += 1;
+            }
+        }
+    }
+    while (m_steps_pmu.size() > nPmu) {
+        auto [v, _state] = m_steps_pmu.back();
+                auto it = m_active.find(v);
+                if (it != m_active.end()) {
+            it->second = PmuState::Blank;
+        }
+        m_steps_pmu.pop_back();
+    }
+}
+
 void PdsState::propagate(PdsState::Vertex vertex) {
     if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
         for (auto w: m_graph.neighbors(vertex)) {
@@ -126,7 +161,7 @@ void PdsState::observe(PdsState::Vertex vertex) {
             m_unobserved_degree[w] -= 1;
             assert(m_unobserved_degree[w] >= 0);
             assert(m_unobserved_degree[w] == ranges::distance(
-                    m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
+                       m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
         }
         for (auto w: m_graph.neighbors(vertex)) {
             propagate(w);
@@ -306,9 +341,11 @@ bool PdsState::disableObservationNeighborhood() {
             size_t stepInactive = numInactive();
             size_t stepObserved = numObserved(); unused(stepActive, stepInactive, stepObserved, checkpoint);
             createCheckpoint();
+            assert(numObserved() == originalObserved + observedSinceCheckpoint().size());
             setActive(v);
-            for (auto w: blankVertices) {
-                if (v != w && fullyObserved(w)) {
+            assert(numObserved() == originalObserved + observedSinceCheckpoint().size());
+            for (auto w: observedSinceCheckpoint()) {
+                if (v != w && isBlank(w) && fullyObserved(w)) {
                     inactive.insert(w);
                     changed = true;
                 }

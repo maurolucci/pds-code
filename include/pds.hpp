@@ -87,7 +87,7 @@ private:
     );
 
 public:
-    PdsState() = default;
+    PdsState();
     explicit PdsState(PowerGrid&& graph);
 
     explicit PdsState(const PowerGrid& graph);
@@ -112,33 +112,11 @@ public:
 
     inline bool isObserved(Vertex vertex) const { return m_observed.contains(vertex); }
 
-    void createCheckpoint() {
-        m_checkpoints.emplace_back(m_steps_observed.size(), m_steps_pmu.size());
-    }
+    void createCheckpoint();
 
-    void restoreLastCheckpoint() {
-        auto [o, p] = m_checkpoints.back();
-        m_checkpoints.pop_back();
-        while (m_steps_observed.size() > o) {
-            auto v = m_steps_observed.back();
-            auto it = m_observed.find(v);
-            if (it != m_observed.end()) {
-                m_observed.erase(it);
-                for (auto w: m_graph.neighbors(v)) {
-                    m_unobserved_degree[w] += 1;
-                }
-            }
-            m_steps_observed.pop_back();
-        }
-        while (m_steps_pmu.size() > p) {
-            auto [v, _state] = m_steps_pmu.back();
-            auto it = m_active.find(v);
-            if (it != m_active.end()) {
-                it->second = PmuState::Blank;
-            }
-            m_steps_pmu.pop_back();
-        }
-    }
+    std::span<Vertex> observedSinceCheckpoint();
+
+    void restoreLastCheckpoint();
 
     inline size_t unobservedDegree(Vertex v) const {
         assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));
