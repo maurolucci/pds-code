@@ -156,7 +156,7 @@ public:
     bool setBlank(Vertex vertex);
 
     inline bool allObserved() const {
-        return ranges::all_of(m_graph.vertices(), [this](auto v) { return m_observed.contains(v); });
+        return m_observed.size() == graph().numVertices();
     }
 
     size_t numObserved() const {
