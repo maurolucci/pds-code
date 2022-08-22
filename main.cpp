@@ -247,6 +247,7 @@ int run(int argc, const char** argv) {
             ("print-state,p", "print solve state after each step")
             ("time-limit,t", po::value<double>()->default_value(600.0), "time limit for gurobi in seconds")
             ("reductions,r", "apply reductions before exact solving")
+            ("export-subproblems,e", "export subproblems as graphml files")
             (
                     "all-zi,z",
                     po::value<bool>()->default_value(false)->implicit_value(true),
@@ -373,6 +374,23 @@ int run(int argc, const char** argv) {
                         fmt::format("{}/comp_{:03}_0unsolved.svg", outdir, i), layout);
                 ++i;
             }
+        }
+    }
+
+    if (vm.count("export-subproblems")) {
+        for (size_t i = 0; const auto &sub: subproblems) {
+            auto graph = sub.graph();
+            for (auto v: sub.graph().vertices()) {
+                if (sub.isActive(v)) {
+                    auto v1 = graph.addVertex();
+                    auto v2 = graph.addVertex();
+                    graph.addEdge(v, v1);
+                    graph.addEdge(v, v2);
+                }
+            }
+            std::ofstream outstream(fmt::format("{}/comp_{:03}_unsolved.graphml", outdir, i));
+            exportGraphml(graph, outstream);
+            ++i;
         }
     }
 
