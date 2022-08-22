@@ -20,10 +20,10 @@
 
 namespace pds {
 
-enum class PmuState {
-    Blank,
-    Active,
-    Inactive
+enum class PmuState : signed char {
+    Blank = 0,
+    Active = 1,
+    Inactive = -1
 };
 
 struct Bus {
@@ -69,10 +69,13 @@ public:
     using Vertex = PowerGrid::vertex_descriptor;
 private:
     pds::map<Vertex, ssize_t> m_unobserved_degree;
-    pds::set<Vertex> m_deleted;
     pds::set<Vertex> m_observed;
     pds::map<Vertex, PmuState> m_active;
     PowerGrid m_graph;
+
+    std::vector<Vertex> m_steps_observed;
+    std::vector<std::pair<Vertex, PmuState>> m_steps_pmu;
+    std::vector<std::pair<size_t, size_t>> m_checkpoints;
 
     void propagate(Vertex vertex);
 
@@ -109,6 +112,39 @@ public:
 
     inline bool isObserved(Vertex vertex) const { return m_observed.contains(vertex); }
 
+    void createCheckpoint() {
+        m_checkpoints.emplace_back(m_steps_observed.size(), m_steps_pmu.size());
+    }
+
+    void restoreLastCheckpoint() {
+        auto [o, p] = m_checkpoints.back();
+        m_checkpoints.pop_back();
+        while (m_steps_observed.size() > o) {
+            auto v = m_steps_observed.back();
+            auto it = m_observed.find(v);
+            if (it != m_observed.end()) {
+                m_observed.erase(it);
+                for (auto w: m_graph.neighbors(v)) {
+                    m_unobserved_degree[w] += 1;
+                }
+            }
+            m_steps_observed.pop_back();
+        }
+        while (m_steps_pmu.size() > p) {
+            auto [v, _state] = m_steps_pmu.back();
+            auto it = m_active.find(v);
+            if (it != m_active.end()) {
+                it->second = PmuState::Blank;
+            }
+            m_steps_pmu.pop_back();
+        }
+    }
+
+    inline size_t unobservedDegree(Vertex v) const {
+        assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));
+        return m_unobserved_degree.at(v);
+    }
+
     inline const set<Vertex>& observed() const { return m_observed; }
 
     inline const map<Vertex, PmuState>& active() const { return m_active; }
@@ -129,6 +165,10 @@ public:
 
     size_t numActive() const {
         return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); }));
+    }
+
+    size_t numInactive() const {
+        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isInactive(v); }));
     }
 
     inline const PowerGrid& graph() const { return m_graph; }
