@@ -46,6 +46,11 @@ PowerGrid import_graphml(const std::string& filename, bool all_zero_injection) {
 
 void exportGraphml(const PowerGrid& graph, std::ostream& out) {
     map<PowerGrid::vertex_descriptor, long> zero_injection_data;
+    for (auto v: graph.vertices()) {
+        if (graph[v].zero_injection) {
+            zero_injection_data[v] = 1;
+        }
+    }
     boost::dynamic_properties attr(boost::ignore_other_properties);
     boost::associative_property_map zero_injection(zero_injection_data);
     auto id_map = [&graph](const PowerGrid::vertex_descriptor& vertex) -> long { return graph[vertex].id;};

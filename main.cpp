@@ -380,10 +380,17 @@ int run(int argc, const char** argv) {
     if (vm.count("export-subproblems")) {
         for (size_t i = 0; const auto &sub: subproblems) {
             auto graph = sub.graph();
+            auto ids = graph.vertices() | ranges::views::transform([&graph](auto v){ return graph[v].id;}) | ranges::to<set<long>>();
+            auto freshId = [&ids]() {
+                long id = 0;
+                while (ids.contains(id)) {++id;}
+                ids.insert(id);
+                return id;
+            };
             for (auto v: sub.graph().vertices()) {
                 if (sub.isActive(v)) {
-                    auto v1 = graph.addVertex();
-                    auto v2 = graph.addVertex();
+                    auto v1 = graph.addVertex(Bus{.name="temp", .id=freshId(), .zero_injection=true});
+                    auto v2 = graph.addVertex(Bus{.name="temp", .id=freshId(), .zero_injection=true});
                     graph.addEdge(v, v1);
                     graph.addEdge(v, v2);
                 }
