@@ -61,7 +61,7 @@ if __name__ == '__main__':
                 print(case)
                 print(net)
             else:
-                graph = pp.topology.create_nxgraph(net, multi=False)
+                graph = pp.topology.create_nxgraph(net, multi=False, respect_switches=False)
                 loads = {i for i in net.load['bus']}
                 generators = {i for i in net.gen['bus']}
                 static_generators = {i for i in net.sgen['bus']}
