@@ -100,7 +100,6 @@ template<
         std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)
 >
 void solveGreedy(PdsState& state, bool applyReductions = true, Strategy strategy = greedy_strategies::largestObservationNeighborhood, F callback = unused) {
-    using Vertex = PdsState::Vertex;
     while (!state.allObserved()) {
         if (applyReductions) {
             exhaustiveReductions(state, true, callback);
@@ -131,24 +130,18 @@ Bounds sensorBounds(const PdsState& state) {
 }
 
 bool isFeasible(const PdsState& state) {
-    auto copy = state;
+    using Vertex = PdsState::Vertex;
+    set<Vertex> active;
     for (auto v: state.graph().vertices()) {
-        if (!state.isInactive(v)) {
-            copy.setActive(v);
-        }
+        if (!state.isInactive(v)) { active.insert(v); }
     }
-    return copy.allObserved();
+    return observationNeighborhood(state.graph(), active).size() == state.graph().numVertices();
 }
 
-template<
-        std::invocable<const PdsState&> Strategy = std::optional<PdsState::Vertex>(const PdsState&),
-        std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)
->
+template< std::invocable<const PdsState&> Strategy = std::optional<PdsState::Vertex>(const PdsState&) >
 void solveBranching(PdsState &state,
                     bool useReductions,
-                    Strategy strategy = greedy_strategies::largestDegree,
-                    F callback = unused) {
-    using Vertex = PdsState::Vertex;
+                    Strategy strategy = greedy_strategies::largestDegree) {
     if (useReductions) {
         exhaustiveReductions(state, true);
     }

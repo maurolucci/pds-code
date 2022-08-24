@@ -143,7 +143,6 @@ void processBoost(const std::string& filename) {
         pds::drawGrid(state.graph(), state.active(), state.observed(), "out/1_red_preprocessed.svg", layout);
         bool drawTrivial = false;
         auto t_solveStart = now();
-        bool optimal = true;
         if (true) {
             auto subproblems = state.subproblems(true);
             ranges::sort(subproblems,

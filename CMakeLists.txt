@@ -32,22 +32,27 @@ add_subdirectory(contrib/setgraph)
 find_package(Gurobi REQUIRED)
 find_package(range-v3 REQUIRED)
 
+function(enable_warnings target)
+    target_compile_options(${target} PRIVATE
+            $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
+            -Wall -Wextra -Werror>
+            $<$<CXX_COMPILER_ID:MSVC>:
+            /W4>)
+endfunction()
+
 add_library(pdslib STATIC src/pds/pds.cpp src/pds/graphml.cpp src/pds/draw_grid.cpp)
 target_include_directories(pdslib PUBLIC include PRIVATE Boost::graph)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
-target_compile_options(pdslib PRIVATE
-        $<$<OR:$<CXX_COMPILER_ID:Clang>,$<CXX_COMPILER_ID:AppleClang>,$<CXX_COMPILER_ID:GNU>>:
-        -Wall -Wextra -Werror>
-        $<$<CXX_COMPILER_ID:MSVC>:
-        /W4>)
+enable_warnings(pdslib)
 
 add_library(pdslib-gurobi src/pds/gurobi_solve.cpp)
 target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
-
+enable_warnings(pdslib-gurobi)
 
 add_executable(pds main.cpp)
 target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::program_options)
+enable_warnings(pds)
 
 add_executable(random_tree random_trees.cpp)
 target_link_libraries(random_tree PUBLIC pdslib Boost::program_options)
