@@ -344,7 +344,7 @@ bool PdsState::disableObservationNeighborhood() {
             assert(numObserved() == originalObserved + observedSinceCheckpoint().size());
             setActive(v);
             assert(numObserved() == originalObserved + observedSinceCheckpoint().size());
-            for (auto w: observedSinceCheckpoint()) {
+            for (auto w: blankVertices) {
                 if (v != w && isBlank(w) && fullyObserved(w)) {
                     inactive.insert(w);
                     changed = true;
