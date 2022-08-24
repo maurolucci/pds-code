@@ -370,6 +370,33 @@ bool PdsState::disableObservationNeighborhood() {
 
 bool PdsState::activateNecessaryNodes() {
     bool changed = false;
+    std::vector<Vertex> blankVertices;
+    std::vector<Vertex> necessary;
+    for (auto v: m_graph.vertices()) {
+        if (isBlank(v)) blankVertices.push_back(v);
+    }
+    size_t firstCheckpoint = m_checkpoints.size(); unused(firstCheckpoint);
+    createCheckpoint();
+    for (size_t i = blankVertices.size(); i--;) {
+        createCheckpoint();
+        setActive(blankVertices[i]);
+    }
+    assert(allObserved());
+    for (size_t i = 0; i < blankVertices.size(); ++i) {
+        restoreLastCheckpoint();
+        for (size_t j = 0; j < i; ++j) {
+            setActive(blankVertices[j]);
+        }
+        if (!allObserved()) {
+            necessary.push_back(blankVertices[i]);
+        }
+    }
+    restoreLastCheckpoint();
+    for (auto v: necessary) {
+        setActive(v);
+        changed = true;
+    }
+    return changed;
     set<Vertex> blankActive;
     for (auto v: m_graph.vertices()) {
         if (!isInactive(v)) blankActive.insert(v);
