@@ -138,7 +138,7 @@ public:
     }
 
     size_t numObserved() const {
-        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isObserved(v); }));
+        return m_observed.size();
     }
 
     size_t numActive() const {
