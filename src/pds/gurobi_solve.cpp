@@ -52,7 +52,7 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
     for (auto v: graph.vertices()) {
         model.addConstr(si.at(v) >= 1);
         for (auto w: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
-            switch (active.at(v)) {
+            switch (active.at(w)) {
                 case PmuState::Blank:
                     model.addConstr(si.at(v) <= xi.at(w) + M * (1 - xi.at(w)));
                     break;
