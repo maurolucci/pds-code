@@ -457,6 +457,7 @@ int run(int argc, const char** argv) {
     }
     fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
     printState(state);
+    printState(input);
 
     return 0;
 }
