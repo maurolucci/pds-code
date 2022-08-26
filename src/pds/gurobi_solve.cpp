@@ -43,8 +43,10 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
         for (auto e: graph.edges()) {
             auto v = graph.source(e);
             auto w = graph.target(e);
-            pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i];
-            pij[{w, v}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i + 1];
+            if (graph[v].zero_injection)
+                pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i];
+            if (graph[w].zero_injection)
+                pij[{w, v}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i + 1];
         }
         //model.setObjective(objective, GRB_MINIMIZE);
     }
@@ -72,16 +74,21 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
             observingNeighbors += xi[w];
             if (graph[w].zero_injection) {
                 observingNeighbors += pij[{w, v}];
+                inObserved += pij[{w, v}];
             }
-
-            outObserved += pij[{v, w}];
-            inObserved += pij[{w, v}];
+            if (graph[v].zero_injection) {
+                outObserved += pij[{v, w}];
+            }
         }
         if (active[v] != PmuState::Active) {
             model.addConstr(si[v] <= M * observingNeighbors);
         }
         model.addConstr(inObserved <= 1);
-        model.addConstr(outObserved <= 1);
+        if (graph[v].zero_injection) {
+            model.addConstr(outObserved <= 1);
+        } else {
+            model.addConstr(outObserved == 0);
+        }
 
         model.addConstr(si[v] <= graph.numVertices());
 
@@ -95,14 +102,20 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
     for (auto e: graph.edges()) {
         auto v = graph.source(e);
         auto w = graph.target(e);
-        model.addConstr(pij[{v, w}] + pij[{w, v}] <= 1);
+        //model.addConstr(pij[{v, w}] + pij[{w, v}] <= 1);
         for (auto t: r3::concat_view(graph.neighbors(w), r3::single_view{w})) {
-            if (t != v)
-                model.addConstr(si[v] >= si[t] + 1 - M * (1 - pij[{w, v}]));
+            if (t != v) {
+                if (graph[w].zero_injection) {
+                    model.addConstr(si[v] >= si[t] + 1 - M * (1 - pij[{w, v}]));
+                }
+            }
         }
         for (auto t: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
-            if (t != w)
-                model.addConstr(si[w] >= si[t] + 1 - M * (1 - pij[{v, w}]));
+            if (t != w) {
+                if (graph[v].zero_injection) {
+                    model.addConstr(si[w] >= si[t] + 1 - M * (1 - pij[{v, w}]));
+                }
+            }
         }
     }
 
