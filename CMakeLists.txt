@@ -62,3 +62,5 @@ target_link_libraries(shave PUBLIC pdslib fmt::fmt Boost::program_options)
 
 add_executable(check_graph check_graph.cpp)
 target_link_libraries(check_graph PUBLIC pdslib fmt::fmt Boost::program_options)
+
+add_subdirectory(testgraphs)
