@@ -241,7 +241,7 @@ int run(int argc, const char** argv) {
             (
                     "solve",
                     po::value<string>()->default_value("subproblem"),
-                    "gurobi solve method. Can be any of [none,greedy,greedy-degree,branching,full,subproblem]"
+                    "gurobi solve method. Can be any of [none,greedy,greedy-degree,branching,full,subproblem,brimkov,jovanovic]"
             )
             ("print-solve", "print intermediate solve state")
             ("print-state,p", "print solve state after each step")
@@ -256,7 +256,7 @@ int run(int argc, const char** argv) {
             (
                     "draw,d",
                     po::value<vector<string>>()->default_value({"none"s}, "none")->implicit_value({"all"s}, "all")->composing(),
-                    "can be one of [none,all,input,solution,reductions,subproblems]"
+                    "can be one of [none,all,input,solution,reductions,subproblems,brimkov,jovanovic,domination]"
             )
             ;
     po::positional_options_description pos;
@@ -307,7 +307,7 @@ int run(int argc, const char** argv) {
 
     string solve = vm["solve"].as<string>();
 
-    if (!set<string>{"none"s, "greedy"s, "greedy-degree"s, "greedy-median"s, "branching"s, "full"s, "subproblem"s}.contains(solve)) {
+    if (!set<string>{"none"s, "greedy"s, "greedy-degree"s, "greedy-median"s, "branching"s, "full"s, "subproblem"s, "brimkov"s, "jovanovic"s, "domination"s}.contains(solve)) {
         fmt::print(stderr, "invalid solve option: {}\n", solve);
         return 1;
     }
@@ -437,14 +437,20 @@ int run(int argc, const char** argv) {
         }
     }
 
-    if (solve == "full") {
+    if (solve == "full"s) {
         solve_pds(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (solve == "greedy") {
-        solveGreedy(state, true, greedy_strategies::largestObservationNeighborhood);
-    } else if (solve == "greedy-degree") {
-        solveGreedy(state, true, greedy_strategies::largestDegree);
-    } else if (solve == "greedy-median") {
-        solveGreedy(state, true, greedy_strategies::medianDegree);
+    } else if (solve == "domination"s) {
+        solveDominatingSet(state, vm.count("print-solve"), vm["time-limit"].as<double>());
+    } else if (solve == "brimkov"s) {
+        solveBrimkov(state, vm.count("print-solve"), vm["time-limit"].as<double>());
+    } else if (solve == "jovanovic"s) {
+        solveJovanovic(state, vm.count("print-solve"), vm["time-limit"].as<double>());
+    } else if (solve == "greedy"s) {
+        solveGreedy(state, vm.count("reductions"), greedy_strategies::largestObservationNeighborhood);
+    } else if (solve == "greedy-degree"s) {
+        solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);
+    } else if (solve == "greedy-median"s) {
+        solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);
     }
     for (auto v: state.graph().vertices()) {
         if (state.isActive(v)) {

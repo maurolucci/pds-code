@@ -134,4 +134,108 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
         return true;
     }
 }
+
+bool solveDominatingSet(PdsState& state, bool output, double timeLimit) {
+    auto env = GRBEnv();
+    auto model = GRBModel(env);
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    map <PowerGrid::vertex_descriptor, GRBVar> xi;
+    for (auto v: state.graph().vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
+    }
+    for (auto v: state.graph().vertices()) {
+        GRBLinExpr sum = xi.at(v);
+        for (auto w: state.graph().neighbors(v)) {
+            sum += xi.at(w);
+        }
+        model.addConstr(sum >= 1);
+    }
+
+    model.optimize();
+    if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {
+        return false;
+    } else {
+        std::cout << "result: " << model.get(GRB_DoubleAttr_ObjBound) << std::endl;
+        for (auto v: state.graph().vertices()) {
+            if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                state.setActive(v);
+            } else {
+                state.setInactive(v);
+            }
+        }
+    }
+    return true;
+}
+
+bool solveBrimkov(PdsState& state, bool output, double timeLimit) {
+    auto env = GRBEnv();
+    auto model = GRBModel(env);
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    map <PowerGrid::vertex_descriptor, GRBVar> xi;
+    map <PowerGrid::vertex_descriptor, GRBVar> si;
+    map <PowerGrid::edge_descriptor, GRBVar> ye;
+    GRBLinExpr objective;
+    size_t T = state.graph().numVertices();
+    for (auto v: state.graph().vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
+        si.try_emplace(v, model.addVar(0.0, static_cast<double>(T), 0.0, GRB_INTEGER));
+        objective += xi.at(v);
+        for (auto e: state.graph().outEdges(v)) {
+            assert(!ye.contains(e));
+            ye.try_emplace(e, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+        }
+    }
+    model.setObjective(objective, GRB_MINIMIZE);
+    // x_v + \sum_{e \in N(v)} y_e = 1 (3)
+    for (auto v: state.graph().vertices()) {
+        GRBLinExpr maxPropagation = xi.at(v);
+        for (auto e: state.graph().inEdges(v)) {
+            unused(e);
+            maxPropagation += ye.at(e);
+        }
+        model.addConstr(maxPropagation == 1);
+    }
+    // s_u - s_v + (T + 1) y_{uv} <= T (4) e@(u,v) \in E'
+    // s_w - s_v + (T + 1) y_e <= T + (T+1) x_u , e@(u,v) \in E', w \in N(u) - v
+    for (auto u: state.graph().vertices()) {
+        for (auto e: state.graph().outEdges(u)) {
+            if (!state.isZeroInjection(u)) model.addConstr(ye.at(e) == 0);
+            auto v = state.graph().target(e);
+            model.addConstr(ye.at(e) <= xi.at(u));
+            //model.addConstr(si.at(u) - si.at(v) + (T + 1) * ye.at(e) <= T);
+            for (auto w: state.graph().neighbors(u)) {
+                if (u != v && u != w) {
+                    unused(u, w, v, e);
+                    //model.addConstr(si.at(w) - si.at(v) + (T + 1) * ye.at(e) <= T + (T+1) * xi.at(u));
+                }
+            }
+        }
+    }
+
+    model.optimize();
+    if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {
+        return false;
+    } else {
+        std::cout << "result: " << model.get(GRB_DoubleAttr_ObjBound) << std::endl;
+        for (auto v: state.graph().vertices()) {
+            if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                state.setActive(v);
+            } else {
+                state.setInactive(v);
+            }
+        }
+    }
+    return true;
+}
+
+bool solveJovanovic(PdsState& state, bool output, double timeLimit) {
+    unused(state, output, timeLimit);
+    struct NotImplemented : public std::exception {};
+    throw NotImplemented{};
+}
+
 } // namespace pds
