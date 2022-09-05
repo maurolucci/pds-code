@@ -11,6 +11,7 @@
 #include <filesystem>
 
 #include "pds.hpp"
+#include "graphio.hpp"
 #include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
 #include "draw_grid.hpp"
@@ -316,7 +317,7 @@ int run(int argc, const char** argv) {
         return 1;
     }
 
-    PdsState state(import_graphml(vm["graph"].as<string>(), vm["all-zi"].as<bool>()));
+    PdsState state(readAutoGraph(vm["graph"].as<string>(), vm["all-zi"].as<bool>()));
     auto input = state;
 
     map<PowerGrid::vertex_descriptor, Coordinate> layout;

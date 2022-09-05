@@ -6,7 +6,8 @@
 #include <range/v3/all.hpp>
 #include <boost/program_options.hpp>
 
-#include <pds.hpp>
+#include "pds.hpp"
+#include "graphio.hpp"
 
 namespace pds {
 
@@ -52,7 +53,7 @@ bool isForest(const PowerGrid& graph) {
 
 int main(int argc, const char** argv) {
     using namespace pds;
-    auto graph = pds::import_graphml(argv[1]);
+    auto graph = pds::readGraphML(argv[1]);
     fmt::print("n={}, m={}\n", graph.numVertices(), graph.numEdges());
     fmt::print("is connected: {}\n", isConnected(graph));
     fmt::print("is forest: {}\n", isForest(graph));

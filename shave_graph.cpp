@@ -6,7 +6,8 @@
 #include <range/v3/all.hpp>
 #include <boost/program_options.hpp>
 
-#include <pds.hpp>
+#include "pds.hpp"
+#include "graphio.hpp"
 
 using Graph = pds::PowerGrid;//setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
 using Vertex = Graph::vertex_descriptor;
@@ -71,7 +72,7 @@ int main(int argc, const char** argv) {
     po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(), vm);
     po::notify(vm);
 
-    auto graph = pds::import_graphml(vm["graph"].as<string>());
+    auto graph = pds::readGraphML(vm["graph"].as<string>());
     shave(graph, vm.count("leaves"), vm.count("paths"));
 
     std::optional<std::ofstream> outStream;
