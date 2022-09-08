@@ -6,19 +6,49 @@
 #include <gurobi_c++.h>
 
 namespace pds {
-bool solve_pds(PdsState& state, bool output, double timeLimit) {
-    auto active = state.active();
-    auto observed = state.observed();
-    bool result = solve_pds(state.graph(), active, output, timeLimit);
-    for (auto v: state.graph().vertices()) {
-        if (active[v] == PmuState::Active) {
-            state.setActive(v);
+
+SolveState solveModel(PdsState& state, map<PowerGrid::vertex_descriptor, GRBVar>& xi, GRBModel& model) {
+    model.optimize();
+    if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {
+        return SolveState::Infeasible;
+    } else {
+        std::cout << "result: " << model.get(GRB_DoubleAttr_ObjBound) << std::endl;
+        for (auto v: state.graph().vertices()) {
+            if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                state.setActive(v);
+            } else {
+                state.setInactive(v);
+            }
         }
     }
-    return result;
+    switch (model.get(GRB_IntAttr_Status)) {
+    case GRB_OPTIMAL:
+        return SolveState::Optimal;
+    case GRB_TIME_LIMIT:
+        return SolveState::Timeout;
+    default:
+        return SolveState::Other;
+    }
 }
 
-bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuState> &active, bool output, double timeLimit) {
+//SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
+//    auto active = state.active();
+//    auto observed = state.observed();
+//    bool result = solve_pds(state.graph(), active, output, timeLimit);
+//    for (auto v: state.graph().vertices()) {
+//        if (active[v] == PmuState::Active) {
+//            state.setActive(v);
+//        }
+//    }
+//    return result;
+//}
+
+SolveState solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuState> &active, bool output, double timeLimit) {
+    unused(graph, active, output, timeLimit);
+    throw 0;
+}
+
+SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
     namespace r3 = ranges;
     auto env = GRBEnv();
     auto model = GRBModel(env);
@@ -31,6 +61,7 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
     map <PowerGrid::vertex_descriptor, GRBVar> xi;
     map <PowerGrid::vertex_descriptor, GRBVar> si;
     map <std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
+    auto& graph = static_cast<const PdsState&>(state).graph();
     const double M = 2 * graph.numVertices();
     {
         GRBLinExpr objective{};
@@ -54,7 +85,7 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
     for (auto v: graph.vertices()) {
         model.addConstr(si.at(v) >= 1);
         for (auto w: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
-            switch (active.at(w)) {
+            switch (state.activeState(w)) {
                 case PmuState::Blank:
                     model.addConstr(si.at(v) <= xi.at(w) + M * (1 - xi.at(w)));
                     break;
@@ -80,7 +111,7 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
                 outObserved += pij[{v, w}];
             }
         }
-        if (active[v] != PmuState::Active) {
+        if (!state.isActive(v)) {
             model.addConstr(si[v] <= M * observingNeighbors);
         }
         model.addConstr(inObserved <= 1);
@@ -92,9 +123,9 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
 
         model.addConstr(si[v] <= graph.numVertices());
 
-        if (active[v] == PmuState::Active) {
+        if (state.isActive(v)) {
             model.addConstr(xi[v] == 1);
-        } else if (active[v] == PmuState::Inactive) {
+        } else if (state.isInactive(v)) {
             model.addConstr(xi[v] == 0);
         }
     }
@@ -119,19 +150,157 @@ bool solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuSta
         }
     }
 
-    model.optimize();
-    if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {
-        return false;
-    } else {
-        std::cout << "result: " << model.get(GRB_DoubleAttr_ObjBound) << std::endl;
-        for (auto v: graph.vertices()) {
-            if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
-                active[v] = PmuState::Active;
-            } else {
-                active[v] = PmuState::Inactive;
+    return solveModel(state, xi, model);
+}
+
+SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
+    auto env = GRBEnv();
+    auto model = GRBModel(env);
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    map <PowerGrid::vertex_descriptor, GRBVar> xi;
+    for (auto v: state.graph().vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
+    }
+    for (auto v: state.graph().vertices()) {
+        GRBLinExpr sum = xi.at(v);
+        for (auto w: state.graph().neighbors(v)) {
+            sum += xi.at(w);
+        }
+        model.addConstr(sum >= 1);
+    }
+
+    return solveModel(state, xi, model);
+}
+
+SolveState solveBrimkovExpanded(PdsState& state, bool output, double timeLimit) {
+    auto env = GRBEnv();
+    auto model = GRBModel(env);
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    map <PowerGrid::vertex_descriptor, GRBVar> xi;
+    map <PowerGrid::vertex_descriptor, GRBVar> si;
+    map <PowerGrid::edge_descriptor, GRBVar> ye;
+    auto T = static_cast<double>(state.graph().numVertices());
+    for (auto v: state.graph().vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, "x"));
+        si.try_emplace(v, model.addVar(0.0, static_cast<double>(T), 0.0, GRB_INTEGER, "s"));
+        for (auto e: state.graph().outEdges(v)) {
+            assert(!ye.contains(e));
+            ye.try_emplace(e, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+        }
+    }
+    for (auto u: state.graph().vertices()) {
+        // x_v + \sum_{e \in N(v)} y_e = 1 (3)
+        if (state.isActive(u)) {
+            model.addConstr(xi.at(u) == 1);
+        } else {
+            GRBLinExpr observers = 0;
+            if (state.isBlank(u)) observers += xi.at(u);
+            for (auto e: state.graph().inEdges(u)) {
+                auto v = state.graph().source(e);
+                assert(v != u);
+                if (!state.isInactive(v)) observers += xi.at(v);
+                if (state.isZeroInjection(v)) observers += ye.at(e);
+            }
+            model.addConstr(observers >= 1);
+        }
+        if (!state.isZeroInjection(u) && !state.isInactive(u)) {
+            GRBLinExpr outPropagation;
+            for (auto e: state.graph().outEdges(u)) {
+                outPropagation += ye.at(e);
+            }
+            model.addConstr(outPropagation <= 0);
+        } else {
+            GRBLinExpr outPropagation;
+            for (auto e: state.graph().outEdges(u)) {
+                outPropagation += ye.at(e);
+            }
+            model.addConstr(outPropagation <= 1);
+        }
+        for (auto e: state.graph().outEdges(u)) {
+            auto v = state.graph().target(e);
+            {
+                // s_u - s_v + (T + 1) y_{uv} <= T (4) e@(u,v) \in E'
+                model.addConstr(si.at(u) - si.at(v) + (T + 1) * ye.at(e) <= T);
+                for (auto w: state.graph().neighbors(u)) {
+                    if (v != w) {
+                        unused(u, w, v, e);
+                        // s_w - s_v + (T + 1) y_e <= T + (T+1) x_u , e@(u,v) \in E', w \in N(u) - v
+                        if (state.isBlank(u)) {
+                            if (state.isZeroInjection(u)) {
+                                model.addConstr(si.at(w) - si.at(v) + (T + 1) * ye.at(e) <= T + (T + 1) * xi.at(u));
+                            }
+                        } else if (state.isActive(u)) {
+                            // ignore, no action needed
+                        } else if (state.isInactive(u)) {
+                            if (state.isZeroInjection(u)) {
+                                model.addConstr(si.at(w) - si.at(v) + (T + 1) * ye.at(e) <= T);
+                            }
+                        }
+                    }
+                }
             }
         }
-        return true;
     }
+
+    return solveModel(state, xi, model);
 }
+
+SolveState solveBrimkov(PdsState& state, bool output, double timeLimit) {
+    auto env = GRBEnv();
+    auto model = GRBModel(env);
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    map <PowerGrid::vertex_descriptor, GRBVar> xi;
+    map <PowerGrid::vertex_descriptor, GRBVar> si;
+    map <PowerGrid::edge_descriptor, GRBVar> ye;
+    size_t T = state.graph().numVertices();
+    for (auto v: state.graph().vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, "x"));
+        si.try_emplace(v, model.addVar(0.0, static_cast<double>(T), 0.0, GRB_INTEGER, "s"));
+        for (auto e: state.graph().outEdges(v)) {
+            assert(!ye.contains(e));
+            ye.try_emplace(e, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+        }
+    }
+    for (auto u: state.graph().vertices()) {
+        // x_v + \sum_{e \in N(v)} y_e = 1 (3)
+        GRBLinExpr observers = 0;
+        observers += xi.at(u);
+        for (auto e: state.graph().inEdges(u)) {
+            auto v = state.graph().source(e);
+            assert(v != u);
+            observers += ye.at({v, u});
+        }
+        model.addConstr(observers == 1);
+        for (auto e: state.graph().outEdges(u)) {
+            auto v = state.graph().target(e);
+            if (!state.isZeroInjection(u)) {
+                model.addConstr(si.at(v) <= si.at(u) + 1);
+            }
+         // s_u - s_v + (T + 1) y_{uv} <= T (4) e@(u,v) \in E'
+            model.addConstr(si.at(u) - si.at(v) + (T + 1) * ye.at(e) <= T);
+            for (auto w: state.graph().neighbors(u)) {
+                if (v != w) {
+                    unused(u, w, v, e);
+         // s_w - s_v + (T + 1) y_e <= T + (T+1) x_u , e@(u,v) \in E', w \in N(u) - v
+                    model.addConstr(si.at(w) - si.at(v) + (T + 1) * ye.at(e) <= T + (T+1) * xi.at(u));
+                }
+            }
+        }
+    }
+
+    return solveModel(state, xi, model);
+}
+
+SolveState solveJovanovic(PdsState& state, bool output, double timeLimit) {
+    unused(state, output, timeLimit);
+    struct NotImplemented : public std::exception {};
+    throw NotImplemented{};
+}
+
 } // namespace pds

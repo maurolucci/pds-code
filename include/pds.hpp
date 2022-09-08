@@ -20,6 +20,16 @@
 
 namespace pds {
 
+enum class SolveState {
+    Optimal,
+    Timeout,
+    Infeasible,
+    Heuristic,
+    Other
+};
+
+SolveState combineSolveState(SolveState first, SolveState second);
+
 enum class PmuState : signed char {
     Blank = 0,
     Active = 1,
@@ -33,8 +43,6 @@ struct Bus {
 };
 
 using PowerGrid = setgraph::SetGraph<Bus, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
-
-PowerGrid import_graphml(const std::string& filename, bool all_zero_injection = false);
 
 void exportGraphml(const PowerGrid& grid, std::ostream& out);
 

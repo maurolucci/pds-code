@@ -40,8 +40,9 @@ function(enable_warnings target)
             /W4>)
 endfunction()
 
-add_library(pdslib STATIC src/pds/pds.cpp src/pds/graphml.cpp src/pds/draw_grid.cpp)
-target_include_directories(pdslib PUBLIC include PRIVATE Boost::graph)
+add_library(pdslib STATIC src/pds/pds.cpp src/pds/graphml.cpp src/pds/draw_grid.cpp src/pds/graphio.cpp)
+target_include_directories(pdslib PUBLIC include)
+target_link_libraries(pdslib PRIVATE Boost::graph)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
 enable_warnings(pdslib)
@@ -62,3 +63,5 @@ target_link_libraries(shave PUBLIC pdslib fmt::fmt Boost::program_options)
 
 add_executable(check_graph check_graph.cpp)
 target_link_libraries(check_graph PUBLIC pdslib fmt::fmt Boost::program_options)
+
+add_subdirectory(testgraphs)

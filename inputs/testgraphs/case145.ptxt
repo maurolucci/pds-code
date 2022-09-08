@@ -1,0 +1,1282 @@
+Number Of Vertices
+145
+Edges
+Number edges containting node 0
+7
+list 
+1
+2
+3
+4
+5
+32
+92
+Number edges containting node 1
+4
+list 
+0
+5
+112
+113
+Number edges containting node 2
+2
+list 
+0
+32
+Number edges containting node 3
+2
+list 
+0
+32
+Number edges containting node 4
+2
+list 
+0
+32
+Number edges containting node 5
+6
+list 
+0
+1
+6
+8
+9
+11
+Number edges containting node 6
+4
+list 
+5
+7
+65
+103
+Number edges containting node 7
+2
+list 
+6
+65
+Number edges containting node 8
+3
+list 
+5
+10
+68
+Number edges containting node 9
+3
+list 
+5
+31
+68
+Number edges containting node 10
+2
+list 
+8
+68
+Number edges containting node 11
+5
+list 
+5
+12
+13
+24
+71
+Number edges containting node 12
+2
+list 
+11
+71
+Number edges containting node 13
+5
+list 
+11
+14
+15
+16
+57
+Number edges containting node 14
+2
+list 
+13
+57
+Number edges containting node 15
+2
+list 
+13
+57
+Number edges containting node 16
+7
+list 
+13
+17
+18
+19
+20
+21
+58
+Number edges containting node 17
+2
+list 
+16
+58
+Number edges containting node 18
+2
+list 
+16
+58
+Number edges containting node 19
+2
+list 
+16
+58
+Number edges containting node 20
+2
+list 
+16
+58
+Number edges containting node 21
+6
+list 
+16
+22
+23
+29
+77
+82
+Number edges containting node 22
+2
+list 
+21
+82
+Number edges containting node 23
+3
+list 
+21
+75
+76
+Number edges containting node 24
+6
+list 
+11
+25
+26
+30
+72
+73
+Number edges containting node 25
+2
+list 
+24
+72
+Number edges containting node 26
+4
+list 
+24
+27
+28
+74
+Number edges containting node 27
+2
+list 
+26
+74
+Number edges containting node 28
+2
+list 
+26
+74
+Number edges containting node 29
+2
+list 
+21
+77
+Number edges containting node 30
+2
+list 
+24
+73
+Number edges containting node 31
+2
+list 
+9
+68
+Number edges containting node 32
+13
+list 
+0
+2
+3
+4
+33
+34
+36
+37
+38
+39
+48
+49
+109
+Number edges containting node 33
+2
+list 
+32
+35
+Number edges containting node 34
+1
+list 
+32
+Number edges containting node 35
+2
+list 
+33
+98
+Number edges containting node 36
+3
+list 
+32
+86
+87
+Number edges containting node 37
+2
+list 
+32
+87
+Number edges containting node 38
+3
+list 
+32
+42
+83
+Number edges containting node 39
+3
+list 
+32
+43
+83
+Number edges containting node 40
+2
+list 
+41
+42
+Number edges containting node 41
+2
+list 
+40
+43
+Number edges containting node 42
+3
+list 
+38
+40
+45
+Number edges containting node 43
+3
+list 
+39
+41
+44
+Number edges containting node 44
+3
+list 
+43
+60
+84
+Number edges containting node 45
+3
+list 
+42
+60
+84
+Number edges containting node 46
+3
+list 
+47
+49
+86
+Number edges containting node 47
+3
+list 
+46
+48
+86
+Number edges containting node 48
+3
+list 
+32
+47
+50
+Number edges containting node 49
+3
+list 
+32
+46
+50
+Number edges containting node 50
+6
+list 
+48
+49
+51
+52
+55
+56
+Number edges containting node 51
+3
+list 
+50
+52
+53
+Number edges containting node 52
+3
+list 
+50
+51
+54
+Number edges containting node 53
+3
+list 
+51
+54
+60
+Number edges containting node 54
+3
+list 
+52
+53
+60
+Number edges containting node 55
+3
+list 
+50
+56
+57
+Number edges containting node 56
+3
+list 
+50
+55
+57
+Number edges containting node 57
+11
+list 
+13
+14
+15
+55
+56
+58
+71
+86
+97
+99
+102
+Number edges containting node 58
+17
+list 
+16
+17
+18
+19
+20
+57
+59
+71
+78
+79
+88
+91
+93
+97
+99
+102
+106
+Number edges containting node 59
+9
+list 
+58
+134
+78
+79
+89
+91
+93
+94
+137
+Number edges containting node 60
+9
+list 
+44
+45
+53
+54
+61
+62
+63
+64
+85
+Number edges containting node 61
+2
+list 
+60
+85
+Number edges containting node 62
+11
+list 
+60
+63
+64
+65
+66
+68
+101
+115
+116
+117
+123
+Number edges containting node 63
+8
+list 
+60
+62
+64
+65
+66
+68
+96
+123
+Number edges containting node 64
+8
+list 
+60
+62
+63
+65
+66
+68
+96
+123
+Number edges containting node 65
+11
+list 
+6
+7
+62
+63
+64
+66
+67
+68
+96
+110
+123
+Number edges containting node 66
+14
+list 
+62
+63
+64
+65
+67
+68
+96
+118
+119
+120
+121
+123
+124
+131
+Number edges containting node 67
+3
+list 
+65
+66
+68
+Number edges containting node 68
+19
+list 
+8
+9
+10
+31
+62
+63
+64
+65
+66
+67
+69
+70
+71
+72
+73
+96
+100
+111
+123
+Number edges containting node 69
+7
+list 
+68
+70
+71
+72
+73
+100
+111
+Number edges containting node 70
+7
+list 
+68
+69
+71
+72
+73
+100
+111
+Number edges containting node 71
+14
+list 
+11
+12
+57
+58
+68
+69
+70
+72
+73
+97
+99
+100
+102
+111
+Number edges containting node 72
+18
+list 
+24
+25
+68
+69
+70
+71
+73
+74
+80
+81
+90
+95
+100
+104
+107
+108
+111
+120
+Number edges containting node 73
+18
+list 
+24
+30
+68
+69
+70
+71
+72
+74
+80
+81
+90
+95
+100
+105
+107
+108
+111
+120
+Number edges containting node 74
+11
+list 
+26
+27
+28
+72
+73
+81
+90
+95
+107
+108
+120
+Number edges containting node 75
+3
+list 
+23
+76
+88
+Number edges containting node 76
+2
+list 
+23
+75
+Number edges containting node 77
+2
+list 
+21
+29
+Number edges containting node 78
+8
+list 
+58
+59
+79
+89
+91
+93
+94
+106
+Number edges containting node 79
+6
+list 
+58
+59
+78
+89
+91
+93
+Number edges containting node 80
+2
+list 
+72
+73
+Number edges containting node 81
+7
+list 
+72
+73
+74
+90
+107
+108
+120
+Number edges containting node 82
+3
+list 
+21
+22
+88
+Number edges containting node 83
+2
+list 
+38
+39
+Number edges containting node 84
+2
+list 
+44
+45
+Number edges containting node 85
+2
+list 
+60
+61
+Number edges containting node 86
+4
+list 
+36
+46
+47
+57
+Number edges containting node 87
+2
+list 
+36
+37
+Number edges containting node 88
+4
+list 
+58
+75
+82
+102
+Number edges containting node 89
+5
+list 
+59
+78
+79
+91
+93
+Number edges containting node 90
+8
+list 
+72
+73
+74
+81
+95
+107
+108
+120
+Number edges containting node 91
+7
+list 
+58
+59
+78
+79
+89
+93
+106
+Number edges containting node 92
+1
+list 
+0
+Number edges containting node 93
+8
+list 
+58
+59
+78
+79
+89
+91
+94
+137
+Number edges containting node 94
+5
+list 
+59
+78
+93
+137
+134
+Number edges containting node 95
+5
+list 
+72
+73
+74
+90
+107
+Number edges containting node 96
+6
+list 
+63
+64
+65
+66
+68
+123
+Number edges containting node 97
+5
+list 
+57
+58
+71
+99
+102
+Number edges containting node 98
+1
+list 
+35
+Number edges containting node 99
+5
+list 
+57
+58
+71
+97
+102
+Number edges containting node 100
+7
+list 
+68
+69
+70
+71
+72
+73
+111
+Number edges containting node 101
+3
+list 
+62
+116
+117
+Number edges containting node 102
+6
+list 
+57
+58
+71
+88
+97
+99
+Number edges containting node 103
+1
+list 
+6
+Number edges containting node 104
+1
+list 
+72
+Number edges containting node 105
+1
+list 
+73
+Number edges containting node 106
+3
+list 
+58
+78
+91
+Number edges containting node 107
+8
+list 
+72
+73
+74
+81
+90
+95
+108
+120
+Number edges containting node 108
+7
+list 
+72
+73
+74
+81
+90
+107
+120
+Number edges containting node 109
+1
+list 
+32
+Number edges containting node 110
+1
+list 
+65
+Number edges containting node 111
+7
+list 
+68
+69
+70
+71
+72
+73
+100
+Number edges containting node 112
+1
+list 
+1
+Number edges containting node 113
+1
+list 
+1
+Number edges containting node 114
+7
+list 
+115
+116
+117
+142
+135
+140
+141
+Number edges containting node 115
+8
+list 
+62
+114
+116
+117
+142
+135
+140
+141
+Number edges containting node 116
+9
+list 
+62
+101
+114
+115
+117
+142
+135
+140
+141
+Number edges containting node 117
+11
+list 
+62
+101
+114
+115
+116
+130
+131
+142
+135
+140
+141
+Number edges containting node 118
+15
+list 
+66
+119
+120
+121
+123
+124
+125
+126
+127
+128
+129
+130
+131
+143
+141
+Number edges containting node 119
+14
+list 
+66
+118
+120
+121
+122
+123
+124
+126
+127
+128
+129
+130
+131
+141
+Number edges containting node 120
+19
+list 
+66
+72
+73
+74
+81
+90
+107
+108
+118
+119
+121
+122
+123
+124
+126
+127
+128
+130
+131
+Number edges containting node 121
+12
+list 
+66
+118
+119
+120
+122
+123
+124
+130
+131
+132
+142
+141
+Number edges containting node 122
+7
+list 
+119
+120
+121
+123
+124
+130
+131
+Number edges containting node 123
+19
+list 
+62
+63
+64
+65
+66
+68
+96
+118
+119
+120
+121
+122
+124
+127
+130
+131
+132
+142
+141
+Number edges containting node 124
+14
+list 
+66
+118
+119
+120
+121
+122
+123
+126
+127
+128
+129
+130
+131
+141
+Number edges containting node 125
+1
+list 
+118
+Number edges containting node 126
+6
+list 
+118
+119
+120
+124
+127
+128
+Number edges containting node 127
+9
+list 
+118
+119
+120
+123
+124
+126
+128
+129
+130
+Number edges containting node 128
+6
+list 
+118
+119
+120
+124
+126
+127
+Number edges containting node 129
+8
+list 
+118
+119
+124
+127
+130
+131
+143
+141
+Number edges containting node 130
+17
+list 
+117
+118
+119
+120
+121
+122
+123
+124
+127
+129
+131
+132
+142
+143
+133
+140
+141
+Number edges containting node 131
+16
+list 
+66
+117
+118
+119
+120
+121
+122
+123
+124
+129
+130
+132
+142
+143
+140
+141
+Number edges containting node 132
+6
+list 
+121
+123
+130
+131
+142
+141
+Number edges containting node 133
+7
+list 
+130
+135
+138
+140
+141
+143
+144
+Number edges containting node 134
+5
+list 
+59
+94
+135
+137
+140
+Number edges containting node 135
+13
+list 
+114
+115
+116
+117
+133
+134
+137
+138
+139
+140
+141
+142
+144
+Number edges containting node 136
+3
+list 
+138
+139
+144
+Number edges containting node 137
+5
+list 
+59
+93
+94
+134
+135
+Number edges containting node 138
+7
+list 
+133
+135
+136
+139
+140
+141
+144
+Number edges containting node 139
+4
+list 
+135
+136
+138
+144
+Number edges containting node 140
+14
+list 
+114
+115
+116
+117
+130
+131
+133
+134
+135
+138
+141
+142
+143
+144
+Number edges containting node 141
+20
+list 
+114
+115
+116
+117
+118
+119
+121
+123
+124
+129
+130
+131
+132
+133
+135
+138
+140
+142
+143
+144
+Number edges containting node 142
+13
+list 
+114
+115
+116
+117
+121
+123
+130
+131
+132
+135
+140
+141
+143
+Number edges containting node 143
+9
+list 
+118
+129
+130
+131
+133
+140
+141
+142
+144
+Number edges containting node 144
+8
+list 
+133
+135
+136
+138
+139
+140
+141
+143

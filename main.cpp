@@ -11,6 +11,7 @@
 #include <filesystem>
 
 #include "pds.hpp"
+#include "graphio.hpp"
 #include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
 #include "draw_grid.hpp"
@@ -95,128 +96,6 @@ bool applyReductions(pds::PdsState& state, const std::function<void(const pds::P
     return changed;
 }
 
-void processBoost(const std::string& filename) {
-    fmt::print("loading graph...\n");
-    auto t0 = now();
-    auto graph = pds::import_graphml(filename, true);
-    auto t1 = now();
-    fmt::print("graph loaded in {}\n", ms(t1 - t0)); std::fflush(nullptr);
-    //printGraph(graph);
-    fmt::print("computing layout...\n");
-    auto layout = pds::layoutGraph(graph);
-    auto t2 = now();
-    fmt::print("layout computed in {}\n", ms(t2 - t1));
-    if (graph.numVertices() < 1000) {
-        fmt::print("solve exact\n");
-        auto t3 = now();
-        auto active = graph.vertices()
-        | ranges::views::transform([](pds::PowerGrid::vertex_descriptor v) { return std::make_pair(v, pds::PmuState::Blank);})
-        | ranges::to<pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>>();
-        pds::solve_pds(graph, active);
-        auto t4 = now();
-        fmt::print("solved in {}", ms(t4 - t3));
-        pds::set<pds::PowerGrid::vertex_descriptor> observed;
-        printResult(graph, active, observed);
-        pds::dominate(graph, active, observed);
-        pds::propagate(graph, observed);
-        printResult(graph, active, observed);
-        pds::drawGrid(graph, active, observed, "out/4_solve_input.svg", layout);
-    }
-    {
-        fmt::print("solve with reductions\n");
-        pds::PdsState state(graph);
-        bool drawReductionSteps = true;
-        size_t counter = 0;
-        auto drawState = [&](const pds::PdsState& state, const std::string& name) mutable {
-            if (drawReductionSteps) {
-                pds::drawGrid(state.graph(), state.active(), state.observed(), fmt::format("out/1_red_{:04}_{}.svg", counter, name), layout);
-                ++counter;
-            }
-        };
-        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/0_input.svg", layout);
-        fmt::print("applying reductions\n");
-        auto t_startReduction = now();
-        while (applyReductions(state, drawState)) { }
-        auto t_endReduction = now();
-        fmt::print("reductions took {}\n", ms(t_endReduction - t_startReduction));
-        printResult(state.graph(), state.active(), state.observed());
-        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/1_red_preprocessed.svg", layout);
-        bool drawTrivial = false;
-        auto t_solveStart = now();
-        if (true) {
-            auto subproblems = state.subproblems(true);
-            ranges::sort(subproblems,
-                         [](const pds::PdsState &left, const pds::PdsState &right) -> bool {
-                             return left.graph().numVertices() < right.graph().numVertices();
-                         });
-            for (size_t i = 0, j = 0; auto &subproblem: subproblems) {
-                if (subproblem.solveTrivial()) {
-                    if (drawTrivial) {
-                        pds::drawGrid(subproblem.graph(), subproblem.active(), subproblem.observed(),
-                                      fmt::format("out/comp_trivial_{:03}.svg", i), layout);
-                        ++i;
-                    }
-                } else {
-                    fmt::print("solving subproblem {}\n", j);
-                    printResult(subproblem.graph(), subproblem.active(), subproblem.observed());
-                    pds::drawGrid(subproblem.graph(), subproblem.active(), subproblem.observed(),
-                                  fmt::format("out/comp_{:03}_0unsolved.svg", j), layout);
-                    while (applyReductions(subproblem, [](const auto&, const auto&) { }));
-                    pds::drawGrid(subproblem.graph(), subproblem.active(), subproblem.observed(),
-                                  fmt::format("out/comp_{:03}_1reductions.svg", j), layout);
-                    auto active = subproblem.active();
-                    auto t_subSolve = now();
-                    if (!pds::solve_pds(subproblem.graph(), active, false, 60 * 60)) {
-                        fmt::print("infeasible subproblem {}\n", j);
-                    }
-                    auto t_subEnd = now();
-                    for (auto v: subproblem.graph().vertices()) {
-                        if (active.at(v) == pds::PmuState::Active) {
-                            subproblem.setActive(v);
-                        }
-                    }
-                    fmt::print("subproblem solved in {}\n", ms(t_subEnd - t_subSolve));
-                    fmt::print("solve result:\n");
-                    printResult(subproblem.graph(), subproblem.active(), subproblem.observed());
-                    pds::drawGrid(subproblem.graph(), subproblem.active(), subproblem.observed(),
-                                  fmt::format("out/comp_{:03}_2solved.svg", j), layout);
-                    ++j;
-                }
-                for (auto v: subproblem.graph().vertices()) {
-                    if (subproblem.isActive(v)) {
-                        state.setActive(v);
-                    }
-                }
-            }
-        } else {
-            auto active = state.active();
-            if (!pds::solve_pds(state.graph(), active)) {
-                fmt::print("infeasible\n");
-            }
-            for (auto v: state.graph().vertices()) {
-                if (active.at(v) == pds::PmuState::Active) {
-                    state.setActive(v);
-                }
-            }
-        }
-        auto t_solveEnd = now();
-        if (state.allObserved()) {
-            fmt::print("solved in {}\n", ms(t_solveEnd - t_solveStart));
-        } else {
-            fmt::print("not solved in {}\n", ms(t_solveEnd - t_solveStart));
-        }
-        pds::drawGrid(state.graph(), state.active(), state.observed(), "out/2_solved_preprocessed.svg", layout);
-        auto active = state.active();
-        pds::set<pds::PowerGrid::vertex_descriptor> observed;
-        pds::dominate(graph, active, observed);
-        pds::propagate(graph, observed);
-        pds::drawGrid(graph, active, observed, "out/3_solved.svg", layout);
-        printResult(graph, active, observed);
-        auto isUnobserved = [&state] (auto v) -> bool { return !state.isObserved(v); };
-        fmt::print("#unobserved = {}", ranges::distance(state.graph().vertices() | ranges::views::filter(isUnobserved)));
-    }
-}
-
 struct DrawOptions {
     bool drawInput;
     bool drawSolution;
@@ -238,10 +117,11 @@ int run(int argc, const char** argv) {
             ("graph,f", po::value<string>(), "input graph")
             ("outdir,o", po::value<string>()->default_value("out"), "output directory")
             (
-                    "solve",
-                    po::value<string>()->default_value("subproblem"),
-                    "gurobi solve method. Can be any of [none,greedy,greedy-degree,branching,full,subproblem]"
+                    "solver,s",
+                    po::value<string>()->default_value("gurobi"),
+                    "solve method. Can be any of [none,greedy,greedy-degree,branching,gurobi,brimkov,jovanovic,domination]"
             )
+            ("subproblem,u", "split problem into subproblems and solve them individually")
             ("print-solve", "print intermediate solve state")
             ("print-state,p", "print solve state after each step")
             ("time-limit,t", po::value<double>()->default_value(600.0), "time limit for gurobi in seconds")
@@ -304,11 +184,31 @@ int run(int argc, const char** argv) {
         }
     }
 
-    string solve = vm["solve"].as<string>();
+    string solve = vm["solver"].as<string>();
 
-    if (!set<string>{"none"s, "greedy"s, "greedy-degree"s, "greedy-median"s, "branching"s, "full"s, "subproblem"s}.contains(solve)) {
-        fmt::print(stderr, "invalid solve option: {}\n", solve);
-        return 1;
+    std::function<SolveState(PdsState& state, bool output, double timeLimit)> solver;
+    if (solve == "gurobi"s) {
+        solver = solve_pds;
+    } else if (solve == "none"s) {
+        solver = [](auto&, auto, auto) { return SolveState::Other; };
+    } else if (solve == "domination"s) {
+        solver = solveDominatingSet;
+    } else if (solve == "brimkov-orig"s) {
+        solver = solveBrimkov;
+    } else if (solve == "brimkov"s) {
+        solver = solveBrimkovExpanded;
+    } else if (solve == "jovanovic"s) {
+        solver = solveJovanovic;
+    } else if (solve == "greedy"s) {
+        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestObservationNeighborhood);};
+    } else if (solve == "greedy-degree"s) {
+        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);};
+    } else if (solve == "greedy-median"s) {
+        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);};
+    } else if (solve == "branching"s) {
+        solver = [&vm](auto& state, bool, double){ return solveBranching(state, vm.count("reductions")); };
+    } else {
+        fmt::print("unrecognized solver {}\n", solve);
     }
 
     if (!vm.count("graph")) {
@@ -316,7 +216,7 @@ int run(int argc, const char** argv) {
         return 1;
     }
 
-    PdsState state(import_graphml(vm["graph"].as<string>(), vm["all-zi"].as<bool>()));
+    PdsState state(readAutoGraph(vm["graph"].as<string>(), vm["all-zi"].as<bool>()));
     auto input = state;
 
     map<PowerGrid::vertex_descriptor, Coordinate> layout;
@@ -400,7 +300,10 @@ int run(int argc, const char** argv) {
         }
     }
 
-    if (solve == "subproblem" || solve == "branching") {
+    SolveState result = SolveState::Optimal;
+
+
+    if (vm.count("subproblem")) {
         for (size_t i = 0; auto &subproblem: subproblems) {
             auto tSub = now();
             if (vm.count("reductions")) {
@@ -414,11 +317,7 @@ int run(int argc, const char** argv) {
             if (!subproblem.solveTrivial()) {
                 fmt::print("solving subproblem {}\n", i);
                 printState(subproblem);
-                if (solve == "subproblem") {
-                    solve_pds(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
-                } else if (solve == "branching") {
-                    solveBranching(subproblem, vm.count("reductions"));
-                }
+                result = solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
                 for (auto v: subproblem.graph().vertices()) {
                     if (subproblem.isActive(v)) {
                         state.setActive(v);
@@ -434,32 +333,31 @@ int run(int argc, const char** argv) {
                 ++i;
             }
         }
+    } else {
+        result = solver(state, vm.count("print-solve"), vm["time-limit"].as<double>());
     }
 
-    if (solve == "full") {
-        solve_pds(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (solve == "greedy") {
-        solveGreedy(state, true, greedy_strategies::largestObservationNeighborhood);
-    } else if (solve == "greedy-degree") {
-        solveGreedy(state, true, greedy_strategies::largestDegree);
-    } else if (solve == "greedy-median") {
-        solveGreedy(state, true, greedy_strategies::medianDegree);
-    }
-    for (auto v: state.graph().vertices()) {
-        if (state.isActive(v)) {
-            input.setActive(v);
+    if (result == SolveState::Infeasible) {
+        auto tSolveEnd = now();
+        fmt::print("model proved infeasible after {}\n", ms(tSolveEnd - tSolveStart));
+        return 1;
+    } else {
+        for (auto v: state.graph().vertices()) {
+            if (state.isActive(v)) {
+                input.setActive(v);
+            }
         }
-    }
-    auto tSolveEnd = now();
-    if (drawOptions.drawSolution) {
-        drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
-        drawGrid(input.graph(), input.active(), input.observed(), fmt::format("{}/3_solved.svg", outdir), layout);
-    }
-    fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
-    printState(state);
-    printState(input);
+        auto tSolveEnd = now();
+        if (drawOptions.drawSolution) {
+            drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
+            drawGrid(input.graph(), input.active(), input.observed(), fmt::format("{}/3_solved.svg", outdir), layout);
+        }
+        fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
+        printState(state);
+        printState(input);
 
-    return 0;
+        return 0;
+    }
 }
 
 int main(int argc, const char** argv) {
