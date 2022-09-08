@@ -117,10 +117,11 @@ int run(int argc, const char** argv) {
             ("graph,f", po::value<string>(), "input graph")
             ("outdir,o", po::value<string>()->default_value("out"), "output directory")
             (
-                    "solve",
-                    po::value<string>()->default_value("subproblem"),
-                    "gurobi solve method. Can be any of [none,greedy,greedy-degree,branching,full,subproblem,brimkov,jovanovic]"
+                    "solver,s",
+                    po::value<string>()->default_value("gurobi"),
+                    "solve method. Can be any of [none,greedy,greedy-degree,branching,gurobi,brimkov,jovanovic,domination]"
             )
+            ("subproblem,u", "split problem into subproblems and solve them individually")
             ("print-solve", "print intermediate solve state")
             ("print-state,p", "print solve state after each step")
             ("time-limit,t", po::value<double>()->default_value(600.0), "time limit for gurobi in seconds")
@@ -134,7 +135,7 @@ int run(int argc, const char** argv) {
             (
                     "draw,d",
                     po::value<vector<string>>()->default_value({"none"s}, "none")->implicit_value({"all"s}, "all")->composing(),
-                    "can be one of [none,all,input,solution,reductions,subproblems,brimkov,jovanovic,domination]"
+                    "can be one of [none,all,input,solution,reductions,subproblems]"
             )
             ;
     po::positional_options_description pos;
@@ -183,11 +184,31 @@ int run(int argc, const char** argv) {
         }
     }
 
-    string solve = vm["solve"].as<string>();
+    string solve = vm["solver"].as<string>();
 
-    if (!set<string>{"none"s, "greedy"s, "greedy-degree"s, "greedy-median"s, "branching"s, "full"s, "subproblem"s, "brimkov"s, "jovanovic"s, "domination"s}.contains(solve)) {
-        fmt::print(stderr, "invalid solve option: {}\n", solve);
-        return 1;
+    std::function<SolveState(PdsState& state, bool output, double timeLimit)> solver;
+    if (solve == "gurobi"s) {
+        solver = solve_pds;
+    } else if (solve == "none"s) {
+        solver = [](auto&, auto, auto) { return SolveState::Other; };
+    } else if (solve == "domination"s) {
+        solver = solveDominatingSet;
+    } else if (solve == "brimkov-orig"s) {
+        solver = solveBrimkov;
+    } else if (solve == "brimkov"s) {
+        solver = solveBrimkovExpanded;
+    } else if (solve == "jovanovic"s) {
+        solver = solveJovanovic;
+    } else if (solve == "greedy"s) {
+        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestObservationNeighborhood);};
+    } else if (solve == "greedy-degree"s) {
+        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);};
+    } else if (solve == "greedy-median"s) {
+        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);};
+    } else if (solve == "branching"s) {
+        solver = [&vm](auto& state, bool, double){ return solveBranching(state, vm.count("reductions")); };
+    } else {
+        fmt::print("unrecognized solver {}\n", solve);
     }
 
     if (!vm.count("graph")) {
@@ -279,7 +300,10 @@ int run(int argc, const char** argv) {
         }
     }
 
-    if (solve == "subproblem" || solve == "branching") {
+    SolveState result = SolveState::Optimal;
+
+
+    if (vm.count("subproblem")) {
         for (size_t i = 0; auto &subproblem: subproblems) {
             auto tSub = now();
             if (vm.count("reductions")) {
@@ -293,11 +317,7 @@ int run(int argc, const char** argv) {
             if (!subproblem.solveTrivial()) {
                 fmt::print("solving subproblem {}\n", i);
                 printState(subproblem);
-                if (solve == "subproblem") {
-                    solve_pds(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
-                } else if (solve == "branching") {
-                    solveBranching(subproblem, vm.count("reductions"));
-                }
+                result = solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
                 for (auto v: subproblem.graph().vertices()) {
                     if (subproblem.isActive(v)) {
                         state.setActive(v);
@@ -313,38 +333,31 @@ int run(int argc, const char** argv) {
                 ++i;
             }
         }
+    } else {
+        result = solver(state, vm.count("print-solve"), vm["time-limit"].as<double>());
     }
 
-    if (solve == "full"s) {
-        solve_pds(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (solve == "domination"s) {
-        solveDominatingSet(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (solve == "brimkov"s) {
-        solveBrimkov(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (solve == "jovanovic"s) {
-        solveJovanovic(state, vm.count("print-solve"), vm["time-limit"].as<double>());
-    } else if (solve == "greedy"s) {
-        solveGreedy(state, vm.count("reductions"), greedy_strategies::largestObservationNeighborhood);
-    } else if (solve == "greedy-degree"s) {
-        solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);
-    } else if (solve == "greedy-median"s) {
-        solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);
-    }
-    for (auto v: state.graph().vertices()) {
-        if (state.isActive(v)) {
-            input.setActive(v);
+    if (result == SolveState::Infeasible) {
+        auto tSolveEnd = now();
+        fmt::print("model proved infeasible after {}\n", ms(tSolveEnd - tSolveStart));
+        return 1;
+    } else {
+        for (auto v: state.graph().vertices()) {
+            if (state.isActive(v)) {
+                input.setActive(v);
+            }
         }
-    }
-    auto tSolveEnd = now();
-    if (drawOptions.drawSolution) {
-        drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
-        drawGrid(input.graph(), input.active(), input.observed(), fmt::format("{}/3_solved.svg", outdir), layout);
-    }
-    fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
-    printState(state);
-    printState(input);
+        auto tSolveEnd = now();
+        if (drawOptions.drawSolution) {
+            drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
+            drawGrid(input.graph(), input.active(), input.observed(), fmt::format("{}/3_solved.svg", outdir), layout);
+        }
+        fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
+        printState(state);
+        printState(input);
 
-    return 0;
+        return 0;
+    }
 }
 
 int main(int argc, const char** argv) {

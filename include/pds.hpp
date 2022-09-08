@@ -20,6 +20,16 @@
 
 namespace pds {
 
+enum class SolveState {
+    Optimal,
+    Timeout,
+    Infeasible,
+    Heuristic,
+    Other
+};
+
+SolveState combineSolveState(SolveState first, SolveState second);
+
 enum class PmuState : signed char {
     Blank = 0,
     Active = 1,

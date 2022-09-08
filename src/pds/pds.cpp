@@ -579,4 +579,18 @@ bool observed(const PowerGrid &graph, const set<PowerGrid::vertex_descriptor> &o
     });
 }
 
+SolveState combineSolveState(SolveState first, SolveState second) {
+    if (first == SolveState::Infeasible || second == SolveState::Infeasible) {
+        return SolveState::Infeasible;
+    } else if (first == SolveState::Timeout || second == SolveState::Timeout) {
+        return SolveState::Timeout;
+    } else if (first == SolveState::Other || second == SolveState::Other) {
+        return SolveState::Other;
+    } else if (first == SolveState::Heuristic || second == SolveState::Heuristic) {
+        return SolveState::Heuristic;
+    } else {
+        return first;
+    }
+}
+
 }
