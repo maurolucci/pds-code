@@ -7,12 +7,23 @@
 
 namespace pds {
 
+namespace {
+GRBEnv &getEnv() {
+    // Suppress Academic License Info by redicreting stdout
+    auto oldstdout = dup(STDOUT_FILENO);
+    freopen("/dev/null", "a", stdout);
+    static thread_local GRBEnv env;
+    dup2(oldstdout, STDOUT_FILENO);
+    return env;
+}
+}
+
 SolveState solveModel(PdsState& state, map<PowerGrid::vertex_descriptor, GRBVar>& xi, GRBModel& model) {
     model.optimize();
     if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {
         return SolveState::Infeasible;
     } else {
-        std::cout << "result: " << model.get(GRB_DoubleAttr_ObjBound) << std::endl;
+        //std::cout << "result: " << model.get(GRB_DoubleAttr_ObjBound) << std::endl;
         for (auto v: state.graph().vertices()) {
             if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
                 state.setActive(v);
@@ -50,8 +61,7 @@ SolveState solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, 
 
 SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
     namespace r3 = ranges;
-    auto env = GRBEnv();
-    auto model = GRBModel(env);
+    auto model = GRBModel(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -154,8 +164,7 @@ SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
 }
 
 SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
-    auto env = GRBEnv();
-    auto model = GRBModel(env);
+    auto model = GRBModel(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -175,8 +184,7 @@ SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
 }
 
 SolveState solveBrimkovExpanded(PdsState& state, bool output, double timeLimit) {
-    auto env = GRBEnv();
-    auto model = GRBModel(env);
+    auto model = GRBModel(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -250,8 +258,7 @@ SolveState solveBrimkovExpanded(PdsState& state, bool output, double timeLimit) 
 }
 
 SolveState solveBrimkov(PdsState& state, bool output, double timeLimit) {
-    auto env = GRBEnv();
-    auto model = GRBModel(env);
+    auto model = GRBModel(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
