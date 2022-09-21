@@ -10,7 +10,7 @@
 #include <concepts>
 
 namespace pds {
-template<std::invocable<const PdsState&, const std::string&> F>
+template<std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)>
 bool exhaustiveSimpleReductions(PdsState& state, F callback = pds::unused) {
     bool anyChanged = false;
     bool changed;
@@ -27,13 +27,20 @@ bool exhaustiveSimpleReductions(PdsState& state, F callback = pds::unused) {
 }
 
 template<std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)>
+bool dominationReductions(PdsState &state, bool firstRun = true, F callback = unused) {
+    bool changed = false;
+    if (state.disableObservationNeighborhood()) { callback(state, "observation_neighborhood"); changed = true; }
+    if ((firstRun || changed) && state.activateNecessaryNodes()) { callback(state, "necessary_nodes"); changed = true; }
+    return changed;
+}
+
+template<std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)>
 bool exhaustiveReductions(PdsState &state, bool firstRun = true, F callback = unused) {
     bool anyChanged = false;
     bool changed;
     do {
         changed = exhaustiveSimpleReductions(state, callback);
-        if ((firstRun || changed) && state.disableObservationNeighborhood()) { callback(state, "observation_neighborhood"); changed = true; }
-        if ((firstRun || changed) && state.activateNecessaryNodes()) { callback(state, "necessary_nodes"); changed = true; }
+        if (firstRun || changed) dominationReductions(state, firstRun, callback);
         firstRun = false;
     } while (changed);
     return anyChanged;
