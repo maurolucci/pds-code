@@ -145,16 +145,20 @@ public:
         return m_observed.size() == graph().numVertices();
     }
 
-    size_t numObserved() const {
+    inline size_t numObserved() const {
         return m_observed.size();
     }
 
-    size_t numActive() const {
+    inline size_t numActive() const {
         return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); }));
     }
 
-    size_t numInactive() const {
+    inline size_t numInactive() const {
         return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isInactive(v); }));
+    }
+
+    inline size_t numZeroInjection() const {
+        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isZeroInjection(v); }));
     }
 
     inline const PowerGrid& graph() const { return m_graph; }
