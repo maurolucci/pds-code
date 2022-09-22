@@ -66,7 +66,7 @@ int main(int argc, const char** argv) {
             ("graph,f", po::value<std::vector<string>>()->required()->multitoken(), "input files")
             ("ignore,i", po::value<string>(), "file that lists inputs to ignore")
             ("all-zi,z", "consider all nodes zero-innjection")
-            ("outdir,o", po::value<string>()->default_value("out"), "output directory")
+            ("outfile,o", po::value<string>(), "output file")
             ("reduce,r", po::value<string>()->implicit_value("all"s,"all")->default_value("none"s,"none"), "apply reduce. can be any of [none,all,simple,domination]")
             ("solve,s", po::value<string>()->default_value("none")->implicit_value("gurobi"), "solve method. can be any of [none,gurobi,greedy]")
             ("subproblems,u", "split into subproblems before calling solve")
@@ -126,9 +126,17 @@ int main(int argc, const char** argv) {
         return 2;
     }
 
-    std::string outdir = vm["outdir"].as<string>();
-    fmt::print("#{}\n", fmt::join(std::span(argv, argc + argv), " "));
-    fmt::print("{}\n","name,pmus,solved,result,t_total,t_reductions,t_solver,n,m,zi,n_reduced,m_reduced,zi_reduced,pmu_reduced,blank_reduced");
+    FILE* outfile = nullptr;
+    std::vector<FILE*> outputs = {stdout};
+    if (vm.count("outfile")) {
+        outfile = fopen(vm["outfile"].as<string>().c_str(), "w");
+        outputs.push_back(outfile);
+    }
+    for (auto out: outputs) {
+        fmt::print(out, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
+        fmt::print(out, "{}\n","name,pmus,solved,result,t_total,t_reductions,t_solver,n,m,zi,n_reduced,m_reduced,zi_reduced,pmu_reduced,blank_reduced");
+    }
+
 
     for (const std::string& filename: inputs) {
         PdsState state(readAutoGraph(filename, allZeroInjection));
@@ -155,23 +163,28 @@ int main(int argc, const char** argv) {
         size_t pmus = state.numActive();
         fmt::memory_buffer buf;
         using namespace fmt::literals;
-        fmt::print(
-                "{name},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
-                "name"_a = filename,
-                "pmus"_a = pmus,
-                "solved"_a = state.allObserved(),
-                "result"_a = result,
-                "t_total"_a = ms(t2 - t0),
-                "t_reductions"_a = ms(t1 - t0),
-                "t_solver"_a = ms(t2 - t1),
-                "n"_a = n,
-                "m"_a = m,
-                "zi"_a = zi,
-                "nReduced"_a = nReduced,
-                "mReduced"_a = mReduced,
-                "ziReduced"_a = ziReduced,
-                "pmuReduced"_a = pmusReduced,
-                "blankReduced"_a = blankReduced
-        );
+        for (auto file: outputs) {
+            fmt::print(file,
+                    "{name},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
+                    "name"_a = filename,
+                    "pmus"_a = pmus,
+                    "solved"_a = state.allObserved(),
+                    "result"_a = result,
+                    "t_total"_a = ms(t2 - t0),
+                    "t_reductions"_a = ms(t1 - t0),
+                    "t_solver"_a = ms(t2 - t1),
+                    "n"_a = n,
+                    "m"_a = m,
+                    "zi"_a = zi,
+                    "nReduced"_a = nReduced,
+                    "mReduced"_a = mReduced,
+                    "ziReduced"_a = ziReduced,
+                    "pmuReduced"_a = pmusReduced,
+                    "blankReduced"_a = blankReduced
+            );
+        }
+    }
+    if (outfile != nullptr) {
+        fclose(outfile);
     }
 }
