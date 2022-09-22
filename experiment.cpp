@@ -155,6 +155,11 @@ int main(int argc, const char** argv) {
         if (subproblems) {
             for (auto substate: state.subproblems(true)) {
                 result = combineSolveState(result, solve(substate));
+                for (auto v: substate.graph().vertices()) {
+                    if (substate.isActive(v) && state.graph().hasVertex(v)) {
+                        state.setActive(v);
+                    }
+                }
             }
         } else {
             result = solve(state);
