@@ -48,7 +48,9 @@ bool simpleReductions(PdsState& state) {
 }
 
 bool applyDominationReductions(PdsState& state) {
-    return dominationReductions(state);
+    bool changed = false;
+    while (dominationReductions(state)) { changed = true; }
+    return changed;
 }
 
 bool applyReductions(PdsState& state) {
