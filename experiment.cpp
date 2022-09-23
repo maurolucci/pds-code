@@ -1,6 +1,7 @@
 #include <chrono>
 #include <string>
 #include <vector>
+#include <optional>
 
 #include <boost/program_options.hpp>
 #include <fmt/format.h>
@@ -11,6 +12,7 @@
 #include "graphio.hpp"
 #include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
+#include "draw_grid.hpp"
 
 using namespace pds;
 
@@ -57,6 +59,7 @@ bool applyReductions(PdsState& state) {
 
 int main(int argc, const char** argv) {
     namespace po = boost::program_options;
+    namespace fs = std::filesystem;
     using namespace std::string_literals;
     using std::string;
 
@@ -71,6 +74,7 @@ int main(int argc, const char** argv) {
             ("solve,s", po::value<string>()->default_value("none")->implicit_value("gurobi"), "solve method. can be any of [none,gurobi,greedy]")
             ("subproblems,u", "split into subproblems before calling solve")
             ("timeout,t", po::value<double>()->default_value(600.), "gurobi time limit (seconds)")
+            ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
     ;
     po::positional_options_description pos;
     pos.add("graph", -1);
@@ -115,6 +119,14 @@ int main(int argc, const char** argv) {
         return 2;
     }
 
+    std::optional<fs::path> drawdir;
+
+    if (vm.count("draw")) {
+        drawdir = vm["draw"].as<string>();
+        if (!fs::is_directory(*drawdir)) {
+            fs::create_directories(*drawdir);
+        }
+    }
     bool subproblems = vm.count("subproblems");
 
     std::vector<string> inputs;
@@ -143,6 +155,12 @@ int main(int argc, const char** argv) {
         size_t n = state.graph().numVertices();
         size_t m = state.graph().numEdges();
         size_t zi = state.numZeroInjection();
+        map<PowerGrid::vertex_descriptor, Coordinate> layout;
+        if (drawdir) {
+            layout = pds::layoutGraph(state.graph());
+            drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "0_input.svg", layout);
+        }
+
         auto t0 = now();
         reduce(state);
         size_t nReduced = state.graph().numVertices();
@@ -165,6 +183,10 @@ int main(int argc, const char** argv) {
             result = solve(state);
         }
         auto t2 = now();
+        if (drawdir) {
+            drawGrid(reduced.graph(), reduced.active(), reduced.observed(), *drawdir / "1_reductions.svg", layout);
+            drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "2_solved_preprocessed.svg", layout);
+        }
         size_t pmus = state.numActive();
         fmt::memory_buffer buf;
         using namespace fmt::literals;

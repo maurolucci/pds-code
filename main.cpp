@@ -252,7 +252,6 @@ int run(int argc, const char** argv) {
     };
 
     if (vm.count("reductions")) {
-
         fmt::print("applying reductions\n");
         while (applyReductions(state, drawCallback)) { };
         auto tReductions = now();
