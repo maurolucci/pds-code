@@ -61,106 +61,111 @@ SolveState solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, 
 
 SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
     namespace r3 = ranges;
-    auto model = GRBModel(getEnv());
-    model.set(GRB_IntParam_LogToConsole, int{output});
-    model.set(GRB_StringParam_LogFile, "gurobi.log");
-    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
-    //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
-    //GRBVar *si_p = model.addVars(num_vertices(graph));
-    map <PowerGrid::vertex_descriptor, GRBVar> xi;
-    map <PowerGrid::vertex_descriptor, GRBVar> si;
-    map <std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
-    auto& graph = static_cast<const PdsState&>(state).graph();
-    const double M = 2 * graph.numVertices();
-    {
-        GRBLinExpr objective{};
-        for (auto v: graph.vertices()) {
-            xi.insert({v, model.addVar(0.0, M, 1.0, GRB_BINARY)});
-            // si[v] >= 1 && si[v] <= num_vertices(graph)
-            si.insert({v, model.addVar(1.0, M, 0.0, GRB_CONTINUOUS)});
-            objective += xi[v];
+    try {
+        auto model = GRBModel(getEnv());
+        model.set(GRB_IntParam_LogToConsole, int{output});
+        model.set(GRB_StringParam_LogFile, "gurobi.log");
+        model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+        //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
+        //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
+        //GRBVar *si_p = model.addVars(num_vertices(graph));
+        map<PowerGrid::vertex_descriptor, GRBVar> xi;
+        map<PowerGrid::vertex_descriptor, GRBVar> si;
+        map<std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
+        auto &graph = static_cast<const PdsState &>(state).graph();
+        const double M = 2 * graph.numVertices();
+        {
+            GRBLinExpr objective{};
+            for (auto v: graph.vertices()) {
+                xi.insert({v, model.addVar(0.0, M, 1.0, GRB_BINARY)});
+                // si[v] >= 1 && si[v] <= num_vertices(graph)
+                si.insert({v, model.addVar(1.0, M, 0.0, GRB_CONTINUOUS)});
+                objective += xi[v];
+            }
+            for (auto e: graph.edges()) {
+                auto v = graph.source(e);
+                auto w = graph.target(e);
+                if (graph[v].zero_injection)
+                    pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i];
+                if (graph[w].zero_injection)
+                    pij[{w, v}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i + 1];
+            }
+            //model.setObjective(objective, GRB_MINIMIZE);
         }
+
+        for (auto v: graph.vertices()) {
+            model.addConstr(si.at(v) >= 1);
+            for (auto w: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
+                switch (state.activeState(w)) {
+                    case PmuState::Blank:
+                        model.addConstr(si.at(v) <= xi.at(w) + M * (1 - xi.at(w)));
+                        break;
+                    case PmuState::Inactive:
+                        model.addConstr(si.at(v) <= M);
+                        break;
+                    case PmuState::Active:
+                        model.addConstr(si.at(v) <= 1);
+                }
+            }
+            GRBLinExpr observingNeighbors = xi.at(v);
+            // v observes at most one neighbor w1
+            GRBLinExpr outObserved;
+            // v is observed by at most one neighbor w1
+            GRBLinExpr inObserved;
+            for (auto w: graph.neighbors(v)) {
+                observingNeighbors += xi[w];
+                if (graph[w].zero_injection) {
+                    observingNeighbors += pij[{w, v}];
+                    inObserved += pij[{w, v}];
+                }
+                if (graph[v].zero_injection) {
+                    outObserved += pij[{v, w}];
+                }
+            }
+            if (!state.isActive(v)) {
+                model.addConstr(si[v] <= M * observingNeighbors);
+            }
+            model.addConstr(inObserved <= 1);
+            if (graph[v].zero_injection) {
+                model.addConstr(outObserved <= 1);
+            } else {
+                model.addConstr(outObserved == 0);
+            }
+
+            model.addConstr(si[v] <= graph.numVertices());
+
+            if (state.isActive(v)) {
+                model.addConstr(xi[v] == 1);
+            } else if (state.isInactive(v)) {
+                model.addConstr(xi[v] == 0);
+            }
+        }
+
         for (auto e: graph.edges()) {
             auto v = graph.source(e);
             auto w = graph.target(e);
-            if (graph[v].zero_injection)
-                pij[{v, w}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i];
-            if (graph[w].zero_injection)
-                pij[{w, v}] = model.addVar(0.0, M, 0.0, GRB_BINARY); //pij_p[2 * i + 1];
-        }
-        //model.setObjective(objective, GRB_MINIMIZE);
-    }
-
-    for (auto v: graph.vertices()) {
-        model.addConstr(si.at(v) >= 1);
-        for (auto w: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
-            switch (state.activeState(w)) {
-                case PmuState::Blank:
-                    model.addConstr(si.at(v) <= xi.at(w) + M * (1 - xi.at(w)));
-                    break;
-                case PmuState::Inactive:
-                    model.addConstr(si.at(v) <= M);
-                    break;
-                case PmuState::Active:
-                    model.addConstr(si.at(v) <= 1);
+            //model.addConstr(pij[{v, w}] + pij[{w, v}] <= 1);
+            for (auto t: r3::concat_view(graph.neighbors(w), r3::single_view{w})) {
+                if (t != v) {
+                    if (graph[w].zero_injection) {
+                        model.addConstr(si[v] >= si[t] + 1 - M * (1 - pij[{w, v}]));
+                    }
+                }
             }
-        }
-        GRBLinExpr observingNeighbors = xi.at(v);
-        // v observes at most one neighbor w1
-        GRBLinExpr outObserved;
-        // v is observed by at most one neighbor w1
-        GRBLinExpr inObserved;
-        for (auto w: graph.neighbors(v)) {
-            observingNeighbors += xi[w];
-            if (graph[w].zero_injection) {
-                observingNeighbors += pij[{w, v}];
-                inObserved += pij[{w, v}];
-            }
-            if (graph[v].zero_injection) {
-                outObserved += pij[{v, w}];
-            }
-        }
-        if (!state.isActive(v)) {
-            model.addConstr(si[v] <= M * observingNeighbors);
-        }
-        model.addConstr(inObserved <= 1);
-        if (graph[v].zero_injection) {
-            model.addConstr(outObserved <= 1);
-        } else {
-            model.addConstr(outObserved == 0);
-        }
-
-        model.addConstr(si[v] <= graph.numVertices());
-
-        if (state.isActive(v)) {
-            model.addConstr(xi[v] == 1);
-        } else if (state.isInactive(v)) {
-            model.addConstr(xi[v] == 0);
-        }
-    }
-
-    for (auto e: graph.edges()) {
-        auto v = graph.source(e);
-        auto w = graph.target(e);
-        //model.addConstr(pij[{v, w}] + pij[{w, v}] <= 1);
-        for (auto t: r3::concat_view(graph.neighbors(w), r3::single_view{w})) {
-            if (t != v) {
-                if (graph[w].zero_injection) {
-                    model.addConstr(si[v] >= si[t] + 1 - M * (1 - pij[{w, v}]));
+            for (auto t: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
+                if (t != w) {
+                    if (graph[v].zero_injection) {
+                        model.addConstr(si[w] >= si[t] + 1 - M * (1 - pij[{v, w}]));
+                    }
                 }
             }
         }
-        for (auto t: r3::concat_view(graph.neighbors(v), r3::single_view{v})) {
-            if (t != w) {
-                if (graph[v].zero_injection) {
-                    model.addConstr(si[w] >= si[t] + 1 - M * (1 - pij[{v, w}]));
-                }
-            }
-        }
-    }
 
-    return solveModel(state, xi, model);
+        return solveModel(state, xi, model);
+    } catch (GRBException ex) {
+        fmt::print(stderr, "Gurobi Exception {}: {}\n", ex.getErrorCode(), ex.getMessage());
+        throw ex;
+    }
 }
 
 SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
