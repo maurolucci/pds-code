@@ -170,12 +170,15 @@ int main(int argc, const char** argv) {
         size_t blankReduced = nReduced - state.numActive() - state.numInactive();
         auto t1 = now();
         SolveState result = SolveState::Optimal;
+        auto reduced = state;
         if (subproblems) {
             for (auto substate: state.subproblems(true)) {
-                result = combineSolveState(result, solve(substate));
-                for (auto v: substate.graph().vertices()) {
-                    if (substate.isActive(v) && state.graph().hasVertex(v)) {
-                        state.setActive(v);
+                if (!substate.allObserved()) {
+                    result = combineSolveState(result, solve(substate));
+                    for (auto v: substate.graph().vertices()) {
+                        if (substate.isActive(v) && state.graph().hasVertex(v)) {
+                            state.setActive(v);
+                        }
                     }
                 }
             }
