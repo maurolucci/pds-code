@@ -78,24 +78,6 @@ auto ms(T time) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(time);
 }
 
-bool simpleReductions(pds::PdsState& state, const std::function<void(const pds::PdsState&, std::string)>& callback) {
-    bool changed = false;
-    if (state.disableLowDegree()) { callback(state, "low_degree"); changed = true; }
-    while (state.collapseLeaves()) { callback(state, "leaves"); changed = true; }
-    if (state.reduceObservedNonZi()) { callback(state, "non_zi"); changed = true; }
-    while (state.collapseDegreeTwo()) { callback(state, "path"); changed = true; }
-    if (state.collapseObservedEdges()) { callback(state, "observed_edges"); changed = true; }
-    return changed;
-}
-
-bool applyReductions(pds::PdsState& state, const std::function<void(const pds::PdsState&, std::string)>& callback) {
-    bool changed = false;
-    while (simpleReductions(state, callback)) { changed = true; }
-    if (state.disableObservationNeighborhood()) { callback(state, "observation_neighborhood"); changed = true; }
-    if (state.activateNecessaryNodes()) { callback(state, "necessary_nodes"); changed = true; }
-    return changed;
-}
-
 struct DrawOptions {
     bool drawInput;
     bool drawSolution;
@@ -253,7 +235,7 @@ int run(int argc, const char** argv) {
 
     if (vm.count("reductions")) {
         fmt::print("applying reductions\n");
-        while (applyReductions(state, drawCallback)) { };
+        exhaustiveReductions(state, true, drawCallback);
         auto tReductions = now();
         printState(state);
         fmt::print("reductions took {}\n", ms(tReductions - tSolveStart));
@@ -306,7 +288,7 @@ int run(int argc, const char** argv) {
         for (size_t i = 0; auto &subproblem: subproblems) {
             auto tSub = now();
             if (vm.count("reductions")) {
-                applyReductions(subproblem, [](const auto &, const auto &) {});
+                exhaustiveReductions(subproblem, false);
                 if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
                     pds::drawGrid(
                             subproblem.graph(), subproblem.active(), subproblem.observed(),

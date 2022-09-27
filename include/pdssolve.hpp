@@ -40,8 +40,9 @@ bool exhaustiveReductions(PdsState &state, bool firstRun = true, F callback = un
     bool changed;
     do {
         changed = exhaustiveSimpleReductions(state, callback);
-        if (firstRun || changed) dominationReductions(state, firstRun, callback);
+        if (firstRun || changed) changed |= dominationReductions(state, firstRun, callback);
         firstRun = false;
+        anyChanged |= changed;
     } while (changed);
     return anyChanged;
 }
