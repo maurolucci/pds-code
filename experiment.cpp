@@ -73,6 +73,7 @@ int main(int argc, const char** argv) {
             ("all-zi,z", "consider all nodes zero-innjection")
             ("outfile,o", po::value<string>(), "output file")
             ("reduce,r", po::value<string>()->implicit_value("all"s,"all")->default_value("none"s,"none"), "apply reduce. can be any of [none,all,simple,domination]")
+            ("repeat,n", po::value<size_t>()->default_value(1)->implicit_value(5), "number of experiment repetitions")
             ("solve,s", po::value<string>()->default_value("none")->implicit_value("gurobi"), "solve method. can be any of [none,gurobi,greedy]")
             ("subproblems,u", "split into subproblems before calling solve")
             ("timeout,t", po::value<double>()->default_value(600.), "gurobi time limit (seconds)")
@@ -90,6 +91,8 @@ int main(int argc, const char** argv) {
 
     bool allZeroInjection = vm.count("all-zi");
     double timeout = vm["timeout"].as<double>();
+
+    size_t repetitions = vm["repetitions"].as<size_t>();
 
     string reductionName = vm["reduce"].as<string>();
     std::function<bool(PdsState&)> reduce;
@@ -153,67 +156,71 @@ int main(int argc, const char** argv) {
 
 
     for (const std::string& filename: inputs) {
-        PdsState state(readAutoGraph(filename, allZeroInjection));
-        size_t n = state.graph().numVertices();
-        size_t m = state.graph().numEdges();
-        size_t zi = state.numZeroInjection();
-        map<PowerGrid::vertex_descriptor, Coordinate> layout;
-        if (drawdir) {
-            layout = pds::layoutGraph(state.graph());
-            drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "0_input.svg", layout);
-        }
+        PdsState inputState(readAutoGraph(filename, allZeroInjection));
+        for (size_t i = 0; i < repetitions; ++i) {
+            auto state = inputState;
+            size_t n = state.graph().numVertices();
+            size_t m = state.graph().numEdges();
+            size_t zi = state.numZeroInjection();
+            map<PowerGrid::vertex_descriptor, Coordinate> layout;
+            if (drawdir) {
+                layout = pds::layoutGraph(state.graph());
+                drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "0_input.svg", layout);
+            }
 
-        auto t0 = now();
-        reduce(state);
-        size_t nReduced = state.graph().numVertices();
-        size_t mReduced = state.graph().numEdges();
-        size_t ziReduced = state.numZeroInjection();
-        size_t pmusReduced = state.numActive();
-        size_t blankReduced = nReduced - state.numActive() - state.numInactive();
-        auto t1 = now();
-        SolveState result = SolveState::Optimal;
-        auto reduced = state;
-        if (subproblems) {
-            for (auto substate: state.subproblems(true)) {
-                if (!substate.allObserved()) {
-                    result = combineSolveState(result, solve(substate));
-                    for (auto v: substate.graph().vertices()) {
-                        if (substate.isActive(v) && state.graph().hasVertex(v)) {
-                            state.setActive(v);
+            auto t0 = now();
+            reduce(state);
+            size_t nReduced = state.graph().numVertices();
+            size_t mReduced = state.graph().numEdges();
+            size_t ziReduced = state.numZeroInjection();
+            size_t pmusReduced = state.numActive();
+            size_t blankReduced = nReduced - state.numActive() - state.numInactive();
+            auto t1 = now();
+            SolveState result = SolveState::Optimal;
+            auto reduced = state;
+            if (subproblems) {
+                for (auto substate: state.subproblems(true)) {
+                    if (!substate.allObserved()) {
+                        result = combineSolveState(result, solve(substate));
+                        for (auto v: substate.graph().vertices()) {
+                            if (substate.isActive(v) && state.graph().hasVertex(v)) {
+                                state.setActive(v);
+                            }
                         }
                     }
                 }
+            } else {
+                result = solve(state);
             }
-        } else {
-            result = solve(state);
-        }
-        auto t2 = now();
-        if (drawdir) {
-            drawGrid(reduced.graph(), reduced.active(), reduced.observed(), *drawdir / "1_reductions.svg", layout);
-            drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "2_solved_preprocessed.svg", layout);
-        }
-        size_t pmus = state.numActive();
-        fmt::memory_buffer buf;
-        using namespace fmt::literals;
-        for (auto file: outputs) {
-            fmt::print(file,
-                    "{name},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
-                    "name"_a = filename,
-                    "pmus"_a = pmus,
-                    "solved"_a = state.allObserved(),
-                    "result"_a = result,
-                    "t_total"_a = ms(t2 - t0),
-                    "t_reductions"_a = ms(t1 - t0),
-                    "t_solver"_a = ms(t2 - t1),
-                    "n"_a = n,
-                    "m"_a = m,
-                    "zi"_a = zi,
-                    "nReduced"_a = nReduced,
-                    "mReduced"_a = mReduced,
-                    "ziReduced"_a = ziReduced,
-                    "pmuReduced"_a = pmusReduced,
-                    "blankReduced"_a = blankReduced
-            );
+            auto t2 = now();
+            if (drawdir) {
+                drawGrid(reduced.graph(), reduced.active(), reduced.observed(), *drawdir / "1_reductions.svg", layout);
+                drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "2_solved_preprocessed.svg", layout);
+            }
+            size_t pmus = state.numActive();
+            fmt::memory_buffer buf;
+            using namespace fmt::literals;
+            for (auto file: outputs) {
+                fmt::print(file,
+                           "{name},{run},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
+                           "name"_a = filename,
+                           "run"_a = i,
+                           "pmus"_a = pmus,
+                           "solved"_a = state.allObserved(),
+                           "result"_a = result,
+                           "t_total"_a = ms(t2 - t0),
+                           "t_reductions"_a = ms(t1 - t0),
+                           "t_solver"_a = ms(t2 - t1),
+                           "n"_a = n,
+                           "m"_a = m,
+                           "zi"_a = zi,
+                           "nReduced"_a = nReduced,
+                           "mReduced"_a = mReduced,
+                           "ziReduced"_a = ziReduced,
+                           "pmuReduced"_a = pmusReduced,
+                           "blankReduced"_a = blankReduced
+                );
+            }
         }
     }
     if (outfile != nullptr) {
