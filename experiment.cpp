@@ -92,7 +92,7 @@ int main(int argc, const char** argv) {
     bool allZeroInjection = vm.count("all-zi");
     double timeout = vm["timeout"].as<double>();
 
-    size_t repetitions = vm["repetitions"].as<size_t>();
+    size_t repetitions = vm["repeat"].as<size_t>();
 
     string reductionName = vm["reduce"].as<string>();
     std::function<bool(PdsState&)> reduce;
