@@ -146,14 +146,16 @@ int main(int argc, const char** argv) {
     FILE* outfile = nullptr;
     std::vector<FILE*> outputs = {stdout};
     if (vm.count("outfile")) {
+        auto outfileName = vm["outfile"].as<string>();
+        fs::create_directories(fs::absolute(fs::path(outfileName)).parent_path());
         outfile = fopen(vm["outfile"].as<string>().c_str(), "w");
         outputs.push_back(outfile);
     }
+
     for (auto out: outputs) {
         fmt::print(out, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
         fmt::print(out, "{}\n","name,run,pmus,solved,result,t_total,t_reductions,t_solver,n,m,zi,n_reduced,m_reduced,zi_reduced,pmu_reduced,blank_reduced");
     }
-
 
     for (const std::string& filename: inputs) {
         PdsState inputState(readAutoGraph(filename, allZeroInjection));
