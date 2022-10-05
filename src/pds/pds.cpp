@@ -175,6 +175,72 @@ bool PdsState::setActive(PdsState::Vertex vertex) {
     return allObserved();
 }
 
+bool PdsState::unsetActive(PdsState::Vertex vertex) {
+    std::vector<Vertex> propagating;
+    std::vector<Vertex> queue;
+    set<Vertex> enqueued;
+
+    m_active[vertex] = PmuState::Blank;
+    queue.push_back(vertex);
+    enqueued.insert(vertex);
+    while (!queue.empty()) {
+        auto v = queue.back();
+        queue.pop_back();
+        std::optional<Vertex> observer;
+        for (auto w: m_graph.neighbors(v)) {
+            assert(m_unobserved_degree[w] == ranges::distance(m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
+            assert(isObserved(v));
+            m_unobserved_degree[w] += 1;
+            if (!isActive(w)) {
+                // w is observed from v
+                if (m_dependencies.edge(v, w).has_value()) {
+                    if (!enqueued.contains(w)) {
+                        queue.push_back(w);
+                        enqueued.insert(w);
+                    }
+                } else if (isObserved(w)) {
+                    for (auto x: m_dependencies.neighbors(w)) {
+                        if (!enqueued.contains(x)) {
+                            queue.push_back(x);
+                            enqueued.insert(x);
+                        }
+                    }
+                    propagating.push_back(w);
+                }
+            } else {
+                observer = {w};
+            }
+        }
+        m_dependencies.removeVertex(v);
+        assert(!m_dependencies.hasVertex(v));
+        for (auto w: m_graph.neighbors(v)) {
+            assert(m_unobserved_degree[w] == ranges::distance(m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
+        }
+        // mark unobserved
+        if (observer.has_value()) {
+            observe(v, observer.value());
+            propagating.push_back(v);
+        }
+    }
+
+    while (!propagating.empty()) {
+        auto v = propagating.back();
+        propagating.pop_back();
+        if (m_unobserved_degree[v] == 1 && m_dependencies.hasVertex(v)) {
+            for (auto w: m_graph.neighbors(v)) {
+                if (!isObserved(w)) {
+                    observe(w, v);
+                    if (m_unobserved_degree[w] == 1) {
+                        propagating.push_back(w);
+                    }
+                }
+            }
+        }
+    }
+
+    return isObserved(vertex);
+}
+
 bool PdsState::setInactive(PdsState::Vertex vertex) {
     assert(!isActive(vertex));
     if (!isInactive(vertex)) {
@@ -346,42 +412,20 @@ bool PdsState::activateNecessaryNodes() {
     for (auto v: m_graph.vertices()) {
         if (isBlank(v)) blankVertices.push_back(v);
     }
-    size_t firstCheckpoint = m_checkpoints.size(); unused(firstCheckpoint);
-    createCheckpoint();
     for (size_t i = blankVertices.size(); i--;) {
-        createCheckpoint();
         setActive(blankVertices[i]);
     }
     assert(allObserved());
     for (size_t i = 0; i < blankVertices.size(); ++i) {
-        restoreLastCheckpoint();
-        for (size_t j = 0; j < i; ++j) {
-            setActive(blankVertices[j]);
-        }
+        unsetActive(blankVertices[i]);
         if (!allObserved()) {
             necessary.push_back(blankVertices[i]);
         }
+        setActive(blankVertices[i]);
     }
-    restoreLastCheckpoint();
     for (auto v: necessary) {
         setActive(v);
         changed = true;
-    }
-    return changed;
-    set<Vertex> blankActive;
-    for (auto v: m_graph.vertices()) {
-        if (!isInactive(v)) blankActive.insert(v);
-    }
-    for (auto v: m_graph.vertices()) {
-        if (isBlank(v)) {
-            blankActive.erase(v);
-            auto observed = observationNeighborhood(m_graph, blankActive);
-            if (ranges::any_of(m_graph.vertices(), [&observed](auto v) -> bool { return !observed.contains(v);})) {
-                setActive(v);
-                changed = true;
-            }
-            blankActive.insert(v);
-        }
     }
     return changed;
 }

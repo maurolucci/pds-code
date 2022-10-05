@@ -133,6 +133,8 @@ public:
 
     bool setActive(Vertex vertex);
 
+    bool unsetActive(Vertex vertex);
+
     bool setInactive(Vertex vertex);
 
     bool setBlank(Vertex vertex);
