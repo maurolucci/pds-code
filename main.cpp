@@ -17,20 +17,18 @@
 #include "draw_grid.hpp"
 
 void printResult(
-        const pds::PowerGrid& graph,
-        const pds::map<pds::PowerGrid::vertex_descriptor, pds::PmuState>& active,
-        const pds::set<pds::PowerGrid::vertex_descriptor>& observed
+        const pds::PdsState& state
 ) {
     size_t active_count = 0, inactive_count = 0, zero_injection_count = 0, observed_count = 0;
-    auto filter_active = [&active](auto v) -> bool {
-        return active.at(v) == pds::PmuState::Active;
+    auto filter_active = [&state](auto v) -> bool {
+        return state.isActive(v);
     };
     if (false) {
-        auto active = graph.vertices() | ranges::views::filter(filter_active) | ranges::to<std::vector>();
+        auto active = state.graph().vertices() | ranges::views::filter(filter_active) | ranges::to<std::vector>();
         fmt::print("active nodes: {}\n", active);
     }
-    for (const auto &v: graph.vertices()) {
-        switch (active.at(v)) {
+    for (const auto &v: state.graph().vertices()) {
+        switch (state.activeState(v)) {
             case pds::PmuState::Active:
                 ++active_count;
                 break;
@@ -40,18 +38,18 @@ void printResult(
             case pds::PmuState::Blank:
                 break;
         }
-        zero_injection_count += graph[v].zero_injection;
-        observed_count += observed.contains(v);
+        zero_injection_count += state.graph()[v].zero_injection;
+        observed_count += state.isObserved(v);
     }
     fmt::print(
                 "graph (n={}, m={}, #active={}, #inactive={}, #observed={}, #zero_injection={})\n",
-                graph.numVertices(),
-                graph.numEdges(),
+                state.graph().numVertices(),
+                state.graph().numEdges(),
                 active_count,
                 inactive_count,
                 observed_count,
                 zero_injection_count);
-    bool feasible = pds::observed(graph, observed);
+    bool feasible = state.allObserved();
     fmt::print("solved: {}\n", feasible);
 }
 
@@ -214,7 +212,7 @@ int run(int argc, const char** argv) {
         drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/0_input.svg", outdir), layout);
     }
     auto printState = [&](const PdsState& state) {
-        if (vm.count("print-state")) printResult(state.graph(), state.active(), state.observed());
+        if (vm.count("print-state")) printResult(state);
     };
     fmt::print("input:\n");
     printState(state);

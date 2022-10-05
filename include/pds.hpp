@@ -46,12 +46,6 @@ using PowerGrid = setgraph::SetGraph<Bus, setgraph::Empty, setgraph::EdgeDirecti
 
 void exportGraphml(const PowerGrid& grid, std::ostream& out);
 
-set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid &graph, const set<PowerGrid::vertex_descriptor> &starts);
-
-bool propagate(const PowerGrid&, set<PowerGrid::vertex_descriptor>&, size_t = 1);
-
-set<PowerGrid::vertex_descriptor> observationNeighborhood(const PowerGrid& graph, const set<PowerGrid::vertex_descriptor>& starts);
-
 template<class T>
 size_t intersectionSize(const set<T>& first, const set<T>& second) {
     size_t count = 0;
@@ -184,12 +178,6 @@ public:
     std::vector<PdsState> subproblems(bool nonZiSeparators = false) const;
 
 };
-
-void dominate(const PowerGrid& graph, const map<PowerGrid::vertex_descriptor, PmuState>& active, set<PowerGrid::vertex_descriptor>& observed);
-
-bool propagate(const PowerGrid& graph, set<PowerGrid::vertex_descriptor>& observed, size_t max_unobserved);
-
-bool observed(const PowerGrid& graph, const set<PowerGrid::vertex_descriptor> & observed);
 
 } // namespace pds
 

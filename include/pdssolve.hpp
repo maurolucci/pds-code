@@ -58,7 +58,7 @@ std::optional<PdsState::Vertex> largestObservationNeighborhood(const PdsState &s
     }
     for (auto v: state.graph().vertices()) {
         if (state.isBlank(v)) {
-            size_t numObserved = observationNeighborhood(state.graph(), active).size();
+            size_t numObserved = state.numObserved(); //TODO
             if (!best || bestObserved < numObserved) {
                 best = {v};
                 bestObserved = numObserved;
@@ -139,12 +139,13 @@ Bounds sensorBounds(const PdsState& state) {
 }
 
 bool isFeasible(const PdsState& state) {
-    using Vertex = PdsState::Vertex;
-    set<Vertex> active;
+    auto copy = state;
     for (auto v: state.graph().vertices()) {
-        if (!state.isInactive(v)) { active.insert(v); }
+        if (!state.isInactive(v)) {
+            copy.setActive(v);
+        }
     }
-    return observationNeighborhood(state.graph(), active).size() == state.graph().numVertices();
+    return copy.allObserved();
 }
 
 template< std::invocable<const PdsState&> Strategy = std::optional<PdsState::Vertex>(const PdsState&) >
