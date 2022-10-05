@@ -78,9 +78,7 @@ struct Coordinate {
 };
 map<PowerGrid::vertex_descriptor, Coordinate> layoutGraph(const PowerGrid& graph);
 
-void drawGrid(const PowerGrid &graph,
-              const map<PowerGrid::vertex_descriptor, PmuState> &active,
-              const set<PowerGrid::vertex_descriptor> &observed,
+void drawGrid(const PdsState &state,
               const std::string &filename,
               const map<PowerGrid::vertex_descriptor, Coordinate>& layout,
               const style::DrawingOptions &style = style::DefaultDrawingOptions{});

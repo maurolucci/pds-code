@@ -131,9 +131,8 @@ map<PowerGrid::vertex_descriptor, Coordinate> layoutGraph(const PowerGrid &graph
     }
     return coordinates;
 }
-void drawGrid(const PowerGrid &graph,
-              const map<unsigned long, PmuState> &active,
-              const set<unsigned long> &observed,
+
+void drawGrid(const PdsState& state,
               const std::string &filename,
               const map<PowerGrid::vertex_descriptor, Coordinate>& layout,
               const style::DrawingOptions &style) {
@@ -148,12 +147,13 @@ void drawGrid(const PowerGrid &graph,
             | ogdf::GraphAttributes::nodeLabel
     );
     map<PowerGrid::vertex_descriptor, ogdf::node> id_to_node;
-    auto nodeState = [&](const PowerGrid::vertex_descriptor& v) -> style::NodeState {
+    const auto& graph = state.graph();
+    auto nodeState = [&state, &graph](const PowerGrid::vertex_descriptor& v) -> style::NodeState {
         return {
                 .id=graph[v].id,
-                .pmu=active.at(v),
+                .pmu=state.activeState(v),
                 .zeroInjection=graph[v].zero_injection,
-                .observed=bool(observed.contains(v))
+                .observed=bool(state.isObserved(v))
         };
     };
     double minx = std::numeric_limits<double>::max(), maxx = 0, miny = std::numeric_limits<double>::max(), maxy = 0;
@@ -198,7 +198,17 @@ void drawGrid(const PowerGrid &graph,
         auto edgeStyle = style.edgeStyle(nodeState(s), nodeState(t));
         GA.strokeColor(edge) = style::toOgdf(edgeStyle.color);
         GA.strokeWidth(edge) = edgeStyle.thickness;
-        GA.arrowType(edge) = ogdf::EdgeArrow::None;
+        if (state.isObservedEdge(s, t)) {
+            if (state.isObservedEdge(t, s)) {
+                GA.arrowType(edge) = ogdf::EdgeArrow::Both;
+            } else {
+                GA.arrowType(edge) = ogdf::EdgeArrow::Last;
+            }
+        } else if (state.isObservedEdge(t, s)) {
+            GA.arrowType(edge) = ogdf::EdgeArrow::First;
+        } else {
+            GA.arrowType(edge) = ogdf::EdgeArrow::None;
+        }
     }
     minx = std::min(minx, maxx);
     miny = std::min(miny, maxy);

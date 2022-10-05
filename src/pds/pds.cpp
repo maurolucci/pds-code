@@ -120,6 +120,7 @@ void PdsState::propagate(PdsState::Vertex vertex) {
 }
 
 bool PdsState::observe(Vertex vertex, Vertex origin) {
+    assert(isObserved(origin) || isActive(origin));
     if (!isObserved(vertex)) {
         m_dependencies.getOrAddVertex(vertex);
         m_dependencies.addEdge(origin, vertex);
@@ -168,6 +169,12 @@ bool PdsState::setBlank(PdsState::Vertex vertex) {
 bool PdsState::setActive(PdsState::Vertex vertex) {
     m_active[vertex] = PmuState::Active;
     m_steps_pmu.emplace_back(vertex, PmuState::Active);
+    if (m_dependencies.hasVertex(vertex)) {
+        while(m_dependencies.inDegree(vertex) > 0) {
+            auto edge = *m_dependencies.inEdges(vertex).begin();
+            m_dependencies.removeEdge(edge);
+        }
+    }
     observe(vertex, vertex);
     for (auto w: m_graph.neighbors(vertex)) {
         observe(w, vertex);
@@ -186,6 +193,7 @@ bool PdsState::unsetActive(PdsState::Vertex vertex) {
     while (!queue.empty()) {
         auto v = queue.back();
         queue.pop_back();
+        assert(!isActive(v));
         std::optional<Vertex> observer;
         for (auto w: m_graph.neighbors(v)) {
             assert(m_unobserved_degree[w] == ranges::distance(m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
@@ -209,15 +217,16 @@ bool PdsState::unsetActive(PdsState::Vertex vertex) {
                 }
             } else {
                 observer = {w};
+                assert(isActive(w));
+                assert(isObserved(w));
             }
         }
         m_dependencies.removeVertex(v);
         assert(!m_dependencies.hasVertex(v));
-        for (auto w: m_graph.neighbors(v)) {
-            assert(m_unobserved_degree[w] == ranges::distance(m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
-        }
         // mark unobserved
         if (observer.has_value()) {
+            assert(isActive(*observer));
+            assert(isObserved(*observer));
             observe(v, observer.value());
             propagating.push_back(v);
         }

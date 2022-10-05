@@ -209,7 +209,7 @@ int run(int argc, const char** argv) {
     }
 
     if (drawOptions.drawInput) {
-        drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/0_input.svg", outdir), layout);
+        drawGrid(state, fmt::format("{}/0_input.svg", outdir), layout);
     }
     auto printState = [&](const PdsState& state) {
         if (vm.count("print-state")) printResult(state);
@@ -222,9 +222,7 @@ int run(int argc, const char** argv) {
 
     auto drawCallback = [&](const pds::PdsState &state, const std::string &name) mutable {
         if (drawOptions.drawReductions) {
-            pds::drawGrid(state.graph(),
-                          state.active(),
-                          state.observed(),
+            pds::drawGrid(state,
                           fmt::format("{}/1_red_{:04}_{}.svg", outdir, counter, name),
                           layout);
             ++counter;
@@ -247,9 +245,7 @@ int run(int argc, const char** argv) {
                      });
         for (size_t i = 0; auto &subproblem: subproblems) {
             if (!subproblem.allObserved()) {
-                pds::drawGrid(
-                        subproblem.graph(), subproblem.active(), subproblem.observed(),
-                        fmt::format("{}/comp_{:03}_0unsolved.svg", outdir, i), layout);
+                pds::drawGrid(subproblem, fmt::format("{}/comp_{:03}_0unsolved.svg", outdir, i), layout);
                 ++i;
             }
         }
@@ -288,9 +284,7 @@ int run(int argc, const char** argv) {
             if (vm.count("reductions")) {
                 exhaustiveReductions(subproblem, false);
                 if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
-                    pds::drawGrid(
-                            subproblem.graph(), subproblem.active(), subproblem.observed(),
-                            fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
+                    pds::drawGrid(subproblem, fmt::format("{}/comp_{:03}_1reductions.svg", outdir, i), layout);
                 }
             }
             if (!subproblem.solveTrivial()) {
@@ -305,9 +299,7 @@ int run(int argc, const char** argv) {
                 auto tSubEnd = now();
                 fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
                 if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
-                    pds::drawGrid(
-                            subproblem.graph(), subproblem.active(), subproblem.observed(),
-                            fmt::format("{}/comp_{:03}_2solved.svg", outdir, i), layout);
+                    pds::drawGrid(subproblem, fmt::format("{}/comp_{:03}_2solved.svg", outdir, i), layout);
                 }
                 ++i;
             }
@@ -328,8 +320,8 @@ int run(int argc, const char** argv) {
         }
         auto tSolveEnd = now();
         if (drawOptions.drawSolution) {
-            drawGrid(state.graph(), state.active(), state.observed(), fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
-            drawGrid(input.graph(), input.active(), input.observed(), fmt::format("{}/3_solved.svg", outdir), layout);
+            drawGrid(state, fmt::format("{}/2_solved_preprocessed.svg", outdir), layout);
+            drawGrid(input, fmt::format("{}/3_solved.svg", outdir), layout);
         }
         fmt::print("solved in {}\n", ms(tSolveEnd - tSolveStart));
         printState(state);

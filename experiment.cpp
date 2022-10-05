@@ -167,7 +167,7 @@ int main(int argc, const char** argv) {
             map<PowerGrid::vertex_descriptor, Coordinate> layout;
             if (drawdir) {
                 layout = pds::layoutGraph(state.graph());
-                drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "0_input.svg", layout);
+                drawGrid(state, *drawdir / "0_input.svg", layout);
             }
 
             auto t0 = now();
@@ -196,8 +196,8 @@ int main(int argc, const char** argv) {
             }
             auto t2 = now();
             if (drawdir) {
-                drawGrid(reduced.graph(), reduced.active(), reduced.observed(), *drawdir / "1_reductions.svg", layout);
-                drawGrid(state.graph(), state.active(), state.observed(), *drawdir / "2_solved_preprocessed.svg", layout);
+                drawGrid(reduced, *drawdir / "1_reductions.svg", layout);
+                drawGrid(state, *drawdir / "2_solved_preprocessed.svg", layout);
             }
             size_t pmus = state.numActive();
             fmt::memory_buffer buf;
