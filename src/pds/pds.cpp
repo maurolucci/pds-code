@@ -415,7 +415,6 @@ bool PdsState::disableObservationNeighborhood() {
 }
 
 bool PdsState::activateNecessaryNodes() {
-    bool changed = false;
     std::vector<Vertex> blankVertices;
     std::vector<Vertex> necessary;
     for (auto v: m_graph.vertices()) {
@@ -432,11 +431,19 @@ bool PdsState::activateNecessaryNodes() {
         }
         setActive(blankVertices[i]);
     }
-    for (auto v: necessary) {
-        setActive(v);
-        changed = true;
+    size_t i = 0, j = 0;
+    while (i < blankVertices.size() && j < necessary.size()) {
+        if (blankVertices[i] == necessary[j]) {
+            ++j; ++i;
+        } else {
+            unsetActive(blankVertices[i]);
+            ++i;
+        }
     }
-    return changed;
+    for (; i < blankVertices.size(); ++i) {
+        unsetActive(blankVertices[i]);
+    }
+    return necessary.size() > 0;
 }
 
 map<PdsState::Vertex, PdsState::Vertex> findClosestActive(const PdsState& state) {
