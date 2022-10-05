@@ -71,9 +71,9 @@ public:
     using Vertex = PowerGrid::vertex_descriptor;
 private:
     pds::map<Vertex, ssize_t> m_unobserved_degree;
-    pds::set<Vertex> m_observed;
     pds::map<Vertex, PmuState> m_active;
     PowerGrid m_graph;
+    setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Bidirectional> m_dependencies;
 
     std::vector<Vertex> m_steps_observed;
     std::vector<std::pair<Vertex, PmuState>> m_steps_pmu;
@@ -81,7 +81,7 @@ private:
 
     void propagate(Vertex vertex);
 
-    void observe(Vertex vertex);
+    bool observe(Vertex vertex, Vertex origin);
 
     inline bool disableLowDegreeRecursive(
             PowerGrid::vertex_descriptor start,
@@ -112,7 +112,9 @@ public:
 
     inline bool isInactive(Vertex vertex) const { return activeState(vertex) == PmuState::Inactive; }
 
-    inline bool isObserved(Vertex vertex) const { return m_observed.contains(vertex); }
+    inline bool isObserved(Vertex vertex) const { return m_dependencies.hasVertex(vertex); }
+
+    inline bool isObservedEdge(Vertex source, Vertex target) const { return m_dependencies.edge(source, target).has_value(); }
 
     void createCheckpoint();
 
@@ -125,7 +127,7 @@ public:
         return m_unobserved_degree.at(v);
     }
 
-    inline const set<Vertex>& observed() const { return m_observed; }
+    inline const set<Vertex> observed() const { return m_dependencies.vertices() | ranges::to<set<Vertex>>; }
 
     inline const map<Vertex, PmuState>& active() const { return m_active; }
 
@@ -136,11 +138,11 @@ public:
     bool setBlank(Vertex vertex);
 
     inline bool allObserved() const {
-        return m_observed.size() == graph().numVertices();
+        return numObserved() == graph().numVertices();
     }
 
     inline size_t numObserved() const {
-        return m_observed.size();
+        return m_dependencies.numVertices();
     }
 
     inline size_t numActive() const {

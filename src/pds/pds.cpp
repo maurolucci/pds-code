@@ -74,7 +74,7 @@ void PdsState::removeVertex(Vertex v) {
             m_unobserved_degree[w] -= 1;
         }
     }
-    m_observed.erase(v);
+    m_dependencies.removeVertex(v);
     m_unobserved_degree.erase(v);
     m_active.erase(v);
     m_graph.removeVertex(v);
@@ -94,9 +94,8 @@ void PdsState::restoreLastCheckpoint() {
             while (m_steps_observed.size() > nObserved) {
         auto v = m_steps_observed.back();
         m_steps_observed.pop_back();
-        auto it = m_observed.find(v);
-        if (it != m_observed.end()) {
-            m_observed.erase(it);
+        if (m_dependencies.hasVertex(v)) {
+            m_dependencies.removeVertex(v);
             for (auto w: m_graph.neighbors(v)) {
                 m_unobserved_degree[w] += 1;
             }
@@ -115,14 +114,16 @@ void PdsState::restoreLastCheckpoint() {
 void PdsState::propagate(PdsState::Vertex vertex) {
     if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
         for (auto w: m_graph.neighbors(vertex)) {
-            observe(w);
+            observe(w, vertex);
         }
     }
 }
 
-void PdsState::observe(PdsState::Vertex vertex) {
+bool PdsState::observe(Vertex vertex, Vertex origin) {
     if (!isObserved(vertex)) {
-        m_observed.insert(vertex);
+        m_dependencies.getOrAddVertex(vertex);
+        m_dependencies.addEdge(origin, vertex);
+
         m_steps_observed.push_back(vertex);
         for (auto w: m_graph.neighbors(vertex)) {
             m_unobserved_degree[w] -= 1;
@@ -134,6 +135,9 @@ void PdsState::observe(PdsState::Vertex vertex) {
             propagate(w);
         }
         propagate(vertex);
+        return true;
+    } else {
+        return false;
     }
 }
 
@@ -158,17 +162,17 @@ bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, set<PdsState::V
 bool PdsState::setBlank(PdsState::Vertex vertex) {
     assert(!isActive(vertex));
     m_active[vertex] = PmuState::Blank;
-    return m_observed.size() == m_graph.numVertices();
+    return allObserved();
 }
 
 bool PdsState::setActive(PdsState::Vertex vertex) {
     m_active[vertex] = PmuState::Active;
     m_steps_pmu.emplace_back(vertex, PmuState::Active);
-    observe(vertex);
+    observe(vertex, vertex);
     for (auto w: m_graph.neighbors(vertex)) {
-        observe(w);
+        observe(w, vertex);
     }
-    return m_observed.size() == m_graph.numVertices();
+    return allObserved();
 }
 
 bool PdsState::setInactive(PdsState::Vertex vertex) {
