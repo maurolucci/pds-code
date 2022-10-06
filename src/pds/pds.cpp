@@ -122,6 +122,7 @@ void PdsState::propagate(std::vector<Vertex> &queue) {
                 }
             }
         }
+        assert(isActive(v) || !m_dependencies.hasVertex(v) || m_dependencies.inDegree(v) > 0);
     }
 }
 
@@ -144,6 +145,7 @@ bool PdsState::observeOne(Vertex vertex, Vertex origin, std::vector<Vertex>& que
             m_unobserved_degree[w] -= 1;
             if (m_unobserved_degree[w] == 1 && isObserved(w) && isZeroInjection(w)) queue.push_back(w);
         }
+        assert(isActive(vertex) || !m_dependencies.hasVertex(vertex) || m_dependencies.inDegree(vertex) > 0);
         return true;
     } else {
         return false;
@@ -447,6 +449,7 @@ bool PdsState::activateNecessaryNodes() {
     for (; i < blankVertices.size(); ++i) {
         unsetActive(blankVertices[i]);
     }
+
     return necessary.size() > 0;
 }
 
@@ -506,6 +509,7 @@ bool PdsState::collapseObservedEdges() {
             m_dependencies.addEdge(closest, t);
         }
     }
+
     return changed;
 }
 
