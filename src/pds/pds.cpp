@@ -111,6 +111,21 @@ void PdsState::restoreLastCheckpoint() {
     }
 }
 
+void PdsState::propagate(std::vector<Vertex> &queue) {
+    while (!queue.empty()) {
+        auto v = queue.back();
+        queue.pop_back();
+        if (isObserved(v) && isZeroInjection(v) && m_unobserved_degree[v] == 1) {
+            for (auto w: m_graph.neighbors(v)) {
+                if (!isObserved(w)) {
+                    observeOne(w, v, queue);
+                }
+            }
+        }
+    }
+}
+
+/*
 void PdsState::propagate(PdsState::Vertex vertex) {
     if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
         for (auto w: m_graph.neighbors(vertex)) {
@@ -118,24 +133,29 @@ void PdsState::propagate(PdsState::Vertex vertex) {
         }
     }
 }
+ */
+
+bool PdsState::observeOne(Vertex vertex, Vertex origin, std::vector<Vertex>& queue) {
+    if (!isObserved(vertex)) {
+        m_dependencies.getOrAddVertex(vertex);
+        if (origin != vertex) m_dependencies.addEdge(origin, vertex);
+        if (m_unobserved_degree[vertex] == 1) queue.push_back(vertex);
+        for (auto w: m_graph.neighbors(vertex)) {
+            m_unobserved_degree[w] -= 1;
+            if (m_unobserved_degree[w] == 1 && isObserved(w) && isZeroInjection(w)) queue.push_back(w);
+        }
+        return true;
+    } else {
+        return false;
+    }
+}
 
 bool PdsState::observe(Vertex vertex, Vertex origin) {
     assert(isObserved(origin) || isActive(origin));
-    if (!isObserved(vertex)) {
-        m_dependencies.getOrAddVertex(vertex);
-        m_dependencies.addEdge(origin, vertex);
-
-        m_steps_observed.push_back(vertex);
-        for (auto w: m_graph.neighbors(vertex)) {
-            m_unobserved_degree[w] -= 1;
-            assert(m_unobserved_degree[w] >= 0);
-            assert(m_unobserved_degree[w] == ranges::distance(
-                       m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
-        }
-        for (auto w: m_graph.neighbors(vertex)) {
-            propagate(w);
-        }
-        propagate(vertex);
+    assert(isActive(origin) || isZeroInjection(origin));
+    std::vector<Vertex> queue;
+    if (observeOne(vertex, origin, queue)) {
+        propagate(queue);
         return true;
     } else {
         return false;
@@ -175,10 +195,12 @@ bool PdsState::setActive(PdsState::Vertex vertex) {
             m_dependencies.removeEdge(edge);
         }
     }
-    observe(vertex, vertex);
+    std::vector<Vertex> queue;
+    observeOne(vertex, vertex, queue);
     for (auto w: m_graph.neighbors(vertex)) {
-        observe(w, vertex);
+        observeOne(w, vertex, queue);
     }
+    propagate(queue);
     return allObserved();
 }
 
@@ -221,31 +243,16 @@ bool PdsState::unsetActive(PdsState::Vertex vertex) {
                 assert(isObserved(w));
             }
         }
-        m_dependencies.removeVertex(v);
-        assert(!m_dependencies.hasVertex(v));
         // mark unobserved
+        m_dependencies.removeVertex(v);
         if (observer.has_value()) {
             assert(isActive(*observer));
             assert(isObserved(*observer));
-            observe(v, observer.value());
-            propagating.push_back(v);
+            observeOne(v, observer.value(), propagating);
         }
     }
 
-    while (!propagating.empty()) {
-        auto v = propagating.back();
-        propagating.pop_back();
-        if (m_unobserved_degree[v] == 1 && m_dependencies.hasVertex(v)) {
-            for (auto w: m_graph.neighbors(v)) {
-                if (!isObserved(w)) {
-                    observe(w, v);
-                    if (m_unobserved_degree[w] == 1) {
-                        propagating.push_back(w);
-                    }
-                }
-            }
-        }
-    }
+    propagate(propagating);
 
     return isObserved(vertex);
 }
@@ -327,8 +334,13 @@ bool PdsState::collapseDegreeTwo() {
             if (!m_graph.edge(x, y)) {
                 if (isInactive(v)) {
                     if((isZeroInjection(x) && m_graph.degree(x) <= 2) || (isZeroInjection(y) && m_graph.degree(y) <= 2)) {
-                        addEdge(x, y);
+                        if (m_dependencies.edge(v, y).has_value()) {
+                            m_dependencies.addEdge(x, y);
+                        } else if (m_dependencies.edge(v, x).has_value()) {
+                            m_dependencies.addEdge(y, x);
+                        }
                         removeVertex(v);
+                        addEdge(x, y);
                         changed = true;
                     }
                 }
@@ -386,24 +398,16 @@ bool PdsState::disableObservationNeighborhood() {
             size_t stepActive = numActive();
             size_t stepInactive = numInactive();
             size_t stepObserved = numObserved(); unused(stepActive, stepInactive, stepObserved, checkpoint);
-            createCheckpoint();
-            assert(numObserved() == originalObserved + observedSinceCheckpoint().size());
             setActive(v);
-            assert(numObserved() == originalObserved + observedSinceCheckpoint().size());
             for (auto w: blankVertices) {
                 if (v != w && isBlank(w) && fullyObserved(w)) {
                     inactive.insert(w);
                     changed = true;
                 }
             }
-            restoreLastCheckpoint();
-            assert(checkpoint == m_checkpoints.size());
-            assert(stepActive == numActive());
-            assert(stepInactive == numInactive());
-            assert(stepObserved == numObserved());
+            unsetActive(v);
         }
     }
-    assert(lastCheckpoint == m_checkpoints.size());
     assert(originalObserved == numObserved());
     assert(originalActive == numActive());
     assert(originalInactive == numInactive());
@@ -483,13 +487,23 @@ bool PdsState::collapseObservedEdges() {
         auto [s, t] = m_graph.endpoints(e);
         if (s == closestActive.at(t) || t == closestActive.at(s)) continue;
         m_graph.removeEdge(e);
+        m_dependencies.removeEdge(s, t);
+        m_dependencies.removeEdge(t, s);
         changed = true;
         auto hasObservedNeighbor = [this](Vertex v) -> bool { return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w);});};
         if (!isActive(s)) {
-            if (!hasObservedNeighbor(s)) addEdge(s, closestActive.at(s));
+            auto closest = closestActive.at(s);
+            if (!hasObservedNeighbor(s)) {
+                addEdge(s, closest);
+            }
+            m_dependencies.addEdge(closest, s);
         }
         if (!isActive(t)) {
-            if (!hasObservedNeighbor(t)) addEdge(t, closestActive.at(t));
+            auto closest = closestActive.at(t);
+            if (!hasObservedNeighbor(t)) {
+                addEdge(t, closest);
+            }
+            m_dependencies.addEdge(closest, t);
         }
     }
     return changed;

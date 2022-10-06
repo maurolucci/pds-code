@@ -79,9 +79,10 @@ private:
     std::vector<std::pair<Vertex, PmuState>> m_steps_pmu;
     std::vector<std::pair<size_t, size_t>> m_checkpoints;
 
-    void propagate(Vertex vertex);
+    void propagate(std::vector<Vertex>& queue);
 
     bool observe(Vertex vertex, Vertex origin);
+    bool observeOne(Vertex vertex, Vertex origin, std::vector<Vertex>& queue);
 
     inline bool disableLowDegreeRecursive(
             PowerGrid::vertex_descriptor start,
