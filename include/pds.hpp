@@ -77,10 +77,6 @@ private:
     PowerGrid m_graph;
     setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Bidirectional> m_dependencies;
 
-    std::vector<Vertex> m_steps_observed;
-    std::vector<std::pair<Vertex, PmuState>> m_steps_pmu;
-    std::vector<std::pair<size_t, size_t>> m_checkpoints;
-
     void propagate(std::vector<Vertex>& queue);
 
     bool observe(Vertex vertex, Vertex origin);
@@ -118,12 +114,6 @@ public:
     inline bool isObserved(Vertex vertex) const { return m_dependencies.hasVertex(vertex); }
 
     inline bool isObservedEdge(Vertex source, Vertex target) const { return m_dependencies.edge(source, target).has_value(); }
-
-    void createCheckpoint();
-
-    std::span<Vertex> observedSinceCheckpoint();
-
-    void restoreLastCheckpoint();
 
     inline size_t unobservedDegree(Vertex v) const {
         assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));

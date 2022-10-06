@@ -89,37 +89,6 @@ void PdsState::removeVertex(Vertex v) {
     m_graph.removeVertex(v);
 }
 
-void PdsState::createCheckpoint() {
-    m_checkpoints.emplace_back(m_steps_observed.size(), m_steps_pmu.size());
-}
-
-std::span<PdsState::Vertex> PdsState::observedSinceCheckpoint() {
-    return std::span(m_steps_observed).subspan(m_checkpoints.back().first);
-}
-
-void PdsState::restoreLastCheckpoint() {
-    auto [nObserved, nPmu] = m_checkpoints.back();
-            m_checkpoints.pop_back();
-            while (m_steps_observed.size() > nObserved) {
-        auto v = m_steps_observed.back();
-        m_steps_observed.pop_back();
-        if (m_dependencies.hasVertex(v)) {
-            m_dependencies.removeVertex(v);
-            for (auto w: m_graph.neighbors(v)) {
-                m_unobserved_degree[w] += 1;
-            }
-        }
-    }
-    while (m_steps_pmu.size() > nPmu) {
-        auto [v, _state] = m_steps_pmu.back();
-                auto it = m_active.find(v);
-                if (it != m_active.end()) {
-            it->second = PmuState::Blank;
-        }
-        m_steps_pmu.pop_back();
-    }
-}
-
 void PdsState::propagate(std::vector<Vertex> &queue) {
     while (!queue.empty()) {
         auto v = queue.back();
@@ -195,7 +164,6 @@ bool PdsState::setActive(PdsState::Vertex vertex) {
     if (!isActive(vertex)) {
         ++m_numActive;
         m_graph[vertex].pmu = PmuState::Active;
-        m_steps_pmu.emplace_back(vertex, PmuState::Active);
         if (m_dependencies.hasVertex(vertex)) {
             while (m_dependencies.inDegree(vertex) > 0) {
                 auto edge = *m_dependencies.inEdges(vertex).begin();
@@ -274,7 +242,6 @@ bool PdsState::setInactive(PdsState::Vertex vertex) {
     if (!isInactive(vertex)) {
         ++m_numInactive;
         m_graph[vertex].pmu = PmuState::Inactive;
-        m_steps_pmu.emplace_back(vertex, PmuState::Inactive);
         assert(activeState(vertex) == PmuState::Inactive);
         return true;
     } else {
@@ -378,11 +345,6 @@ bool PdsState::collapseDegreeTwo() {
 }
 
 bool PdsState::disableObservationNeighborhood() {
-    size_t lastCheckpoint = m_checkpoints.size();
-    size_t originalActive = numActive();
-    size_t originalInactive = numInactive();
-    size_t originalObserved = numObserved(); unused(originalActive, originalInactive, originalObserved, lastCheckpoint);
-
     bool changed = false;
     map<Vertex, set<Vertex>> cachedNeighborhood;
     set<Vertex> active;
@@ -407,10 +369,6 @@ bool PdsState::disableObservationNeighborhood() {
     ranges::sort(blankVertices, [this](auto left, auto right) -> bool { return m_graph.degree(left) > m_graph.degree(right);});
     for (auto v: blankVertices) {
         if (isBlank(v) && !inactive.contains(v)) {
-            size_t checkpoint = m_checkpoints.size();
-            size_t stepActive = numActive();
-            size_t stepInactive = numInactive();
-            size_t stepObserved = numObserved(); unused(stepActive, stepInactive, stepObserved, checkpoint);
             setActive(v);
             for (auto w: blankVertices) {
                 if (v != w && isBlank(w) && fullyObserved(w)) {
@@ -421,13 +379,9 @@ bool PdsState::disableObservationNeighborhood() {
             unsetActive(v);
         }
     }
-    assert(originalObserved == numObserved());
-    assert(originalActive == numActive());
-    assert(originalInactive == numInactive());
     for(auto v: inactive) {
         setInactive(v);
     }
-    assert(originalInactive + inactive.size() == numInactive());
     return changed;
 }
 
