@@ -81,7 +81,15 @@ map<PowerGrid::vertex_descriptor, Coordinate> layoutGraph(const PowerGrid& graph
 void drawGrid(const PdsState &state,
               const std::string &filename,
               const map<PowerGrid::vertex_descriptor, Coordinate>& layout,
-              const style::DrawingOptions &style = style::DefaultDrawingOptions{});
+              const style::DrawingOptions &style);
+
+inline void drawGrid(const PdsState &state,
+                     const std::string &filename,
+                     const map<PowerGrid::vertex_descriptor, Coordinate>& layout
+) {
+    return drawGrid(state, filename, layout, style::DefaultDrawingOptions{});
 }
+
+} // namespace pds
 
 #endif //PDS_DRAW_GRID_HPP
