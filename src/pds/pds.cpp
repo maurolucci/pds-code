@@ -128,16 +128,6 @@ void PdsState::propagate(std::vector<Vertex> &queue) {
     }
 }
 
-/*
-void PdsState::propagate(PdsState::Vertex vertex) {
-    if (isObserved(vertex) && isZeroInjection(vertex) && m_unobserved_degree[vertex] == 1) {
-        for (auto w: m_graph.neighbors(vertex)) {
-            observe(w, vertex);
-        }
-    }
-}
- */
-
 bool PdsState::observeOne(Vertex vertex, Vertex origin, std::vector<Vertex>& queue) {
     if (!isObserved(vertex)) {
         m_dependencies.getOrAddVertex(vertex);
