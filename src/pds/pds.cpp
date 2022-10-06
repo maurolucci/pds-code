@@ -47,11 +47,19 @@ PdsState::PdsState() : PdsState(PowerGrid{}) { }
 PdsState::PdsState(const pds::PowerGrid &graph) : PdsState(PowerGrid{graph}) { }
 
 PdsState::PdsState(PowerGrid&& graph) : m_numActive{0}, m_numInactive{0}, m_graph(graph) {
-    createCheckpoint();
     for (auto v: m_graph.vertices()) {
         m_graph.removeEdge(v, v);
         m_unobserved_degree[v] = m_graph.degree(v);
-        m_active.emplace(v, PmuState::Blank);
+        switch (m_graph[v].pmu) {
+            case PmuState::Active:
+                ++m_numActive;
+                break;
+            case PmuState::Inactive:
+                ++m_numInactive;
+                break;
+            default:
+                break;
+        }
     }
 }
 
@@ -78,7 +86,6 @@ void PdsState::removeVertex(Vertex v) {
     if (isInactive(v)) --m_numInactive;
     m_dependencies.removeVertex(v);
     m_unobserved_degree.erase(v);
-    m_active.erase(v);
     m_graph.removeVertex(v);
 }
 
@@ -178,16 +185,16 @@ bool PdsState::setBlank(PdsState::Vertex vertex) {
     assert(!isActive(vertex));
     if (isInactive(vertex)) {
         --m_numInactive;
-        m_active[vertex] = PmuState::Blank;
+        m_graph[vertex].pmu = PmuState::Blank;
     }
     return allObserved();
 }
 
 bool PdsState::setActive(PdsState::Vertex vertex) {
-    assert(m_active[vertex] != PmuState::Inactive);
-    if (m_active[vertex] != PmuState::Active) {
+    assert(!isInactive(vertex));
+    if (!isActive(vertex)) {
         ++m_numActive;
-        m_active[vertex] = PmuState::Active;
+        m_graph[vertex].pmu = PmuState::Active;
         m_steps_pmu.emplace_back(vertex, PmuState::Active);
         if (m_dependencies.hasVertex(vertex)) {
             while (m_dependencies.inDegree(vertex) > 0) {
@@ -212,7 +219,7 @@ bool PdsState::unsetActive(PdsState::Vertex vertex) {
         std::vector<Vertex> queue;
         set<Vertex> enqueued;
 
-        m_active[vertex] = PmuState::Blank;
+        m_graph[vertex].pmu = PmuState::Blank;
         --m_numActive;
         queue.push_back(vertex);
         enqueued.insert(vertex);
@@ -266,7 +273,7 @@ bool PdsState::setInactive(PdsState::Vertex vertex) {
     assert(!isActive(vertex));
     if (!isInactive(vertex)) {
         ++m_numInactive;
-        m_active[vertex] = PmuState::Inactive;
+        m_graph[vertex].pmu = PmuState::Inactive;
         m_steps_pmu.emplace_back(vertex, PmuState::Inactive);
         assert(activeState(vertex) == PmuState::Inactive);
         return true;

@@ -40,6 +40,7 @@ struct Bus {
     std::string name;
     long id;
     bool zero_injection;
+    PmuState pmu;
 };
 
 using PowerGrid = setgraph::SetGraph<Bus, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
@@ -71,7 +72,6 @@ public:
     using Vertex = PowerGrid::vertex_descriptor;
 private:
     pds::map<Vertex, ssize_t> m_unobserved_degree;
-    pds::map<Vertex, PmuState> m_active;
     size_t m_numActive;
     size_t m_numInactive;
     PowerGrid m_graph;
@@ -107,7 +107,7 @@ public:
 
     inline bool isZeroInjection(Vertex vertex) const { return m_graph[vertex].zero_injection; }
 
-    inline PmuState activeState(Vertex vertex) const { return m_active.at(vertex); }
+    inline PmuState activeState(Vertex vertex) const { return m_graph[vertex].pmu; }
 
     inline bool isActive(Vertex vertex) const { return activeState(vertex) == PmuState::Active; }
 
@@ -129,10 +129,6 @@ public:
         assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));
         return m_unobserved_degree.at(v);
     }
-
-    inline const set<Vertex> observed() const { return m_dependencies.vertices() | ranges::to<set<Vertex>>; }
-
-    inline const map<Vertex, PmuState>& active() const { return m_active; }
 
     bool setActive(Vertex vertex);
 
