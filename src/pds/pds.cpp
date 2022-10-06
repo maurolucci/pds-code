@@ -46,7 +46,7 @@ PdsState::PdsState() : PdsState(PowerGrid{}) { }
 
 PdsState::PdsState(const pds::PowerGrid &graph) : PdsState(PowerGrid{graph}) { }
 
-PdsState::PdsState(PowerGrid&& graph) : m_graph(graph) {
+PdsState::PdsState(PowerGrid&& graph) : m_numActive{0}, m_numInactive{0}, m_graph(graph) {
     createCheckpoint();
     for (auto v: m_graph.vertices()) {
         m_graph.removeEdge(v, v);
@@ -74,6 +74,8 @@ void PdsState::removeVertex(Vertex v) {
             m_unobserved_degree[w] -= 1;
         }
     }
+    if (isActive(v)) --m_numActive;
+    if (isInactive(v)) --m_numInactive;
     m_dependencies.removeVertex(v);
     m_unobserved_degree.erase(v);
     m_active.erase(v);
@@ -184,84 +186,96 @@ bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, set<PdsState::V
 
 bool PdsState::setBlank(PdsState::Vertex vertex) {
     assert(!isActive(vertex));
-    m_active[vertex] = PmuState::Blank;
+    if (isInactive(vertex)) {
+        --m_numInactive;
+        m_active[vertex] = PmuState::Blank;
+    }
     return allObserved();
 }
 
 bool PdsState::setActive(PdsState::Vertex vertex) {
-    m_active[vertex] = PmuState::Active;
-    m_steps_pmu.emplace_back(vertex, PmuState::Active);
-    if (m_dependencies.hasVertex(vertex)) {
-        while(m_dependencies.inDegree(vertex) > 0) {
-            auto edge = *m_dependencies.inEdges(vertex).begin();
-            m_dependencies.removeEdge(edge);
+    assert(m_active[vertex] != PmuState::Inactive);
+    if (m_active[vertex] != PmuState::Active) {
+        ++m_numActive;
+        m_active[vertex] = PmuState::Active;
+        m_steps_pmu.emplace_back(vertex, PmuState::Active);
+        if (m_dependencies.hasVertex(vertex)) {
+            while (m_dependencies.inDegree(vertex) > 0) {
+                auto edge = *m_dependencies.inEdges(vertex).begin();
+                m_dependencies.removeEdge(edge);
+            }
         }
+        std::vector<Vertex> queue;
+        observeOne(vertex, vertex, queue);
+        for (auto w: m_graph.neighbors(vertex)) {
+            observeOne(w, vertex, queue);
+        }
+        propagate(queue);
     }
-    std::vector<Vertex> queue;
-    observeOne(vertex, vertex, queue);
-    for (auto w: m_graph.neighbors(vertex)) {
-        observeOne(w, vertex, queue);
-    }
-    propagate(queue);
     return allObserved();
 }
 
 bool PdsState::unsetActive(PdsState::Vertex vertex) {
-    std::vector<Vertex> propagating;
-    std::vector<Vertex> queue;
-    set<Vertex> enqueued;
+    assert(isActive(vertex));
+    if (isActive(vertex)) {
+        std::vector<Vertex> propagating;
+        std::vector<Vertex> queue;
+        set<Vertex> enqueued;
 
-    m_active[vertex] = PmuState::Blank;
-    queue.push_back(vertex);
-    enqueued.insert(vertex);
-    while (!queue.empty()) {
-        auto v = queue.back();
-        queue.pop_back();
-        assert(!isActive(v));
-        std::optional<Vertex> observer;
-        for (auto w: m_graph.neighbors(v)) {
-            assert(m_unobserved_degree[w] == ranges::distance(m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
-            assert(isObserved(v));
-            m_unobserved_degree[w] += 1;
-            if (!isActive(w)) {
-                // w is observed from v
-                if (m_dependencies.edge(v, w).has_value()) {
-                    if (!enqueued.contains(w)) {
-                        queue.push_back(w);
-                        enqueued.insert(w);
-                    }
-                } else if (isObserved(w)) {
-                    for (auto x: m_dependencies.neighbors(w)) {
-                        if (!enqueued.contains(x)) {
-                            queue.push_back(x);
-                            enqueued.insert(x);
+        m_active[vertex] = PmuState::Blank;
+        --m_numActive;
+        queue.push_back(vertex);
+        enqueued.insert(vertex);
+        while (!queue.empty()) {
+            auto v = queue.back();
+            queue.pop_back();
+            assert(!isActive(v));
+            std::optional<Vertex> observer;
+            for (auto w: m_graph.neighbors(v)) {
+                assert(m_unobserved_degree[w] == ranges::distance(
+                        m_graph.neighbors(w) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
+                assert(isObserved(v));
+                m_unobserved_degree[w] += 1;
+                if (!isActive(w)) {
+                    // w is observed from v
+                    if (m_dependencies.edge(v, w).has_value()) {
+                        if (!enqueued.contains(w)) {
+                            queue.push_back(w);
+                            enqueued.insert(w);
                         }
+                    } else if (isObserved(w)) {
+                        for (auto x: m_dependencies.neighbors(w)) {
+                            if (!enqueued.contains(x)) {
+                                queue.push_back(x);
+                                enqueued.insert(x);
+                            }
+                        }
+                        propagating.push_back(w);
                     }
-                    propagating.push_back(w);
+                } else {
+                    observer = {w};
+                    assert(isActive(w));
+                    assert(isObserved(w));
                 }
-            } else {
-                observer = {w};
-                assert(isActive(w));
-                assert(isObserved(w));
+            }
+            // mark unobserved
+            m_dependencies.removeVertex(v);
+            if (observer.has_value()) {
+                assert(isActive(*observer));
+                assert(isObserved(*observer));
+                observeOne(v, observer.value(), propagating);
             }
         }
-        // mark unobserved
-        m_dependencies.removeVertex(v);
-        if (observer.has_value()) {
-            assert(isActive(*observer));
-            assert(isObserved(*observer));
-            observeOne(v, observer.value(), propagating);
-        }
+
+        propagate(propagating);
     }
-
-    propagate(propagating);
-
     return isObserved(vertex);
 }
 
 bool PdsState::setInactive(PdsState::Vertex vertex) {
     assert(!isActive(vertex));
     if (!isInactive(vertex)) {
+        ++m_numInactive;
         m_active[vertex] = PmuState::Inactive;
         m_steps_pmu.emplace_back(vertex, PmuState::Inactive);
         assert(activeState(vertex) == PmuState::Inactive);

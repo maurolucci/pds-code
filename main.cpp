@@ -290,7 +290,7 @@ int run(int argc, const char** argv) {
             if (!subproblem.solveTrivial()) {
                 fmt::print("solving subproblem {}\n", i);
                 printState(subproblem);
-                result = solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>());
+                result = combineSolveState(result, solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>()));
                 for (auto v: subproblem.graph().vertices()) {
                     if (subproblem.isActive(v)) {
                         state.setActive(v);

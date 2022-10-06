@@ -72,6 +72,8 @@ public:
 private:
     pds::map<Vertex, ssize_t> m_unobserved_degree;
     pds::map<Vertex, PmuState> m_active;
+    size_t m_numActive;
+    size_t m_numInactive;
     PowerGrid m_graph;
     setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Bidirectional> m_dependencies;
 
@@ -149,11 +151,13 @@ public:
     }
 
     inline size_t numActive() const {
-        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); }));
+        assert(ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); })) == (ssize_t)m_numActive);
+        return m_numActive;
     }
 
     inline size_t numInactive() const {
-        return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isInactive(v); }));
+        assert(ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isInactive(v); })) == (ssize_t)m_numInactive);
+        return m_numInactive;
     }
 
     inline size_t numZeroInjection() const {
