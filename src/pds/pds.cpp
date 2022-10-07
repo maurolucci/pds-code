@@ -359,7 +359,7 @@ bool PdsState::disableObservationNeighborhood() {
     };
     std::vector<Vertex> blankVertices;
     std::set<Vertex> inactive;
-    for (auto v: m_graph.vertices()) {
+    for (auto v: m_dependencies.vertices()) {
         if (isBlank(v)) {
             if (fullyObserved(v)) {
                 inactive.insert(v);
