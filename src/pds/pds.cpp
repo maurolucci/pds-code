@@ -50,12 +50,15 @@ PdsState::PdsState(PowerGrid&& graph) : m_numActive{0}, m_numInactive{0}, m_grap
     for (auto v: m_graph.vertices()) {
         m_graph.removeEdge(v, v);
         m_unobserved_degree[v] = m_graph.degree(v);
+    }
+    for (auto v: m_graph.vertices()) {
         switch (m_graph[v].pmu) {
             case PmuState::Active:
-                ++m_numActive;
+                m_graph[v].pmu = PmuState::Blank;
+                setActive(v);
                 break;
             case PmuState::Inactive:
-                ++m_numInactive;
+                setInactive(v);
                 break;
             default:
                 break;
