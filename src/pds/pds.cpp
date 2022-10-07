@@ -349,41 +349,51 @@ bool PdsState::collapseDegreeTwo() {
 
 bool PdsState::disableObservationNeighborhood() {
     bool changed = false;
-    map<Vertex, set<Vertex>> cachedNeighborhood;
-    set<Vertex> active;
-    for (auto v: m_graph.vertices()) {
-        if (isActive(v)) active.insert(v);
-    }
     auto fullyObserved = [this](auto v) {
         return isObserved(v) && unobservedDegree(v) == 0;
     };
     std::vector<Vertex> blankVertices;
-    std::set<Vertex> inactive;
-    for (auto v: m_dependencies.vertices()) {
+    std::vector<char> blankInactive;
+    for (auto v: m_graph.vertices()) {
         if (isBlank(v)) {
             if (fullyObserved(v)) {
-                inactive.insert(v);
+                setInactive(v);
                 changed = true;
             } else {
                 blankVertices.push_back(v);
+                blankInactive.push_back(false);
             }
         }
     }
     ranges::sort(blankVertices, [this](auto left, auto right) -> bool { return m_graph.degree(left) > m_graph.degree(right);});
-    for (auto v: blankVertices) {
-        if (isBlank(v) && !inactive.contains(v)) {
+    size_t skipStart = 0;
+    for (size_t i = 0; i < blankVertices.size(); ++i) {
+        auto& v = blankVertices[i];
+        auto& inactive = blankInactive[i];
+        if (!inactive) {
             setActive(v);
-            for (auto w: blankVertices) {
-                if (v != w && isBlank(w) && fullyObserved(w)) {
-                    inactive.insert(w);
-                    changed = true;
+            for (size_t j = skipStart; j < blankVertices.size(); ++j) {
+                if (i != j) {
+                    auto w = blankVertices[j];
+                    if (!blankInactive[j] && fullyObserved(w)) {
+                        setInactive(w);
+                        changed = true;
+                        if (j > i) {
+                            std::swap(blankVertices[j], blankVertices.back());
+                            std::swap(blankInactive[j], blankInactive.back());
+                            blankVertices.pop_back();
+                            blankInactive.pop_back();
+                            --j; // j > 0 is guaranteed
+                        } else {
+                            std::swap(blankVertices[j], blankVertices.front());
+                            std::swap(blankInactive[j], blankInactive.front());
+                            ++skipStart;
+                        }
+                    }
                 }
             }
             unsetActive(v);
         }
-    }
-    for(auto v: inactive) {
-        setInactive(v);
     }
     return changed;
 }
