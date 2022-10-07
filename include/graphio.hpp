@@ -20,6 +20,10 @@ PowerGrid readGraphML(const std::string& filename, bool allZeroInjection = false
 
 PowerGrid readAutoGraph(const std::string& filename, bool allZeroInjection = false);
 
+PowerGrid readPds(const std::string& filename, bool allZeroInjection = false);
+
+void writePds(const PowerGrid& grid, const std::string& filename);
+
 }
 
 #endif //PDS_GRAPHIO_HPP
