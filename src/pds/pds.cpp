@@ -77,6 +77,12 @@ void PdsState::addEdge(Vertex source, Vertex target) {
             m_unobserved_degree[source] += 1;
         }
     }
+#ifndef NDEBUG
+    for (auto v: {source, target}) {
+        assert(m_unobserved_degree[v] == ranges::distance(
+                m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
+    }
+#endif
 }
 
 void PdsState::removeVertex(Vertex v) {
@@ -85,6 +91,7 @@ void PdsState::removeVertex(Vertex v) {
             m_unobserved_degree[w] -= 1;
         }
     }
+    assert(m_unobserved_degree[v] == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v); })));
     if (isActive(v)) --m_numActive;
     if (isInactive(v)) --m_numInactive;
     m_dependencies.removeVertex(v);
@@ -370,6 +377,7 @@ bool PdsState::collapseDegreeTwo() {
                     changed = true;
                 }
             }
+
         }
     }
     return changed;
