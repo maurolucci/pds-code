@@ -316,7 +316,35 @@ bool PdsState::collapseDegreeTwo() {
             auto [x, y] = std::tie(neighbors[0], neighbors[1]); { }
             if (!m_graph.edge(x, y)) {
                 if (isInactive(v)) {
-                    if((isZeroInjection(x) && m_graph.degree(x) <= 2) || (isZeroInjection(y) && m_graph.degree(y) <= 2)) {
+                    auto otherNeighbor = [this] (auto i, auto j) {
+                        return (m_graph.neighbors(i) | ranges::views::filter([this,j](auto v) { return v != j && !isObserved(v);}) | ranges::to_vector)[0];
+                    };
+                    if (!isObserved(v) && isObserved(x) && isInactive(x) && isZeroInjection(x) && m_unobserved_degree[x] == 2 && m_graph.degree(otherNeighbor(x, v)) == 2 && isZeroInjection(otherNeighbor(x, v))) {
+                        // v must be unobserved if x is observed
+                        auto z = otherNeighbor(x, v);
+                        assert(!isObserved(z) && z != v && m_graph.edge(v, x) && m_graph.edge(x, z) &&
+                               m_graph.degree(z) == 2);
+                        assert(isObserved(x) && !isObserved(v) && !isObserved(z));
+                        m_graph.removeEdge(x, z);
+                        m_unobserved_degree[x] -= 1;
+                        removeVertex(v);
+                        addEdge(y, z);
+                        changed = true;
+                        assert(m_unobserved_degree[x] == 0);
+                        assert(ranges::distance(m_graph.neighbors(x) | ranges::views::filter([this](auto v) { return !isObserved(v); })) == m_unobserved_degree[x]);
+                    } else if (!isObserved(v) && isObserved(y) && isInactive(y) && isZeroInjection(y) && m_unobserved_degree[y] == 2 && m_graph.degree(otherNeighbor(y, v)) == 2 && isZeroInjection(otherNeighbor(y, v))) {
+                        // v must be unobserved if x is observed
+                        auto z = otherNeighbor(y, v);
+                        assert(!isObserved(z) && z != v && m_graph.edge(v, y) && m_graph.edge(y, z) &&  m_graph.degree(z) == 2);
+                        assert(isObserved(y) && !isObserved(v) && !isObserved(z));
+                        m_graph.removeEdge(y, z);
+                        m_unobserved_degree[y] -= 1;
+                        removeVertex(v);
+                        addEdge(x, z);
+                        changed = true;
+                        assert(m_unobserved_degree[y] == 0);
+                        assert(ranges::distance(m_graph.neighbors(y) | ranges::views::filter([this](auto v) { return !isObserved(v);})) == m_unobserved_degree[y]);
+                    } else if((isZeroInjection(x) && m_graph.degree(x) <= 2) || (isZeroInjection(y) && m_graph.degree(y) <= 2)) {
                         if (m_dependencies.edge(v, y).has_value()) {
                             m_dependencies.addEdge(x, y);
                         } else if (m_dependencies.edge(v, x).has_value()) {

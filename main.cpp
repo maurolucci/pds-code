@@ -199,13 +199,6 @@ int run(int argc, const char** argv) {
     PdsState state(readAutoGraph(vm["graph"].as<string>(), vm["all-zi"].as<bool>()));
     auto input = state;
 
-    if (drawOptions.drawAny()) {
-        fmt::print("computing layout\n");
-        auto t0 = now();
-        auto t1 = now();
-        fmt::print("computed layout in {}\n", ms(t1-t0));
-    }
-
     if (drawOptions.drawInput) {
         writePds(state.graph(), fmt::format("{}/0_input.pds", outdir));
     }
