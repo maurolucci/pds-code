@@ -23,7 +23,12 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/fmtlib/fmt.git
         GIT_TAG c4ee726 # 9.0.0
 )
-FetchContent_MakeAvailable(unordered_dense OGDF fmt)
+FetchContent_Declare(
+        htd
+        GIT_REPOSITORY https://github.com/CinusMinus/htd.git
+        GIT_TAG master
+)
+FetchContent_MakeAvailable(unordered_dense OGDF fmt htd)
 # No warnings from OGDF headers
 get_target_property(TMP_OGDF_INCLUDE_DIRS OGDF INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(OGDF SYSTEM INTERFACE ${TMP_OGDF_INCLUDE_DIRS})
@@ -65,7 +70,7 @@ add_executable(check_graph check_graph.cpp)
 target_link_libraries(check_graph PUBLIC pdslib fmt::fmt Boost::program_options)
 
 add_executable(experiment experiment.cpp)
-target_link_libraries(experiment PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::program_options)
+target_link_libraries(experiment PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::program_options htd)
 
 add_executable(draw_grid drawGrid.cpp)
 target_link_libraries(draw_grid PUBLIC pdslib fmt::fmt Boost::program_options OGDF)

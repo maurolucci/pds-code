@@ -8,6 +8,8 @@
 #include <fmt/os.h>
 #include <fmt/chrono.h>
 
+#include <htd/main.hpp>
+
 #include "pds.hpp"
 #include "graphio.hpp"
 #include "pdssolve.hpp"
@@ -57,6 +59,65 @@ bool applyReductions(PdsState& state) {
     return exhaustiveReductions(state);
 }
 
+size_t treeWidth(const PowerGrid& graph) {
+    std::unique_ptr<htd::LibraryInstance> library(htd::createManagementInstance(htd::Id::FIRST));
+    htd::Graph htdGraph(library.get());
+    pds::map<PowerGrid::vertex_descriptor, htd::vertex_t> vertices;
+    for (auto v: graph.vertices()){
+        auto mapped = htdGraph.addVertex();
+        vertices[v] = mapped;
+    }
+    for (auto edge: graph.edges()) {
+        auto [s, t] = graph.endpoints(edge);
+        htdGraph.addEdge(vertices[s], vertices[t]);
+    }
+    library->orderingAlgorithmFactory().setConstructionTemplate(new htd::MinFillOrderingAlgorithm(library.get()));
+    auto treeDecompositionAlgo = std::make_unique<htd::CombinedWidthMinimizingTreeDecompositionAlgorithm>(library.get());
+    treeDecompositionAlgo->setComputeInducedEdgesEnabled(false);
+    auto algo = std::make_unique<htd::CombinedWidthMinimizingTreeDecompositionAlgorithm>(library.get());
+    auto baseAlgo = std::make_unique<htd::WidthMinimizingTreeDecompositionAlgorithm>(library.get());
+    baseAlgo->setIterationCount(10);
+    baseAlgo->addManipulationOperation(new htd::NormalizationOperation(library.get()));
+    algo->addDecompositionAlgorithm(baseAlgo.release());
+    auto decomposition = std::unique_ptr<htd::ITreeDecomposition>(algo->computeDecomposition(htdGraph));
+    return decomposition->maximumBagSize();
+}
+
+void writeSolutionStatistics(const std::string_view& name, const PdsState& state, FILE* out) {
+    using namespace fmt::literals;
+    size_t maxDegree = 0;
+    map<std::pair<pds::PmuState, bool>, map<size_t, size_t>> degrees;
+    for (auto v: state.graph().vertices()) {
+        auto deg = state.graph().degree(v);
+        maxDegree = std::max(maxDegree, deg);
+        degrees[{state.activeState(v), state.isZeroInjection(v)}][deg] += 1;
+    }
+    std::vector<std::string> degreeCount;
+    for (size_t i = 0; i < maxDegree; ++i) {
+        std::vector<size_t> deg;
+        for (bool zi: {true, false}) {
+            for (auto state: {PmuState::Inactive, PmuState::Blank, PmuState::Active}) {
+                deg.push_back(degrees[{state, zi}][i]);
+            }
+        }
+        degreeCount.push_back(fmt::format("{}", fmt::join(deg, ":")));
+    }
+    fmt::print(
+            out,
+            "{name},{n},{m},{n_zero_injection},{n_pmu},{n_inactive},{n_blank},{n_observed},{tree_width},\"{degrees}\"\n",
+            "name"_a=name,
+            "n"_a=state.graph().numVertices(),
+            "m"_a=state.graph().numEdges(),
+            "n_zero_injection"_a=state.numZeroInjection(),
+            "n_pmu"_a=state.numActive(),
+            "n_inactive"_a=state.numInactive(),
+            "n_blank"_a=state.graph().numVertices() - state.numActive() - state.numInactive(),
+            "n_observed"_a=state.numObserved(),
+            "tree_width"_a=treeWidth(state.graph()),
+            "degrees"_a=fmt::join(degreeCount, ";")
+    );
+}
+
 // Main
 
 int main(int argc, const char** argv) {
@@ -78,6 +139,7 @@ int main(int argc, const char** argv) {
             ("subproblems,u", "split into subproblems before calling solve")
             ("timeout,t", po::value<double>()->default_value(600.), "gurobi time limit (seconds)")
             ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
+            ("stat-file", po::value<string>(), "write statistics about solutions")
     ;
     po::positional_options_description pos;
     pos.add("graph", -1);
@@ -151,6 +213,15 @@ int main(int argc, const char** argv) {
         outfile = fopen(vm["outfile"].as<string>().c_str(), "w");
         outputs.push_back(outfile);
     }
+    FILE* statFile = nullptr;
+    if (vm.count("stat-file")) {
+        auto statFileName = vm["stat-file"].as<string>();
+        fs::create_directories(fs::absolute(fs::path(statFileName)).parent_path());
+        statFile = fopen(statFileName.c_str(), "w");
+        fmt::print(statFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
+        fmt::print(statFile, "# degrees format: <#zi+inactive>:<#zi+blank>:<#zi+active>:<#nonzi+inactive>:<#nonzi+blank>:<#nonzi.active>;...\n");
+        fmt::print(statFile, "{}", "name,n,m,n_zero_injection,n_pmu,n_inactive,n_blank,n_observed,tree_width,degrees\n");
+    }
 
     for (auto out: outputs) {
         fmt::print(out, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
@@ -223,7 +294,13 @@ int main(int argc, const char** argv) {
                            "blankReduced"_a = blankReduced
                 );
             }
+            if (statFile != nullptr) {
+                writeSolutionStatistics(filename, state, statFile);
+            }
         }
+    }
+    if (statFile != nullptr) {
+        fclose(statFile);
     }
     if (outfile != nullptr) {
         fclose(outfile);
