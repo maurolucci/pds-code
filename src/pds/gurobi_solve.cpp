@@ -54,11 +54,6 @@ SolveState solveModel(PdsState& state, map<PowerGrid::vertex_descriptor, GRBVar>
 //    return result;
 //}
 
-SolveState solve_pds(const PowerGrid &graph, map <PowerGrid::vertex_descriptor, PmuState> &active, bool output, double timeLimit) {
-    unused(graph, active, output, timeLimit);
-    throw 0;
-}
-
 SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
     namespace r3 = ranges;
     try {
@@ -75,12 +70,10 @@ SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
         auto &graph = static_cast<const PdsState &>(state).graph();
         const double M = 2 * graph.numVertices();
         {
-            GRBLinExpr objective{};
             for (auto v: graph.vertices()) {
                 xi.insert({v, model.addVar(0.0, M, 1.0, GRB_BINARY)});
                 // si[v] >= 1 && si[v] <= num_vertices(graph)
                 si.insert({v, model.addVar(1.0, M, 0.0, GRB_CONTINUOUS)});
-                objective += xi[v];
             }
             for (auto e: graph.edges()) {
                 auto v = graph.source(e);
@@ -125,11 +118,9 @@ SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
             if (!state.isActive(v)) {
                 model.addConstr(si[v] <= M * observingNeighbors);
             }
-            model.addConstr(inObserved <= 1);
+            model.addConstr(inObserved <= !state.isActive(v));
             if (graph[v].zero_injection) {
                 model.addConstr(outObserved <= 1);
-            } else {
-                model.addConstr(outObserved == 0);
             }
 
             model.addConstr(si[v] <= graph.numVertices());
