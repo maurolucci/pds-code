@@ -47,6 +47,22 @@ bool exhaustiveReductions(PdsState &state, bool firstRun = true, F callback = un
     return anyChanged;
 }
 
+template<std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)>
+bool noNecessaryReductions(PdsState &state, bool firstRun = true, F callback = unused) {
+    bool anyChanged = false;
+    bool changed;
+    do {
+        changed = exhaustiveSimpleReductions(state, callback);
+        if (firstRun || changed) if(state.disableObservationNeighborhood()) {
+            callback(state, "observation_neighborhood");
+            changed = true;
+        }
+        firstRun = false;
+        anyChanged |= changed;
+    } while (changed);
+    return anyChanged;
+}
+
 namespace greedy_strategies {
 std::optional<PdsState::Vertex> largestObservationNeighborhood(const PdsState &state) {
     using Vertex = PdsState::Vertex;

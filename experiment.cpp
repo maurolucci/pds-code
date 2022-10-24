@@ -55,6 +55,25 @@ bool applyDominationReductions(PdsState& state) {
     return changed;
 }
 
+bool applyReductionsNotDomination(PdsState& state) {
+    bool anyChanged = false;
+    bool firstRun = true;
+    bool changed;
+    do {
+        changed = exhaustiveSimpleReductions(state);
+        if (firstRun || changed) if(state.activateNecessaryNodes()) {
+                changed = true;
+            }
+        firstRun = false;
+        anyChanged |= changed;
+    } while (changed);
+    return anyChanged;
+}
+
+bool applyReductionsNotNecessary(PdsState& state) {
+    return noNecessaryReductions(state);
+}
+
 bool applyReductions(PdsState& state) {
     return exhaustiveReductions(state);
 }
@@ -93,7 +112,7 @@ void writeSolutionStatistics(const std::string_view& name, const PdsState& state
         degrees[{state.activeState(v), state.isZeroInjection(v)}][deg] += 1;
     }
     std::vector<std::string> degreeCount;
-    for (size_t i = 0; i < maxDegree; ++i) {
+    for (size_t i = 0; i <= maxDegree; ++i) {
         std::vector<size_t> deg;
         for (bool zi: {true, false}) {
             for (auto state: {PmuState::Inactive, PmuState::Blank, PmuState::Active}) {
@@ -166,8 +185,12 @@ int main(int argc, const char** argv) {
         reduce = simpleReductions;
     } else if (reductionName == "domination") {
         reduce = applyDominationReductions;
+    } else if (reductionName == "no-necessary") {
+        reduce = applyReductionsNotNecessary;
+    } else if (reductionName == "no-domination") {
+        reduce = applyReductionsNotDomination;
     } else {
-        fmt::print(stderr, "invalid reduction mode: {}", reductionName);
+        fmt::print(stderr, "invalid reduction mode: {}. modes: {}", reductionName, fmt::join({"all", "simple", "domination", "no-necessary", "no-domination"}, ", "));
         return 2;
     }
 
@@ -235,10 +258,8 @@ int main(int argc, const char** argv) {
             size_t n = state.graph().numVertices();
             size_t m = state.graph().numEdges();
             size_t zi = state.numZeroInjection();
-            map<PowerGrid::vertex_descriptor, Coordinate> layout;
             if (drawdir) {
-                layout = pds::layoutGraph(state.graph());
-                drawGrid(state, *drawdir / "0_input.svg", layout);
+                writePds(state.graph(), fmt::format("{}/0_input.pds", drawdir->string()));
             }
 
             auto t0 = now();
@@ -267,8 +288,8 @@ int main(int argc, const char** argv) {
             }
             auto t2 = now();
             if (drawdir) {
-                drawGrid(reduced, *drawdir / "1_reductions.svg", layout);
-                drawGrid(state, *drawdir / "2_solved_preprocessed.svg", layout);
+                writePds(reduced.graph(), fmt::format("{}/1_reductions.pds", drawdir->string()));
+                writePds(state.graph(), fmt::format("{}/2_solved_preprocessed.pds", drawdir->string()));
             }
             size_t pmus = state.numActive();
             fmt::memory_buffer buf;
