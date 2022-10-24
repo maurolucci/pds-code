@@ -106,7 +106,6 @@ int run(int argc, const char** argv) {
             ("print-state,p", "print solve state after each step")
             ("time-limit,t", po::value<double>()->default_value(600.0), "time limit for gurobi in seconds")
             ("reductions,r", "apply reductions before exact solving")
-            ("export-subproblems,e", "export subproblems as graphml files")
             (
                     "all-zi,z",
                     po::value<bool>()->default_value(false)->implicit_value(true),
@@ -227,11 +226,11 @@ int run(int argc, const char** argv) {
     }
 
     vector subproblems = state.subproblems(true);
+    ranges::sort(subproblems,
+                 [](const pds::PdsState &left, const pds::PdsState &right) -> bool {
+                     return left.graph().numVertices() < right.graph().numVertices();
+                 });
     if (drawOptions.drawSubproblems) {
-        ranges::sort(subproblems,
-                     [](const pds::PdsState &left, const pds::PdsState &right) -> bool {
-                         return left.graph().numVertices() < right.graph().numVertices();
-                     });
         for (size_t i = 0; auto &subproblem: subproblems) {
             if (!subproblem.allObserved()) {
                 writePds(subproblem.graph(), fmt::format("{}/comp_{:03}_0unsolved.pds", outdir, i));
@@ -240,58 +239,25 @@ int run(int argc, const char** argv) {
         }
     }
 
-    if (vm.count("export-subproblems")) {
-        for (size_t i = 0; const auto &sub: subproblems) {
-            auto graph = sub.graph();
-            auto ids = graph.vertices() | ranges::views::transform([&graph](auto v){ return graph[v].id;}) | ranges::to<set<long>>();
-            auto freshId = [&ids]() {
-                long id = 0;
-                while (ids.contains(id)) {++id;}
-                ids.insert(id);
-                return id;
-            };
-            for (auto v: sub.graph().vertices()) {
-                if (sub.isActive(v)) {
-                    auto v1 = graph.addVertex(Bus{.name="temp", .id=freshId(), .zero_injection=true});
-                    auto v2 = graph.addVertex(Bus{.name="temp", .id=freshId(), .zero_injection=true});
-                    graph.addEdge(v, v1);
-                    graph.addEdge(v, v2);
-                }
-            }
-            std::ofstream outstream(fmt::format("{}/comp_{:03}_unsolved.graphml", outdir, i));
-            exportGraphml(graph, outstream);
-            ++i;
-        }
-    }
-
     SolveState result = SolveState::Optimal;
-
 
     if (vm.count("subproblem")) {
         for (size_t i = 0; auto &subproblem: subproblems) {
             auto tSub = now();
-            if (vm.count("reductions")) {
-                exhaustiveReductions(subproblem, false);
-                if (drawOptions.drawSubproblems && drawOptions.drawReductions) {
-                    writePds(subproblem.graph(), fmt::format("{}/comp_{:03}_1reductions.pds", outdir, i));
+            fmt::print("solving subproblem {}\n", i);
+            printState(subproblem);
+            result = combineSolveState(result, solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>()));
+            for (auto v: subproblem.graph().vertices()) {
+                if (subproblem.isActive(v)) {
+                    state.setActive(v);
                 }
             }
-            if (!subproblem.solveTrivial()) {
-                fmt::print("solving subproblem {}\n", i);
-                printState(subproblem);
-                result = combineSolveState(result, solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>()));
-                for (auto v: subproblem.graph().vertices()) {
-                    if (subproblem.isActive(v)) {
-                        state.setActive(v);
-                    }
-                }
-                auto tSubEnd = now();
-                fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
-                if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
-                    writePds(subproblem.graph(), fmt::format("{}/comp_{:03}_2solved.pds", outdir, i));
-                }
-                ++i;
+            auto tSubEnd = now();
+            fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
+            if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
+                writePds(subproblem.graph(), fmt::format("{}/comp_{:03}_2solved.pds", outdir, i));
             }
+            ++i;
         }
     } else {
         result = solver(state, vm.count("print-solve"), vm["time-limit"].as<double>());
