@@ -1,3 +1,3 @@
 [submodule "contrib/setgraph"]
-	path = contrib/setgraph
+	path = contrib/mpgraphs
 	url = git@gitlab.com:Aldorn/setgraph.git
