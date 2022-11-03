@@ -2,8 +2,8 @@
 // Created by max on 15.08.22.
 //
 
-#include <setgraph/graph.hpp>
-#include <setgraph/boost_adapter.hpp>
+#include <mpgraphs/graph.hpp>
+#include <mpgraphs/boost_adapter.hpp>
 #include <boost/property_map/property_map.hpp>
 #include <boost/property_map/dynamic_property_map.hpp>
 #include <range/v3/all.hpp>
@@ -13,8 +13,10 @@
 
 #include <fmt/format.h>
 
-using Graph = setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
-using Vertex = Graph::vertex_descriptor;
+#include "map.hpp"
+
+using Graph = mpgraphs::MapGraph<mpgraphs::Empty, mpgraphs::Empty, mpgraphs::EdgeDirection::Undirected>;
+using Vertex = Graph::VertexDescriptor;
 
 template<std::uniform_random_bit_generator Rng = std::minstd_rand>
 Graph randomTree(size_t n, Rng rng = Rng()) {
@@ -43,7 +45,7 @@ bool intersects(const L& lhs, const R& rhs) {
     return false;
 }
 
-void dfs(const Graph& graph, Vertex start, setgraph::map<Vertex, Vertex>& parent, setgraph::map<Vertex, size_t>& distance) {
+void dfs(const Graph& graph, Vertex start, pds::map<Vertex, Vertex>& parent, pds::map<Vertex, size_t>& distance) {
     if (!parent.contains(start)) {
         parent[start] = start;
         distance[start] = 0;
@@ -57,7 +59,7 @@ void dfs(const Graph& graph, Vertex start, setgraph::map<Vertex, Vertex>& parent
     }
 }
 
-std::optional<Vertex> lowestCommonAncestor(Vertex first, Vertex second, const setgraph::map<Vertex, Vertex>& parent, const setgraph::map<Vertex, size_t>& distance) {
+std::optional<Vertex> lowestCommonAncestor(Vertex first, Vertex second, const pds::map<Vertex, Vertex>& parent, const pds::map<Vertex, size_t>& distance) {
     while (first != second) {
         if (parent.at(first) == first && parent.at(second) == second) return {};
         if ((distance.at(first) < distance.at(second) && parent.at(second) != second) || parent.at(first) == first) {
@@ -103,13 +105,13 @@ Graph randomCactus(size_t n, Rng rng = Rng()) {
 //Graph randomCactus(size_t n, double p = 0.1) {
 //    auto graph = randomTree(n);
 //    if (n == 0) return graph;
-//    setgraph::map<Graph::vertex_descriptor, setgraph::set<size_t>> onCycle;
+//    pds::map<Graph::vertex_descriptor, pds::set<size_t>> onCycle;
 //    std::minstd_rand rng;
 //    const auto N = graph.numVertices();
 //    std::uniform_int_distribution endpoint(size_t{0}, N - 1);
 //    auto vertices = graph.vertices() | ranges::to<std::vector>();
-//    setgraph::map<Vertex, Vertex> parent;
-//    setgraph::map<Vertex, size_t> distance;
+//    pds::map<Vertex, Vertex> parent;
+//    pds::map<Vertex, size_t> distance;
 //    dfs(graph, vertices.front(), parent, distance);
 //    size_t cycle = 1;
 //    for (size_t i = 0; i < static_cast<size_t>(N * p); ++i) {
@@ -138,14 +140,14 @@ Graph randomCactus(size_t n, Rng rng = Rng()) {
 namespace po = boost::program_options;
 
 void writeGraph(const Graph& graph, std::ostream& out) {
-    setgraph::map<Vertex, long> zeroInjection;
+    pds::map<Vertex, long> zeroInjection;
     for (auto v: graph.vertices()) {
         zeroInjection[v] = 1;
     }
     boost::associative_property_map ziMap(zeroInjection);
     boost::dynamic_properties properties(boost::ignore_other_properties);
     properties.property("zero_injection", ziMap);
-    setgraph::map<Vertex, size_t> vertexIndex;
+    pds::map<Vertex, size_t> vertexIndex;
     for (size_t i = 0; auto v: graph.vertices()) {
         vertexIndex.insert({v, i});
         ++i;
@@ -175,8 +177,6 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    using Graph = setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
-    using Vertex = Graph::vertex_descriptor;
     Graph graph;
     std::minstd_rand rng(vm.count("seed") ? vm["seed"].as<size_t>() : size_t{std::random_device()()});
     if (graphType == "tree") { graph = randomTree(n, rng);}

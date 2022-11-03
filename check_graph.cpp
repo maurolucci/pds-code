@@ -2,7 +2,7 @@
 // Created by max on 19.08.22.
 //
 
-#include <setgraph/graph.hpp>
+#include <mpgraphs/graph.hpp>
 #include <range/v3/all.hpp>
 #include <boost/program_options.hpp>
 
@@ -11,7 +11,7 @@
 
 namespace pds {
 
-using Vertex = PowerGrid::vertex_descriptor;
+using Vertex = PowerGrid::VertexDescriptor;
 
 bool visitComponent(const PowerGrid& graph, Vertex start, set<Vertex>& seen) {
     if (seen.contains(start)) return false;

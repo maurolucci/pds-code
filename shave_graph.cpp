@@ -2,7 +2,7 @@
 // Created by max on 18.08.22.
 //
 
-#include <setgraph/graph.hpp>
+#include <mpgraphs/graph.hpp>
 #include <range/v3/all.hpp>
 #include <boost/program_options.hpp>
 
@@ -10,8 +10,8 @@
 #include "graphio.hpp"
 
 using Graph = pds::PowerGrid;//setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
-using Vertex = Graph::vertex_descriptor;
-using Edge = Graph::edge_descriptor;
+using Vertex = Graph::VertexDescriptor;
+using Edge = Graph::VertexDescriptor;
 
 void shave(Graph& graph, bool leaves = true, bool paths = true) {
     std::vector<Vertex> deg1;

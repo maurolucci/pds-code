@@ -81,7 +81,7 @@ bool applyReductions(PdsState& state) {
 size_t treeWidth(const PowerGrid& graph) {
     std::unique_ptr<htd::LibraryInstance> library(htd::createManagementInstance(htd::Id::FIRST));
     htd::Graph htdGraph(library.get());
-    pds::map<PowerGrid::vertex_descriptor, htd::vertex_t> vertices;
+    pds::map<PowerGrid::VertexDescriptor, htd::vertex_t> vertices;
     for (auto v: graph.vertices()){
         auto mapped = htdGraph.addVertex();
         vertices[v] = mapped;

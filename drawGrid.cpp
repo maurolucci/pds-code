@@ -8,7 +8,7 @@
 #include <ogdf/energybased/FMMMLayout.h>
 #include <ogdf/energybased/fmmm/FMMMOptions.h>
 
-using Layout = pds::map<pds::PowerGrid::vertex_descriptor, pds::Coordinate>;
+using Layout = pds::map<pds::PowerGrid::VertexDescriptor, pds::Coordinate>;
 
 void writeLayout(const Layout& layout, const std::string& filename) {
     FILE* outfile = fopen(filename.c_str(), "wb");

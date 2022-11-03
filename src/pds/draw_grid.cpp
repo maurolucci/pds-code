@@ -105,9 +105,9 @@ struct FixedBBGraphAttributes : public virtual ogdf::GraphAttributes {
     }
 };
 
-map<PowerGrid::vertex_descriptor, Coordinate> layoutGraph(const PowerGrid &graph) {
+map<PowerGrid::VertexDescriptor, Coordinate> layoutGraph(const PowerGrid &graph) {
     ogdf::Graph G;
-    map<PowerGrid::vertex_descriptor, ogdf::node> id_to_node;
+    map<PowerGrid::VertexDescriptor, ogdf::node> id_to_node;
     for (auto v: graph.vertices()) {
         id_to_node.emplace(v, G.newNode());
     }
@@ -124,7 +124,7 @@ map<PowerGrid::vertex_descriptor, Coordinate> layoutGraph(const PowerGrid &graph
     layout.randSeed(1234);
     layout.call(GA);
 
-    map<PowerGrid::vertex_descriptor, Coordinate> coordinates;
+    map<PowerGrid::VertexDescriptor, Coordinate> coordinates;
     for (auto v: graph.vertices()) {
         auto node = id_to_node.at(v);
         coordinates.emplace(v, Coordinate{GA.x(node), GA.y(node)});
@@ -134,7 +134,7 @@ map<PowerGrid::vertex_descriptor, Coordinate> layoutGraph(const PowerGrid &graph
 
 void drawGrid(const PdsState& state,
               const std::string &filename,
-              const map<PowerGrid::vertex_descriptor, Coordinate>& layout,
+              const map<PowerGrid::VertexDescriptor, Coordinate>& layout,
               const style::DrawingOptions &style) {
     ogdf::Graph G;
     ogdf::GraphAttributes GA(
@@ -146,9 +146,9 @@ void drawGrid(const PdsState& state,
             | ogdf::GraphAttributes::edgeArrow
             | ogdf::GraphAttributes::nodeLabel
     );
-    map<PowerGrid::vertex_descriptor, ogdf::node> id_to_node;
+    map<PowerGrid::VertexDescriptor, ogdf::node> id_to_node;
     const auto& graph = state.graph();
-    auto nodeState = [&state, &graph](const PowerGrid::vertex_descriptor& v) -> style::NodeState {
+    auto nodeState = [&state, &graph](const PowerGrid::VertexDescriptor& v) -> style::NodeState {
         return {
                 .id=graph[v].id,
                 .pmu=state.activeState(v),

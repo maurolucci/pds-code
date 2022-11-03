@@ -33,7 +33,7 @@ FetchContent_MakeAvailable(unordered_dense OGDF fmt htd)
 get_target_property(TMP_OGDF_INCLUDE_DIRS OGDF INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(OGDF SYSTEM INTERFACE ${TMP_OGDF_INCLUDE_DIRS})
 
-add_subdirectory(contrib/setgraph)
+add_subdirectory(contrib/mpgraphs)
 find_package(Gurobi REQUIRED)
 find_package(range-v3 REQUIRED)
 
@@ -49,7 +49,7 @@ add_library(pdslib STATIC src/pds/pds.cpp src/pds/graphml.cpp src/pds/draw_grid.
 target_include_directories(pdslib PUBLIC include)
 target_link_libraries(pdslib PRIVATE Boost::graph)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
-target_link_libraries(pdslib PUBLIC setgraph unordered_dense::unordered_dense PRIVATE OGDF)
+target_link_libraries(pdslib PUBLIC mpgraphs unordered_dense::unordered_dense PRIVATE OGDF)
 enable_warnings(pdslib)
 
 add_library(pdslib-gurobi src/pds/gurobi_solve.cpp)

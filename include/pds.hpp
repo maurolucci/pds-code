@@ -16,7 +16,7 @@
 
 #include "map.hpp"
 #include "utility.hpp"
-#include <setgraph/graph.hpp>
+#include <mpgraphs/graph.hpp>
 
 namespace pds {
 
@@ -43,7 +43,7 @@ struct Bus {
     PmuState pmu;
 };
 
-using PowerGrid = setgraph::SetGraph<Bus, setgraph::Empty, setgraph::EdgeDirection::Undirected>;
+using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected>;
 
 void exportGraphml(const PowerGrid& grid, std::ostream& out);
 
@@ -69,13 +69,13 @@ bool isSuperset(const set <T> &container, const set <T> &other) {
 
 class PdsState {
 public:
-    using Vertex = PowerGrid::vertex_descriptor;
+    using Vertex = PowerGrid::VertexDescriptor;
 private:
     pds::map<Vertex, ssize_t> m_unobserved_degree;
     size_t m_numActive;
     size_t m_numInactive;
     PowerGrid m_graph;
-    setgraph::SetGraph<setgraph::Empty, setgraph::Empty, setgraph::EdgeDirection::Bidirectional> m_dependencies;
+    mpgraphs::MapGraph<mpgraphs::Empty, mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional> m_dependencies;
 
     void propagate(std::vector<Vertex>& queue);
 
@@ -83,8 +83,8 @@ private:
     bool observeOne(Vertex vertex, Vertex origin, std::vector<Vertex>& queue);
 
     inline bool disableLowDegreeRecursive(
-            PowerGrid::vertex_descriptor start,
-            set<PowerGrid::vertex_descriptor>& seen
+            PowerGrid::VertexDescriptor start,
+            set<PowerGrid::VertexDescriptor>& seen
     );
 
 public:

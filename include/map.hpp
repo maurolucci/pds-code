@@ -5,11 +5,11 @@
 #ifndef PDS_MAP_HPP
 #define PDS_MAP_HPP
 
-#include "setgraph/utility.hpp"
+#include "mpgraphs/utility.hpp"
 
 namespace pds {
-using setgraph::map;
-using setgraph::set;
+using mpgraphs::map;
+using mpgraphs::set;
 }
 
 #endif //PDS_MAP_HPP

@@ -18,7 +18,7 @@ GRBEnv &getEnv() {
 }
 }
 
-SolveState solveModel(PdsState& state, map<PowerGrid::vertex_descriptor, GRBVar>& xi, GRBModel& model) {
+SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>& xi, GRBModel& model) {
     model.optimize();
     if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {
         return SolveState::Infeasible;
@@ -64,9 +64,9 @@ SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
         //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
         //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
         //GRBVar *si_p = model.addVars(num_vertices(graph));
-        map<PowerGrid::vertex_descriptor, GRBVar> xi;
-        map<PowerGrid::vertex_descriptor, GRBVar> si;
-        map<std::pair<PowerGrid::vertex_descriptor, PowerGrid::vertex_descriptor>, GRBVar> pij;
+        map<PowerGrid::VertexDescriptor, GRBVar> xi;
+        map<PowerGrid::VertexDescriptor, GRBVar> si;
+        map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
         auto &graph = static_cast<const PdsState &>(state).graph();
         const double M = 2 * graph.numVertices();
         {
@@ -164,7 +164,7 @@ SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    map <PowerGrid::vertex_descriptor, GRBVar> xi;
+    map <PowerGrid::VertexDescriptor, GRBVar> xi;
     for (auto v: state.graph().vertices()) {
         xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
     }
@@ -184,9 +184,9 @@ SolveState solveBrimkovExpanded(PdsState& state, bool output, double timeLimit) 
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    map <PowerGrid::vertex_descriptor, GRBVar> xi;
-    map <PowerGrid::vertex_descriptor, GRBVar> si;
-    map <PowerGrid::edge_descriptor, GRBVar> ye;
+    map <PowerGrid::VertexDescriptor, GRBVar> xi;
+    map <PowerGrid::VertexDescriptor, GRBVar> si;
+    map <PowerGrid::EdgeDescriptor, GRBVar> ye;
     auto T = static_cast<double>(state.graph().numVertices());
     for (auto v: state.graph().vertices()) {
         xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, "x"));
@@ -258,9 +258,9 @@ SolveState solveBrimkov(PdsState& state, bool output, double timeLimit) {
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_StringParam_LogFile, "gurobi.log");
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    map <PowerGrid::vertex_descriptor, GRBVar> xi;
-    map <PowerGrid::vertex_descriptor, GRBVar> si;
-    map <PowerGrid::edge_descriptor, GRBVar> ye;
+    map <PowerGrid::VertexDescriptor, GRBVar> xi;
+    map <PowerGrid::VertexDescriptor, GRBVar> si;
+    map <PowerGrid::EdgeDescriptor, GRBVar> ye;
     size_t T = state.graph().numVertices();
     for (auto v: state.graph().vertices()) {
         xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, "x"));

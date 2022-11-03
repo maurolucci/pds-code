@@ -5,7 +5,7 @@
 #ifndef PDS_GRAPHIO_HPP
 #define PDS_GRAPHIO_HPP
 
-#include <setgraph/graph.hpp>
+#include <mpgraphs/graph.hpp>
 #include <pds.hpp>
 #include <fstream>
 #include <filesystem>

@@ -2,7 +2,7 @@
 // Created by max on 01.08.22.
 //
 
-#include "setgraph/boost_adapter.hpp"
+#include "mpgraphs/boost_adapter.hpp"
 #include "pds.hpp"
 #include "graphml/graphml.hpp"
 
@@ -24,7 +24,7 @@ namespace pds {
 //}
 
 void exportGraphml(const PowerGrid& graph, std::ostream& out) {
-    map<PowerGrid::vertex_descriptor, long> zero_injection_data;
+    map<PowerGrid::VertexDescriptor, long> zero_injection_data;
     for (auto v: graph.vertices()) {
         if (graph[v].zero_injection) {
             zero_injection_data[v] = 1;
@@ -32,10 +32,10 @@ void exportGraphml(const PowerGrid& graph, std::ostream& out) {
     }
     boost::dynamic_properties attr(boost::ignore_other_properties);
     boost::associative_property_map zero_injection(zero_injection_data);
-    auto id_map = [&graph](const PowerGrid::vertex_descriptor& vertex) -> long { return graph[vertex].id;};
-    auto name_map = [&graph](PowerGrid::vertex_descriptor vertex) -> std::string { return graph[vertex].name; };
-    boost::function_property_map<decltype(id_map), PowerGrid::vertex_descriptor> id(id_map);
-    boost::function_property_map<decltype(name_map), PowerGrid::vertex_descriptor> name(name_map);
+    auto id_map = [&graph](const PowerGrid::VertexDescriptor& vertex) -> long { return graph[vertex].id;};
+    auto name_map = [&graph](PowerGrid::VertexDescriptor vertex) -> std::string { return graph[vertex].name; };
+    boost::function_property_map<decltype(id_map), PowerGrid::VertexDescriptor> id(id_map);
+    boost::function_property_map<decltype(name_map), PowerGrid::VertexDescriptor> name(name_map);
     attr.property("zero_injection", zero_injection);
     attr.property("name", name);
     attr.property("id", id);
@@ -500,7 +500,7 @@ map<PdsState::Vertex, PdsState::Vertex> findClosestActive(const PdsState& state)
 
 bool PdsState::collapseObservedEdges() {
     bool changed = false;
-    auto isObservedEdge = [this](PowerGrid::edge_descriptor e) {
+    auto isObservedEdge = [this](PowerGrid::EdgeDescriptor e) {
         auto [s, t] = m_graph.endpoints(e);
         return isObserved(s) && isObserved(t);
     };
