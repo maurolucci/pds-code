@@ -45,8 +45,6 @@ struct Bus {
 
 using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected>;
 
-void exportGraphml(const PowerGrid& grid, std::ostream& out);
-
 template<class T>
 size_t intersectionSize(const set<T>& first, const set<T>& second) {
     size_t count = 0;

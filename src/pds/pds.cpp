@@ -23,25 +23,6 @@ namespace pds {
 //    }
 //}
 
-void exportGraphml(const PowerGrid& graph, std::ostream& out) {
-    map<PowerGrid::VertexDescriptor, long> zero_injection_data;
-    for (auto v: graph.vertices()) {
-        if (graph[v].zero_injection) {
-            zero_injection_data[v] = 1;
-        }
-    }
-    boost::dynamic_properties attr(boost::ignore_other_properties);
-    boost::associative_property_map zero_injection(zero_injection_data);
-    auto id_map = [&graph](const PowerGrid::VertexDescriptor& vertex) -> long { return graph[vertex].id;};
-    auto name_map = [&graph](PowerGrid::VertexDescriptor vertex) -> std::string { return graph[vertex].name; };
-    boost::function_property_map<decltype(id_map), PowerGrid::VertexDescriptor> id(id_map);
-    boost::function_property_map<decltype(name_map), PowerGrid::VertexDescriptor> name(name_map);
-    attr.property("zero_injection", zero_injection);
-    attr.property("name", name);
-    attr.property("id", id);
-    pds::write_graphml(out, graph, id, attr, true);
-}
-
 PdsState::PdsState() : PdsState(PowerGrid{}) { }
 
 PdsState::PdsState(const pds::PowerGrid &graph) : PdsState(PowerGrid{graph}) { }

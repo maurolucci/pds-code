@@ -61,7 +61,7 @@ int main(int argc, const char** argv) {
     using std::string, std::vector;
     desc.add_options()
             ("graph,f", po::value<string>(), "graph input file")
-            ("outfile,o", po::value<string>()->default_value("-"), "graph output file")
+            ("outfile,o", po::value<string>()->required(), "graph output file")
             ("leaves,l", "remove leaves")
             ("paths,p","contract paths")
             ;
@@ -75,10 +75,5 @@ int main(int argc, const char** argv) {
     auto graph = pds::readGraphML(vm["graph"].as<string>());
     shave(graph, vm.count("leaves"), vm.count("paths"));
 
-    std::optional<std::ofstream> outStream;
-    auto outfile = vm["outfile"].as<string>();
-    if (outfile != "-") {
-        outStream = {std::ofstream(outfile)};
-    }
-    pds::exportGraphml(graph, outStream.has_value() ? *outStream : std::cout);
+    pds::writePds(graph, vm["outfile"].as<string>());
 }
