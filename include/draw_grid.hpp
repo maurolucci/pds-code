@@ -76,16 +76,18 @@ public:
 struct Coordinate {
     double x, y;
 };
-map<PowerGrid::VertexDescriptor, Coordinate> layoutGraph(const PowerGrid& graph);
+using Layout = pds::map<long, pds::Coordinate>;
+
+Layout layoutGraph(const PowerGrid& graph);
 
 void drawGrid(const PdsState &state,
               const std::string &filename,
-              const map<PowerGrid::VertexDescriptor, Coordinate>& layout,
+              const Layout& layout,
               const style::DrawingOptions &style);
 
 inline void drawGrid(const PdsState &state,
                      const std::string &filename,
-                     const map<PowerGrid::VertexDescriptor, Coordinate>& layout
+                     const Layout& layout
 ) {
     return drawGrid(state, filename, layout, style::DefaultDrawingOptions{});
 }

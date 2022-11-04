@@ -8,9 +8,7 @@
 #include <ogdf/energybased/FMMMLayout.h>
 #include <ogdf/energybased/fmmm/FMMMOptions.h>
 
-using Layout = pds::map<pds::PowerGrid::VertexDescriptor, pds::Coordinate>;
-
-void writeLayout(const Layout& layout, const std::string& filename) {
+void writeLayout(const pds::Layout& layout, const std::string& filename) {
     FILE* outfile = fopen(filename.c_str(), "wb");
     if (outfile == nullptr) throw std::system_error(std::error_code(errno, std::system_category()));
     fmt::print(outfile, "Layout V1.0\n");
@@ -43,11 +41,11 @@ std::vector<std::string_view> split(const std::string_view& in, char delim) {
     return pieces;
 }
 
-Layout readLayout(const std::string& filename) {
+pds::Layout readLayout(const std::string& filename) {
     std::ifstream infile(filename);
     std::string line;
     size_t lineno = 0;
-    Layout layout;
+    pds::Layout layout;
     std::getline(infile, line);
     ++lineno;
     if (line != "Layout V1.0") throw ParseError { fmt::format("unknown format: {}", line), lineno };
@@ -58,7 +56,7 @@ Layout readLayout(const std::string& filename) {
         if (pieces.size() == 1 && pieces[0] == "") continue; // empty line
         if (pieces.size() != 3) throw ParseError { "not a triple", lineno };
         try {
-            unsigned long v = std::stoi(std::string{pieces[0]});
+            long v = std::stoi(std::string{pieces[0]});
             double x = std::stoi(std::string{pieces[1]});
             double y = std::stoi(std::string{pieces[2]});
             layout[v] = {x, y};
@@ -69,11 +67,9 @@ Layout readLayout(const std::string& filename) {
     return layout;
 }
 
-void restrictLayout(Layout& layout, const pds::PowerGrid& graph) {
-    std::vector<unsigned long> keys = layout | ranges::views::transform([](const auto& kv) { return kv.first;}) | ranges::to<std::vector>;
-    for (auto k: keys) {
-        erase_if(layout,[&graph](const auto& kv) { return !graph.hasVertex(kv.first);});
-    }
+void restrictLayout(pds::Layout& layout, const pds::PowerGrid& graph) {
+    pds::set<long> ids = ranges::transform_view(graph.vertices(), [&graph](auto v) { return graph[v].id; }) | ranges::to<pds::set<long>>;
+    erase_if(layout,[&ids](const auto& kv) { return !ids.contains(kv.first);});
 }
 
 int main(int argc, const char** argv) {

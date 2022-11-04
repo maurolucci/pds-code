@@ -105,15 +105,15 @@ struct FixedBBGraphAttributes : public virtual ogdf::GraphAttributes {
     }
 };
 
-map<PowerGrid::VertexDescriptor, Coordinate> layoutGraph(const PowerGrid &graph) {
+Layout layoutGraph(const PowerGrid &graph) {
     ogdf::Graph G;
-    map<PowerGrid::VertexDescriptor, ogdf::node> id_to_node;
+    map<long, ogdf::node> id_to_node;
     for (auto v: graph.vertices()) {
-        id_to_node.emplace(v, G.newNode());
+        id_to_node.emplace(graph[v].id, G.newNode());
     }
     for (auto e: graph.edges()) {
         auto [s, t] = graph.endpoints(e);
-        G.newEdge(id_to_node.at(s), id_to_node.at(t));
+        G.newEdge(id_to_node.at(graph[s].id), id_to_node.at(graph[t].id));
     }
     ogdf::GraphAttributes GA(G);
     ogdf::FMMMLayout layout;
@@ -124,9 +124,9 @@ map<PowerGrid::VertexDescriptor, Coordinate> layoutGraph(const PowerGrid &graph)
     layout.randSeed(1234);
     layout.call(GA);
 
-    map<PowerGrid::VertexDescriptor, Coordinate> coordinates;
+    Layout coordinates;
     for (auto v: graph.vertices()) {
-        auto node = id_to_node.at(v);
+        auto node = id_to_node.at(graph[v].id);
         coordinates.emplace(v, Coordinate{GA.x(node), GA.y(node)});
     }
     return coordinates;
@@ -134,7 +134,7 @@ map<PowerGrid::VertexDescriptor, Coordinate> layoutGraph(const PowerGrid &graph)
 
 void drawGrid(const PdsState& state,
               const std::string &filename,
-              const map<PowerGrid::VertexDescriptor, Coordinate>& layout,
+              const Layout& layout,
               const style::DrawingOptions &style) {
     ogdf::Graph G;
     ogdf::GraphAttributes GA(
@@ -168,9 +168,9 @@ void drawGrid(const PdsState& state,
     for (auto v: graph.vertices()) {
         auto node = G.newNode();
         id_to_node.emplace(v, node);
-        if (layout.contains(v)) {
-            GA.x(node) = layout.at(v).x;
-            GA.y(node) = layout.at(v).y;
+        if (layout.contains(graph[v].id)) {
+            GA.x(node) = layout.at(graph[v].id).x;
+            GA.y(node) = layout.at(graph[v].id).y;
         } else {
             GA.x(node) = centerx;
             GA.y(node) = centery;
