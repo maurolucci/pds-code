@@ -11,12 +11,16 @@ PowerGrid readEdgeList(const std::string &filename, bool allZeroInjection) {
     }
     std::ifstream infile(filename);
     PowerGrid graph;
+    map<size_t, PowerGrid::VertexDescriptor> vertices;
+    auto getVertex = [&graph, &vertices,allZeroInjection](size_t v) {
+        if (vertices.contains(v)) { return vertices[v]; }
+        vertices[v] = graph.addVertex(Bus{.name=std::to_string(v), .id=static_cast<long>(v), .zero_injection=allZeroInjection});
+        return vertices[v];
+    };
     while (infile) {
         PowerGrid::VertexDescriptor i, j;
         infile >> i >> j;
-        graph.getOrAddVertex(i, Bus{.name=std::to_string(i), .id=long(i), .zero_injection=allZeroInjection});
-        graph.getOrAddVertex(j, Bus{.name=std::to_string(j), .id=long(j), .zero_injection=allZeroInjection});
-        graph.addEdge(i, j);
+        graph.addEdge(getVertex(i), getVertex(j));
     }
     return graph;
 }
@@ -41,6 +45,12 @@ PowerGrid readPtxt(const std::string &filename, bool allZeroInjection) {
     size_t currentNode = -1;
     size_t expectedEdges = 0;
     using namespace std::string_literals;
+    map<size_t, PowerGrid::VertexDescriptor> vertices;
+    auto getVertex = [&graph, &vertices,allZeroInjection](size_t v) {
+        if (vertices.contains(v)) { return vertices[v]; }
+        vertices[v] = graph.addVertex(Bus{.name=std::to_string(v), .id=static_cast<long>(v), .zero_injection=allZeroInjection});
+        return vertices[v];
+    };
     while (std::getline(infile, line)) {
         std::string lower = line;
         ranges::transform(lower, lower.begin(), ::tolower);
@@ -67,11 +77,7 @@ PowerGrid readPtxt(const std::string &filename, bool allZeroInjection) {
                 if (expectedEdges) {
                     trim(lower);
                     size_t target = std::stoi(lower);
-                    graph.getOrAddVertex(currentNode,
-                                         Bus{.name=std::to_string(currentNode), .id=long(currentNode), .zero_injection=allZeroInjection});
-                    graph.getOrAddVertex(target,
-                                         Bus{.name=std::to_string(target), .id=long(target), .zero_injection=allZeroInjection});
-                    graph.addEdge(currentNode, target);
+                    graph.addEdge(getVertex(currentNode), getVertex(target));
                     --expectedEdges;
                 } else {
                     throw std::runtime_error("unexpected line: " + line);
@@ -237,6 +243,7 @@ PowerGrid readPds(const std::string& filename, bool allZeroInjection) {
     }
 
     PowerGrid graph;
+    map<int, PowerGrid::VertexDescriptor> vertices;
     while (infile) {
         std::getline(infile, line);
         ++lineno;
@@ -245,8 +252,10 @@ PowerGrid readPds(const std::string& filename, bool allZeroInjection) {
             if (pieces[0] == "V") {
                 if (pieces.size() < 3) throw ParseError{"too little data", lineno};
                 int v = parseInt(pieces[1], lineno);
-                if (graph.hasVertex(v)) throw ParseError{"duplicate vertex definition", lineno};
-                auto &data = graph.getOrAddVertex(v);
+                if (vertices.contains(v)) throw ParseError{"duplicate vertex definition", lineno};
+                vertices[v] = graph.addVertex();
+                auto &data = graph.getVertex(vertices[v]);
+                data.id = v;
                 data.name = pieces[1];
                 data.zero_injection = allZeroInjection;
                 data.pmu = PmuState::Blank;
@@ -275,9 +284,9 @@ PowerGrid readPds(const std::string& filename, bool allZeroInjection) {
                 }
                 auto s = parseInt(pieces[1], lineno);
                 auto t = parseInt(pieces[2], lineno);
-                if (!graph.hasVertex(s)) throw ParseError { fmt::format("undefined start: {}", s), lineno};
-                if (!graph.hasVertex(t)) throw ParseError { fmt::format("undefined end: {}", s), lineno};
-                graph.addEdge(s, t);
+                if (!vertices.contains(s)) throw ParseError { fmt::format("undefined start: {}", s), lineno};
+                if (!vertices.contains(t)) throw ParseError { fmt::format("undefined end: {}", s), lineno};
+                graph.addEdge(vertices[s],  vertices[t]);
             } else if(pieces[0] != "") {
                 throw ParseError{fmt::format("unexpected line: {}", line), lineno};
             }
@@ -294,7 +303,7 @@ void writePds(const PowerGrid& grid, const std::string& filename) {
     fmt::print(outfile, "G {} {}\n", grid.numVertices(), grid.numEdges());
     for (auto v: grid.vertices()) {
         const auto& data = grid[v];
-        fmt::print(outfile, "V {} \"{}\" ", v, data.name);
+        fmt::print(outfile, "V {} \"{}\" ", data.id, data.name);
         if (data.zero_injection) {
             fmt::print(outfile, "Z");
         }
@@ -310,8 +319,9 @@ void writePds(const PowerGrid& grid, const std::string& filename) {
         }
         fmt::print(outfile, "\n");
     }
+    auto id = [&grid](auto v) {return grid[v].id; };
     for (auto [s, t]: grid.edges() | ranges::views::transform([&grid](auto e) { return grid.endpoints(e); })) {
-        fmt::print(outfile, "E {} {}\n", s, t);
+        fmt::print(outfile, "E {} {}\n", id(s), id(t));
     }
     fclose(outfile);
 }
