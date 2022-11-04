@@ -4,7 +4,7 @@ list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(Boost 1.70 REQUIRED COMPONENTS graph program_options)
+find_package(Boost 1.70 REQUIRED COMPONENTS program_options)
 
 include(FetchContent)
 set(FETCHCONTENT_TRY_FIND_PACKAGE_MODE OPT_IN)
@@ -36,6 +36,7 @@ target_include_directories(OGDF SYSTEM INTERFACE ${TMP_OGDF_INCLUDE_DIRS})
 add_subdirectory(contrib/mpgraphs)
 find_package(Gurobi REQUIRED)
 find_package(range-v3 REQUIRED)
+find_package(tinyxml2 REQUIRED)
 
 function(enable_warnings target)
     target_compile_options(${target} PRIVATE
@@ -47,7 +48,7 @@ endfunction()
 
 add_library(pdslib STATIC src/pds/pds.cpp src/pds/graphml.cpp src/pds/draw_grid.cpp src/pds/graphio.cpp)
 target_include_directories(pdslib PUBLIC include)
-target_link_libraries(pdslib PRIVATE Boost::graph)
+target_link_libraries(pdslib PRIVATE tinyxml2)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC mpgraphs unordered_dense::unordered_dense PRIVATE OGDF)
 enable_warnings(pdslib)

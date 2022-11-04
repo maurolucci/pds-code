@@ -1,10 +1,6 @@
 #include "graphio.hpp"
 
-#include "mpgraphs/boost_adapter.hpp"
-#include <boost/property_map/function_property_map.hpp>
-#include "graphml/graphml.hpp"
-
-
+#include <tinyxml2.h>
 
 namespace pds {
 
@@ -93,27 +89,6 @@ PowerGrid readPtxt(const std::string &filename, bool allZeroInjection) {
     return graph;
 }
 
-PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
-    PowerGrid graph;
-    boost::dynamic_properties attr(boost::ignore_other_properties);
-    map<PowerGrid::VertexDescriptor, long> zero_injection_data;
-    boost::associative_property_map zero_injection(zero_injection_data);
-    auto id_map = [&graph](const PowerGrid::VertexDescriptor &vertex) -> long & { return graph[vertex].id; };
-    auto name_map = [&graph](PowerGrid::VertexDescriptor vertex) -> std::string & { return graph[vertex].name; };
-    boost::function_property_map<decltype(id_map), PowerGrid::VertexDescriptor> id(id_map);
-    boost::function_property_map<decltype(name_map), PowerGrid::VertexDescriptor> name(name_map);
-    attr.property("zero_injection", zero_injection);//make_vector_property_map(long_zi, graph));
-    attr.property("name", name);
-    attr.property("id", id);
-    std::ifstream graph_in(filename);
-    read_graphml(graph_in, graph, attr);
-    graph_in.close();
-    for (auto v: graph.vertices()) {
-        graph[v].zero_injection = zero_injection[v] || all_zero_injection;
-    }
-    return graph;
-}
-
 struct ParseError : std::exception {
 private:
     std::string reason;
@@ -127,6 +102,90 @@ public:
         return reason.c_str();
     }
 };
+
+namespace {
+struct GraphMLAttribute {
+    std::string type;
+    std::string name;
+};
+bool parseBool(const std::string& text) {
+    auto boolString = ranges::transform_view(text, [](auto c) { return std::tolower((unsigned char) c); }) | ranges::to<std::string>;
+    if (boolString == "false" || boolString == "0" || boolString == "" || boolString == "no") return false;
+    return true;
+}
+}
+
+PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
+    using namespace std::string_literals;
+    PowerGrid outgraph;
+    tinyxml2::XMLDocument doc;
+    auto err = doc.LoadFile(filename.c_str());
+    if (err != tinyxml2::XMLError::XML_SUCCESS) {
+        throw ParseError(doc.ErrorIDToName(err), 0);
+    }
+    auto graphml = doc.FirstChildElement("graphml");
+    if (!graphml) throw ParseError("no graphml content", doc.GetLineNum());
+    auto graph = graphml->FirstChildElement("graph");
+    if (!graph) throw ParseError("no graph", graphml->GetLineNum());
+    auto attributes = graphml->FirstChildElement("key");
+    map<const char*, GraphMLAttribute> nodeAttributes;
+    while (attributes) {
+        const char *id, *type, *element, *name;
+        auto queryAttribute = [&doc, &attributes](const char* name, const char** attr) -> bool {
+            auto err = attributes->QueryAttribute(name, attr);
+            if (err) {
+                fmt::print(stderr, "[WARN] cannot read attribute {}: {}", name, doc.ErrorIDToName(err));
+                return false;
+            } else { return true; }
+        };
+        if (queryAttribute("id", &id)
+            && queryAttribute("for", &element)
+            && queryAttribute("attr.type", &type)
+            && queryAttribute("attr.name", &name)
+        ) {
+            nodeAttributes["id"] = {type, name};
+        }
+        attributes = attributes->NextSiblingElement("key");
+
+    }
+    auto node = graph->FirstChildElement("node");
+    map<std::string, PowerGrid::VertexDescriptor> vertices;
+    while (node) {
+        const char* key;
+        if (node->QueryAttribute("id", &key)) throw ParseError("invalid node", node->GetLineNum());
+        auto vertex = outgraph.addVertex(Bus {
+            .name=key,
+            .id=static_cast<long>(vertices.size()),
+            .zero_injection=all_zero_injection,
+            .pmu=PmuState::Blank
+        });
+        vertices[key] = vertex;
+        auto data = node->FirstChildElement("data");
+        while (data) {
+            auto text = data->GetText();
+            if (!text) throw ParseError("could not read text", data->GetLineNum());
+            if (!data->QueryAttribute("key", &key)) {
+                if ("zero_injection"s == nodeAttributes[key].name) {
+                    outgraph.getVertex(vertex).zero_injection = parseBool(text);
+                } else if ("name"s == nodeAttributes[key].name) {
+                    outgraph.getVertex(vertex).name = text;
+                }
+            }
+            data = data->NextSiblingElement("data");
+        }
+        node = node->NextSiblingElement("node");
+    }
+    auto edge = graph->FirstChildElement("edge");
+    while (edge) {
+        const char* source, * target;
+        if (edge->QueryAttribute("source", &source)) throw ParseError("cannot parse edge source", edge->GetLineNum());
+        if (edge->QueryAttribute("target", &target)) throw ParseError("cannot parse edge target", edge->GetLineNum());
+        if (!vertices.contains(source) || !vertices.contains(target)) throw ParseError("invalid edge", edge->GetLineNum());
+        outgraph.addEdge(vertices[source], vertices[target]);
+        edge = edge->NextSiblingElement("edge");
+    }
+    return outgraph;
+}
 
 std::vector<std::string_view> split(const std::string_view& in, char delim) {
     std::vector<std::string_view> pieces;
@@ -225,7 +284,7 @@ PowerGrid readPds(const std::string& filename, bool allZeroInjection) {
         }
     }
     if (graph.numVertices() != numVertices) throw ParseError { fmt::format("expected {} vertices but got {}", numVertices, graph.numVertices()), lineno};
-    if (graph.numEdges() != numEdges) throw ParseError { fmt::format("expected {} vertices but got {}", numVertices, graph.numVertices()), lineno};
+    if (graph.numEdges() != numEdges) throw ParseError { fmt::format("expected {} edges but got {}", numEdges, graph.numEdges()), lineno};
     return graph;
 }
 
@@ -251,7 +310,7 @@ void writePds(const PowerGrid& grid, const std::string& filename) {
         }
         fmt::print(outfile, "\n");
     }
-    for (auto [s, t]: grid.edges()) {
+    for (auto [s, t]: grid.edges() | ranges::views::transform([&grid](auto e) { return grid.endpoints(e); })) {
         fmt::print(outfile, "E {} {}\n", s, t);
     }
     fclose(outfile);
