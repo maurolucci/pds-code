@@ -485,14 +485,14 @@ bool PdsState::collapseObservedEdges() {
         auto [s, t] = m_graph.endpoints(e);
         return isObserved(s) && isObserved(t);
     };
-    auto edges = m_graph.edges() | ranges::views::filter(isObservedEdge) | ranges::to<std::vector>();
+    auto edges = m_graph.edges() | ranges::views::filter(isObservedEdge) | ranges::views::transform([this](auto e) {return m_graph.endpoints(e); }) | ranges::to<std::vector>();
     if (edges.empty()) return false;
     auto closestActive = findClosestActive(*this);
 
     for (auto e: edges) {
-        auto [s, t] = m_graph.endpoints(e);
+        auto [s, t] = e;
         if (s == closestActive.at(t) || t == closestActive.at(s)) continue;
-        m_graph.removeEdge(e);
+        m_graph.removeEdge(s, t);
         m_dependencies.removeEdge(s, t);
         m_dependencies.removeEdge(t, s);
         changed = true;
