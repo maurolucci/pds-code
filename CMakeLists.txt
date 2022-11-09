@@ -80,5 +80,3 @@ add_executable(draw_grid drawGrid.cpp)
 target_link_libraries(draw_grid PUBLIC pdslib fmt::fmt Boost::program_options OGDF)
 
 add_subdirectory(testgraphs)
-enable_testing()
-add_subdirectory(test)
