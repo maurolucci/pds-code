@@ -10,51 +10,6 @@
 #include <cassert>
 
 namespace pds {
-template<std::integral T, class Bool = bool>
-class VecSet {
-public:
-    VecSet() : m_size{0}, m_content{} {};
-
-    VecSet(const VecSet &other) = default;
-
-    VecSet(VecSet &&other) = default;
-
-    VecSet &operator=(const VecSet &) = default;
-
-    VecSet &operator=(VecSet &&) = default;
-
-    void clear() {
-        m_content.clear();
-    }
-
-    void insert(const T &x) {
-        assert(x > 0);
-        if (m_content.size() <= x) {
-            m_content.resize(x + 1, false);
-        }
-        if (!m_content[x]) {
-            m_content[x] = true;
-            ++m_size;
-        }
-    }
-
-    inline void erase(const T &x) {
-        if (validKey(x) && m_content[x]) {
-            m_content[x] = false;
-            --m_size;
-        }
-    }
-
-    inline bool validKey(const T &x) const { return x >= 0 && static_cast<size_t>(x) < m_content.size(); }
-
-    inline bool contains(const T &x) const { validKey(x) && m_content[x]; }
-
-    inline size_t count(const T &x) const { return contains(x); }
-
-private:
-    std::vector <Bool> m_content;
-    size_t m_size;
-};
 
 template<std::integral K, class V, std::integral Timestamp = bool, class Allocator = std::allocator <V>>
 class VecMap {
