@@ -57,6 +57,9 @@ add_library(pdslib-gurobi src/pds/gurobi_solve.cpp)
 target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 enable_warnings(pdslib-gurobi)
 
+add_library(vecmap INTERFACE)
+target_include_directories(vecmap INTERFACE include)
+
 add_executable(pds main.cpp)
 target_link_libraries(pds PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::program_options)
 enable_warnings(pds)
@@ -77,3 +80,5 @@ add_executable(draw_grid drawGrid.cpp)
 target_link_libraries(draw_grid PUBLIC pdslib fmt::fmt Boost::program_options OGDF)
 
 add_subdirectory(testgraphs)
+enable_testing()
+add_subdirectory(test)

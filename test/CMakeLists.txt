@@ -1,0 +1,22 @@
+find_package(Boost REQUIRED COMPONENTS unit_test_framework)
+set(TEST_LOGGING unit_scope CACHE STRING "test log level")
+
+set(TEST_MAIN_FILE ${CMAKE_CURRENT_BINARY_DIR}/test/test_main.cpp)
+file(WRITE ${TEST_MAIN_FILE} "#define BOOST_TEST_MODULE ${name}\n#include <boost/test/unit_test.hpp>")
+add_library(test-main ${TEST_MAIN_FILE})
+target_link_libraries(test-main PUBLIC Boost::unit_test_framework)
+
+function(create_test name source)
+    set(multiValueArgs LINK)
+    cmake_parse_arguments(PARSE_ARGV 2 TMP "" "" "${multiValueArgs}")
+    #add_library(${name}-test-main ${TEST_MAIN_FILE})
+    #target_link_libraries(${name}-test-main PUBLIC Boost::unit_test_framework)
+    add_executable(${name} ${source})
+    target_link_libraries("${name}" PRIVATE test-main)
+    target_link_libraries("${name}" PUBLIC ${TMP_LINK})
+    add_test(NAME ${name} COMMAND $<TARGET_FILE:${name}> -l ${TEST_LOGGING})
+    target_compile_definitions(${name} PUBLIC BOOST_TEST_DYN_LINK)
+    enable_warnings(${name})
+endfunction()
+
+create_test(TestVecMap testVecMap.cpp LINK vecmap fmt::fmt)
