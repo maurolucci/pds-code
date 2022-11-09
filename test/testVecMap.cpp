@@ -2,7 +2,6 @@
 // Created by max on 07.11.22.
 //
 #include <boost/test/unit_test.hpp>
-#include <map>
 #include "vecmap.hpp"
 #include <fmt/format.h>
 #include <range/v3/all.hpp>
@@ -108,7 +107,7 @@ BOOST_AUTO_TEST_CASE(insert_delete) {
         BOOST_TEST(testMap[k].value == v.value);
     }
     BOOST_TEST(DeStruct::instances() == NUM_INSERT);
-    for (const auto& kv: static_cast<const decltype(testMap)&>(testMap)) {
+    for (const auto kv: static_cast<const decltype(testMap)&>(testMap)) {
         auto k = kv.first;
         auto& v = kv.second;
         BOOST_TEST(testMap.contains(k));

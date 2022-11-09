@@ -69,7 +69,7 @@ class VecMap {
         Iterator& operator=(Iterator&&) = default;
 
         Iterator(Map *base, size_t i) : base(base), i(i) {
-            while (i < base->m_present.size() && !base->m_present[i]) {
+            while (i < base->capacity() && !base->contains(i)) {
                 ++i;
             }
         }
@@ -79,15 +79,15 @@ class VecMap {
         }
 
         IteratorPair<const Map> operator*() const {
-            return {i, base->m_present[i]};
+            return {i, base->m_content[i]};
         }
 
         pointer operator->() requires (!std::is_const_v < Map > ) {
-            return std::make_unique<IteratorPair<Map>>(IteratorPair<Map>{i, base->m_present[i]});
+            return std::make_unique<IteratorPair<Map>>(IteratorPair<Map>{i, base->m_content[i]});
         }
 
         pointer operator->() const {
-            return std::make_unique<IteratorPair<Map>>(IteratorPair<Map>{i, base->m_present[i]});
+            return std::make_unique<IteratorPair<Map>>(IteratorPair<Map>{i, base->m_content[i]});
         }
 
         Iterator &operator++() {

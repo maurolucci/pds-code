@@ -20,3 +20,4 @@ function(create_test name source)
 endfunction()
 
 create_test(TestVecMap testVecMap.cpp LINK vecmap fmt::fmt)
+create_test(TestVecSet testVecSet.cpp LINK vecmap fmt::fmt)
