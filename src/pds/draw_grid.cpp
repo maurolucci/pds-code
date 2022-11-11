@@ -198,13 +198,13 @@ void drawGrid(const PdsState& state,
         auto edgeStyle = style.edgeStyle(nodeState(s), nodeState(t));
         GA.strokeColor(edge) = style::toOgdf(edgeStyle.color);
         GA.strokeWidth(edge) = edgeStyle.thickness;
-        if (state.isObservedEdge(s, t)) {
-            if (state.isObservedEdge(t, s)) {
+        if (state.isObservingEdge(s, t)) {
+            if (state.isObservingEdge(t, s)) {
                 GA.arrowType(edge) = ogdf::EdgeArrow::Both;
             } else {
                 GA.arrowType(edge) = ogdf::EdgeArrow::Last;
             }
-        } else if (state.isObservedEdge(t, s)) {
+        } else if (state.isObservingEdge(t, s)) {
             GA.arrowType(edge) = ogdf::EdgeArrow::First;
         } else {
             GA.arrowType(edge) = ogdf::EdgeArrow::None;

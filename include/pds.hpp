@@ -17,6 +17,8 @@
 #include "map.hpp"
 #include "utility.hpp"
 #include <mpgraphs/graph.hpp>
+#include <mpgraphs/vecmap.hpp>
+#include <mpgraphs/vecset.hpp>
 
 namespace pds {
 
@@ -69,11 +71,13 @@ class PdsState {
 public:
     using Vertex = PowerGrid::VertexDescriptor;
 private:
-    pds::map<Vertex, ssize_t> m_unobserved_degree;
+    mpgraphs::VecMap<Vertex, ssize_t> m_unobserved_degree;
+    mpgraphs::VecSet<Vertex> m_seen;
     size_t m_numActive;
     size_t m_numInactive;
     PowerGrid m_graph;
-    mpgraphs::MapGraph<mpgraphs::Empty, mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional> m_dependencies;
+    mpgraphs::VecGraph<mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional> m_dependencies;
+    //mpgraphs::MapGraph<mpgraphs::Empty, mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional> m_dependencies;
 
     void propagate(std::vector<Vertex>& queue);
 
@@ -82,7 +86,7 @@ private:
 
     inline bool disableLowDegreeRecursive(
             PowerGrid::VertexDescriptor start,
-            set<PowerGrid::VertexDescriptor>& seen
+            mpgraphs::VecSet<PdsState::Vertex>& seen
     );
 
 public:
@@ -111,7 +115,7 @@ public:
 
     inline bool isObserved(Vertex vertex) const { return m_dependencies.hasVertex(vertex); }
 
-    inline bool isObservedEdge(Vertex source, Vertex target) const { return m_dependencies.edge(source, target).has_value(); }
+    inline bool isObservingEdge(Vertex source, Vertex target) const { return m_dependencies.edge(source, target).has_value(); }
 
     inline size_t unobservedDegree(Vertex v) const {
         assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));
@@ -149,6 +153,7 @@ public:
     }
 
     inline const PowerGrid& graph() const { return m_graph; }
+    inline auto observationGraph() const { return m_dependencies; }
 
     inline PowerGrid && graph() { return std::move(m_graph); }
 

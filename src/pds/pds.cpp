@@ -104,7 +104,7 @@ bool PdsState::observeOne(Vertex vertex, Vertex origin, std::vector<Vertex>& que
             m_unobserved_degree[w] -= 1;
             if (m_unobserved_degree[w] == 1 && isObserved(w) && isZeroInjection(w)) queue.push_back(w);
         }
-        assert(isActive(vertex) || !m_dependencies.hasVertex(vertex) || m_dependencies.inDegree(vertex) > 0);
+        assert(isActive(vertex) || !isObserved(vertex) || m_dependencies.inDegree(vertex) > 0);
         return true;
     } else {
         return false;
@@ -123,7 +123,7 @@ bool PdsState::observe(Vertex vertex, Vertex origin) {
     }
 }
 
-bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, set<PdsState::Vertex> &seen) {
+bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, mpgraphs::VecSet<PdsState::Vertex> &seen) {
     auto hasBlankNeighbor = [this] (auto v) {
         return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w) || isBlank(w);} );
     };
@@ -276,12 +276,17 @@ bool PdsState::collapseLeaves() {
 
 bool PdsState::disableLowDegree() {
     bool changed = false;
-    set<PdsState::Vertex> seen;
+    //set<PdsState::Vertex> seen;
+    assert(m_seen.empty());
     for (auto v: m_graph.vertices()) {
         if (m_graph.degree(v) >= 3) {
-            changed = disableLowDegreeRecursive(v, seen);
+            changed = disableLowDegreeRecursive(v, m_seen);
         }
     }
+    for (auto v: m_graph.vertices()) {
+        m_seen.erase(v);
+    }
+    assert(m_seen.empty());
     return changed;
 }
 
@@ -456,6 +461,14 @@ bool PdsState::activateNecessaryNodes() {
     return necessary.size() > 0;
 }
 
+PdsState::Vertex findActiveParent(const PdsState& state, PdsState::Vertex vertex) {
+    while (!state.isActive(vertex)) {
+        assert(!ranges::empty(state.observationGraph().inNeighbors(vertex)));
+        vertex = *(state.observationGraph().inNeighbors(vertex).begin());
+    }
+    return vertex;
+}
+
 map<PdsState::Vertex, PdsState::Vertex> findClosestActive(const PdsState& state) {
     using Vertex = PdsState::Vertex;
     std::deque<Vertex> queue;
@@ -485,33 +498,48 @@ bool PdsState::collapseObservedEdges() {
         auto [s, t] = m_graph.endpoints(e);
         return isObserved(s) && isObserved(t);
     };
-    auto edges = m_graph.edges() | ranges::views::filter(isObservedEdge) | ranges::views::transform([this](auto e) {return m_graph.endpoints(e); }) | ranges::to<std::vector>();
+    auto edges = m_graph.edges()
+            | ranges::views::filter(isObservedEdge)
+            | ranges::views::transform([this](auto e) { return graph().endpoints(e); })
+            | ranges::to<std::vector>();
     if (edges.empty()) return false;
-    auto closestActive = findClosestActive(*this);
+    //auto closestActive = findClosestActive(*this);
 
+#ifndef NDEBUG
+    for (auto v: graph().vertices()) {
+        assert(!isObserved(v) || isActive(v) || !ranges::empty(m_dependencies.inNeighbors(v)));
+    }
+#endif
     for (auto e: edges) {
         auto [s, t] = e;
-        if (s == closestActive.at(t) || t == closestActive.at(s)) continue;
+        if ((!isActive(s) && isActive(t) && isObservingEdge(t, s)) || (!isActive(t) && isActive(s) && isObservingEdge(s, t))) { continue; }
         m_graph.removeEdge(s, t);
+        auto closestS = findActiveParent(*this, s);
+        auto closestT = findActiveParent(*this, t);
         m_dependencies.removeEdge(s, t);
         m_dependencies.removeEdge(t, s);
         changed = true;
         auto hasObservedNeighbor = [this](Vertex v) -> bool { return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w);});};
         if (!isActive(s)) {
-            auto closest = closestActive.at(s);
             if (!hasObservedNeighbor(s)) {
-                addEdge(s, closest);
+                addEdge(s, closestS);
             }
-            m_dependencies.addEdge(closest, s);
+            m_dependencies.addEdge(closestS, s);
         }
         if (!isActive(t)) {
-            auto closest = closestActive.at(t);
             if (!hasObservedNeighbor(t)) {
-                addEdge(t, closest);
+                addEdge(t, closestT);
             }
-            m_dependencies.addEdge(closest, t);
+            m_dependencies.addEdge(closestT, t);
         }
+        assert(isActive(s) || !ranges::empty(m_dependencies.inNeighbors(s)));
+        assert(isActive(t) || !ranges::empty(m_dependencies.inNeighbors(t)));
     }
+#ifndef NDEBUG
+    for (auto v: graph().vertices()) {
+        assert(!isObserved(v) || isActive(v) || !ranges::empty(m_dependencies.inNeighbors(v)));
+    }
+#endif
 
     return changed;
 }
