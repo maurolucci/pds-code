@@ -123,7 +123,7 @@ bool PdsState::observe(Vertex vertex, Vertex origin) {
     }
 }
 
-bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, mpgraphs::VecSet<PdsState::Vertex> &seen) {
+bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, VertexSet &seen) {
     auto hasBlankNeighbor = [this] (auto v) {
         return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w) || isBlank(w);} );
     };

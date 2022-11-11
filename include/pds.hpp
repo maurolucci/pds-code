@@ -45,7 +45,12 @@ struct Bus {
     PmuState pmu;
 };
 
-using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected>;
+using Timestamp = std::uint8_t;
+using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected, true, Timestamp>;
+using ObservationGraph = mpgraphs::VecGraph<mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional, true, Timestamp>;
+using VertexSet = mpgraphs::VecSet<PowerGrid::VertexDescriptor, Timestamp>;
+template<typename T>
+using VertexMap = mpgraphs::VecMap<PowerGrid::VertexDescriptor, T, Timestamp>;
 
 template<class T>
 size_t intersectionSize(const set<T>& first, const set<T>& second) {
@@ -71,12 +76,12 @@ class PdsState {
 public:
     using Vertex = PowerGrid::VertexDescriptor;
 private:
-    mpgraphs::VecMap<Vertex, ssize_t> m_unobserved_degree;
-    mpgraphs::VecSet<Vertex> m_seen;
+    VertexMap<ssize_t> m_unobserved_degree;
+    VertexSet m_seen;
     size_t m_numActive;
     size_t m_numInactive;
     PowerGrid m_graph;
-    mpgraphs::VecGraph<mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional> m_dependencies;
+    ObservationGraph m_dependencies;
     //mpgraphs::MapGraph<mpgraphs::Empty, mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional> m_dependencies;
 
     void propagate(std::vector<Vertex>& queue);
@@ -86,7 +91,7 @@ private:
 
     inline bool disableLowDegreeRecursive(
             PowerGrid::VertexDescriptor start,
-            mpgraphs::VecSet<PdsState::Vertex>& seen
+            VertexSet& seen
     );
 
 public:
@@ -153,7 +158,7 @@ public:
     }
 
     inline const PowerGrid& graph() const { return m_graph; }
-    inline auto observationGraph() const { return m_dependencies; }
+    inline const auto& observationGraph() const { return m_dependencies; }
 
     inline PowerGrid && graph() { return std::move(m_graph); }
 
