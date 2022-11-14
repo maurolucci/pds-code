@@ -45,12 +45,20 @@ struct Bus {
     PmuState pmu;
 };
 
+#ifdef USE_HASHMAP
+using PowerGrid = mpgraphs::MapGraph<Bus, mpgraphs::Empty, mpgraphs::EdgeDirection::Undirected>;
+using ObservationGraph = mpgraphs::MapGraph<mpgraphs::Empty, mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional>;
+using VertexSet = mpgraphs::set<PowerGrid::VertexDescriptor>;
+template<typename T>
+using VertexMap = mpgraphs::map<PowerGrid::VertexDescriptor, T>;
+#else
 using Timestamp = std::uint8_t;
 using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected, true, Timestamp>;
 using ObservationGraph = mpgraphs::VecGraph<mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional, true, Timestamp>;
 using VertexSet = mpgraphs::VecSet<PowerGrid::VertexDescriptor, Timestamp>;
 template<typename T>
 using VertexMap = mpgraphs::VecMap<PowerGrid::VertexDescriptor, T, Timestamp>;
+#endif
 
 template<class T>
 size_t intersectionSize(const set<T>& first, const set<T>& second) {
