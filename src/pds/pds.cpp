@@ -4,7 +4,6 @@
 
 #include "mpgraphs/boost_adapter.hpp"
 #include "pds.hpp"
-#include "graphml/graphml.hpp"
 
 #include <boost/property_map/function_property_map.hpp>
 #include "utility.hpp"
