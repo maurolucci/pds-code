@@ -123,6 +123,7 @@ bool parseBool(const std::string& text) {
 
 PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
     using namespace std::string_literals;
+    using std::string;
     PowerGrid outgraph;
     tinyxml2::XMLDocument doc;
     auto err = doc.LoadFile(filename.c_str());
@@ -134,7 +135,7 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
     auto graph = graphml->FirstChildElement("graph");
     if (!graph) throw ParseError("no graph", graphml->GetLineNum());
     auto attributes = graphml->FirstChildElement("key");
-    map<const char*, GraphMLAttribute> nodeAttributes;
+    map<string, GraphMLAttribute> nodeAttributes;
     while (attributes) {
         const char *id, *type, *element, *name;
         auto queryAttribute = [&doc, &attributes](const char* name, const char** attr) -> bool {
@@ -149,7 +150,7 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
             && queryAttribute("attr.type", &type)
             && queryAttribute("attr.name", &name)
         ) {
-            nodeAttributes["id"] = {type, name};
+            nodeAttributes[id] = {type, name};
         }
         attributes = attributes->NextSiblingElement("key");
 
@@ -172,7 +173,7 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
             if (!text) throw ParseError("could not read text", data->GetLineNum());
             if (!data->QueryAttribute("key", &key)) {
                 if ("zero_injection"s == nodeAttributes[key].name) {
-                    outgraph.getVertex(vertex).zero_injection = parseBool(text);
+                    outgraph.getVertex(vertex).zero_injection = all_zero_injection || parseBool(text);
                 } else if ("name"s == nodeAttributes[key].name) {
                     outgraph.getVertex(vertex).name = text;
                 }

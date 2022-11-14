@@ -158,6 +158,7 @@ int main(int argc, const char** argv) {
             ("subproblems,u", "split into subproblems before calling solve")
             ("timeout,t", po::value<double>()->default_value(600.), "gurobi time limit (seconds)")
             ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
+            ("write,w", po::value<string>()->implicit_value("solutions"s), "write solutions to the specified directory")
             ("stat-file", po::value<string>(), "write statistics about solutions")
     ;
     po::positional_options_description pos;
@@ -217,6 +218,14 @@ int main(int argc, const char** argv) {
             fs::create_directories(*drawdir);
         }
     }
+    std::optional<fs::path> solDir;
+    if (vm.count("write")) {
+        solDir = vm["write"].as<string>();
+        if (!fs::is_directory(*solDir)) {
+            fs::create_directories(*solDir);
+        }
+    }
+
     bool subproblems = vm.count("subproblems");
 
     std::vector<string> inputs;
@@ -290,6 +299,13 @@ int main(int argc, const char** argv) {
             if (drawdir) {
                 writePds(reduced.graph(), fmt::format("{}/1_reductions.pds", drawdir->string()));
                 writePds(state.graph(), fmt::format("{}/2_solved_preprocessed.pds", drawdir->string()));
+            }
+            if (solDir) {
+                auto name = fs::path(filename).filename().string();
+                auto end = name.rfind('.');
+                name = name.substr(0, end);
+                auto solPath = *solDir / fmt::format("{}_{}.pds", name, i);
+                writePds(state.graph(), solPath);
             }
             size_t pmus = state.numActive();
             fmt::memory_buffer buf;
