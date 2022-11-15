@@ -102,6 +102,67 @@ size_t treeWidth(const PowerGrid& graph) {
     return decomposition->maximumBagSize();
 }
 
+VertexMap<size_t> propagationDistance(const PowerGrid& graph)  {
+    using Vertex = PowerGrid::VertexDescriptor;
+    VertexMap<ssize_t> unobservedDegree;
+    VertexMap<size_t> step;
+    std::deque<Vertex> queue;
+    for (auto v: graph.vertices()) {
+        unobservedDegree[v] += graph.degree(v);
+        if (graph.getVertex(v).pmu == PmuState::Active) {
+            step.insert_or_assign(v, 0);
+            for (auto w: graph.neighbors(v)) {
+                unobservedDegree[w] -= 1;
+                if (!step.contains(w) && graph.getVertex(w).pmu != pds::PmuState::Active) {
+                    step.insert_or_assign(w, step.at(v) + 1);
+                    for (auto u: graph.neighbors(w)) {
+                        unobservedDegree[u] -= 1;
+                    }
+                }
+            }
+        }
+    }
+    for (auto v: graph.vertices()) {
+        if (step.contains(v) && unobservedDegree[v] == 1) queue.push_back(v);
+    }
+    for (auto v: graph.vertices()) {
+        auto neighbors = graph.neighbors(v) | ranges::to<std::vector>;
+        size_t unobserved = std::ranges::distance(neighbors | ranges::views::filter([&step](auto v) { return !step.contains(v); }));
+        unused(unobserved);
+        assert(unobservedDegree[v] == unobserved);
+        assert(!step.contains(v) || step[v] == (graph.getVertex(v).pmu != PmuState::Active));
+        if (graph.getVertex(v).pmu == pds::PmuState::Active) {
+            for (auto w: graph.neighbors(v)) {
+                assert(step.contains(w));
+            }
+        }
+    }
+    while (!queue.empty()) {
+        auto v = queue.front();
+        queue.pop_front();
+        if (unobservedDegree[v] == 1) {
+            for (auto w: graph.neighbors(v)) {
+                if (!step.contains(w)) {
+                    step[w] = step[v] + 1;
+                    for (auto u: graph.neighbors(w)) {
+                        unobservedDegree[u] -= 1;
+                        if (unobservedDegree[u] == 1 && step.contains(u)) {
+                            queue.push_back(u);
+                        }
+                    }
+                    if (unobservedDegree[w] == 1) {
+                        queue.push_back(w);
+                    }
+                }
+            }
+        }
+    }
+    for (auto v: graph.vertices()) {
+        assert(unobservedDegree[v] == std::ranges::distance(graph.neighbors(v) | ranges::views::filter([&step](auto v) { return !step.contains(v); })));
+    }
+    return step;
+}
+
 void writeSolutionStatistics(const std::string_view& name, const PdsState& state, FILE* out) {
     using namespace fmt::literals;
     size_t maxDegree = 0;
@@ -121,9 +182,12 @@ void writeSolutionStatistics(const std::string_view& name, const PdsState& state
         }
         degreeCount.push_back(fmt::format("{}", fmt::join(deg, ":")));
     }
+    auto step = propagationDistance(state.graph());
+    ssize_t maxStep = -1;
+    for (auto v: step) maxStep = std::max(maxStep, ssize_t(v.second));
     fmt::print(
             out,
-            "{name},{n},{m},{n_zero_injection},{n_pmu},{n_inactive},{n_blank},{n_observed},{tree_width},\"{degrees}\"\n",
+            "{name},{n},{m},{n_zero_injection},{n_pmu},{n_inactive},{n_blank},{n_observed},{propagation_distance},{tree_width},\"{degrees}\"\n",
             "name"_a=name,
             "n"_a=state.graph().numVertices(),
             "m"_a=state.graph().numEdges(),
@@ -132,6 +196,7 @@ void writeSolutionStatistics(const std::string_view& name, const PdsState& state
             "n_inactive"_a=state.numInactive(),
             "n_blank"_a=state.graph().numVertices() - state.numActive() - state.numInactive(),
             "n_observed"_a=state.numObserved(),
+            "propagation_distance"_a=maxStep,
             "tree_width"_a=treeWidth(state.graph()),
             "degrees"_a=fmt::join(degreeCount, ";")
     );
@@ -252,7 +317,7 @@ int main(int argc, const char** argv) {
         statFile = fopen(statFileName.c_str(), "w");
         fmt::print(statFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
         fmt::print(statFile, "# degrees format: <#zi+inactive>:<#zi+blank>:<#zi+active>:<#nonzi+inactive>:<#nonzi+blank>:<#nonzi.active>;...\n");
-        fmt::print(statFile, "{}", "name,n,m,n_zero_injection,n_pmu,n_inactive,n_blank,n_observed,tree_width,degrees\n");
+        fmt::print(statFile, "{}", "name,n,m,n_zero_injection,n_pmu,n_inactive,n_blank,n_observed,propagation_distance,tree_width,degrees\n");
     }
 
     for (auto out: outputs) {

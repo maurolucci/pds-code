@@ -176,7 +176,7 @@ SolveState solveBranching(PdsState &state,
     auto upper = sensorBounds(heuristic).second;
     fmt::print("heuristic result: {}\n", upper);
     size_t lower = 0;
-    auto compare = [](const auto& first, const auto& second) { return 2 * first.first.first + first.first.second > 2 * second.first.first + second.first.second; };
+    auto compare = [](const auto& first, const auto& second) { return first.first.first > second.first.first; };
     using Element = std::pair<Bounds, PdsState>;
     std::priority_queue<Element, std::vector<Element>, decltype(compare)> queue(compare);
     queue.push({sensorBounds(state), state});
