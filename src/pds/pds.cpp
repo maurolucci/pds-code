@@ -598,29 +598,15 @@ std::vector<PdsState> PdsState::subproblems(bool nonZiSeparators) const {
                     subgraph.removeVertex(x);
                 }
             }
-            auto dummy = subgraph.addVertex();
-            auto oneActive = dummy;
+            std::optional<Vertex> oneActive;
             PdsState subproblem(std::move(subgraph));
             for (auto x: subproblem.graph().vertices()) {
-                if (x == dummy) continue;
                 if (isActive(x)) {
                     subproblem.setActive(x);
-                    oneActive = x;
+                    oneActive = {x};
                 } else if (isInactive(x)) {
                     subproblem.setInactive(x);
                 }
-            }
-            bool dummyNeeded = false;
-            for (auto x: subproblem.graph().vertices()) {
-                if (x == dummy) continue;
-                if (isObserved(x) && !subproblem.isObserved(x)) {
-                    subproblem.addEdge(x, oneActive);
-                    dummyNeeded = true;
-                }
-            }
-            subproblem.setActive(oneActive);
-            if (oneActive != dummy || !dummyNeeded) {
-                subproblem.removeVertex(dummy);
             }
             components.emplace_back(std::move(subproblem));
         }
