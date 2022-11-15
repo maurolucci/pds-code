@@ -370,7 +370,19 @@ int main(int argc, const char** argv) {
                 auto end = name.rfind('.');
                 name = name.substr(0, end);
                 auto solPath = *solDir / fmt::format("{}_{}.pds", name, i);
-                writePds(state.graph(), solPath);
+                auto solution = inputState.graph();
+                for (auto v: solution.vertices()) {
+                    if (!state.graph().hasVertex(v)) {
+                        solution.getVertex(v).pmu = PmuState::Inactive;
+                    } else {
+                        if (state.isActive(v)) {
+                            solution.getVertex(v).pmu = PmuState::Active;
+                        } else if (state.isInactive(v)) {
+                            solution.getVertex(v).pmu = PmuState::Inactive;
+                        }
+                    }
+                }
+                writePds(solution, solPath);
             }
             size_t pmus = state.numActive();
             fmt::memory_buffer buf;
