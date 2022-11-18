@@ -249,7 +249,7 @@ int run(int argc, const char** argv) {
             result = combineSolveState(result, solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>()));
             state.applySubsolution(subproblem);
             auto tSubEnd = now();
-            fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
+            fmt::print("solved subproblem {} in {} ({} active)\n", i, ms(tSubEnd - tSub), subproblem.numActive());
             if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
                 writePds(subproblem.graph(), fmt::format("{}/comp_{:03}_2solved.pds", outdir, i));
             }

@@ -183,13 +183,14 @@ SolveState solveBranching(PdsState &state,
     size_t explored = 0;
     while (!queue.empty()) {
         ++explored;
-        auto [bounds, top] = queue.top();
+        PdsState top(std::move(queue.top().second));
+        auto bounds = queue.top().first;
         queue.pop();
         if (bounds.first > upper) continue;
         lower = bounds.first;
         fmt::print("explored {} nodes\t{}\t{}\t{}\t{}\t{}\n", explored, lower, upper, bounds.first, bounds.second, top.allObserved());
         upper = std::min(upper, bounds.second);
-        if (bounds.first == bounds.second) {
+        if (bounds.first == bounds.second && top.allObserved()) {
             heuristic = top;
             fmt::print("incumbent solution: {}\t{}\n", bounds.first, top.allObserved());
         }
@@ -206,14 +207,14 @@ SolveState solveBranching(PdsState &state,
         auto disabledBounds = sensorBounds(top);
         if (activatedBounds.first < upper && isFeasible(activated)) {// && activatedBounds.first <= activatedBounds.second
             upper = std::min(upper, activatedBounds.second);
-            queue.push({activatedBounds, activated});
+            queue.template emplace(activatedBounds, std::move(activated));
         }
         if (disabledBounds.first < upper && isFeasible(top)) { // && disabledBounds.first <= disabledBounds.second
             upper = std::min(upper, disabledBounds.second);
-            queue.push({disabledBounds, top});
+            queue.emplace(disabledBounds, std::move(top));
         }
     }
-    state = heuristic;
+    state = std::move(heuristic);
     fmt::print("solved by branching. result: {}\n", upper);
     return SolveState::Optimal;
 }

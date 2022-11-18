@@ -1,26 +1,11 @@
 //
 // Created by max on 01.08.22.
 //
-
-#include "mpgraphs/boost_adapter.hpp"
 #include "pds.hpp"
 
-#include <boost/property_map/function_property_map.hpp>
 #include "utility.hpp"
 
 namespace pds {
-
-//void validateState(const PdsState& state) {
-//    auto active = state.active()
-//            | ranges::views::filter([](const auto& xy) { return xy.second == PmuState::Active; })
-//            | ranges::views::transform([](const auto& xy) { return xy.first; })
-//            | ranges::to<set<PdsState::Vertex>>();
-//    auto observed = observationNeighborhood(state.graph(), active);
-//    for (auto v: state.graph().vertices()) {
-//        unused(v);
-//        assert(observed.contains(v) == state.isObserved(v));
-//    }
-//}
 
 PdsState::PdsState() : PdsState(PowerGrid{}) { }
 
