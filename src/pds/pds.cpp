@@ -34,16 +34,22 @@ PdsState::PdsState(PowerGrid&& graph) : m_numActive{0}, m_numInactive{0}, m_grap
     for (auto v: m_graph.vertices()) {
         switch (m_graph[v].pmu) {
             case PmuState::Active:
+                // cannot call setActive on already active vertex
+                // setBlank on active vertex requires previous call to setActive
                 m_graph[v].pmu = PmuState::Blank;
                 setActive(v);
                 break;
             case PmuState::Inactive:
+                m_graph[v].pmu = PmuState::Blank;
                 setInactive(v);
                 break;
             default:
                 break;
         }
     }
+    assert(ranges::distance(m_graph.vertices() | ranges::views::filter([this](auto v) { return isActive(v); })) == (ssize_t)m_numActive);
+    assert(ranges::distance(m_graph.vertices() | ranges::views::filter([this](auto v) { return isInactive(v); })) == (ssize_t)m_numInactive);
+    assert(ranges::all_of(m_graph.vertices(), [this](auto v) { return m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})); }));
 }
 
 void PdsState::addEdge(Vertex source, Vertex target) {
@@ -141,17 +147,20 @@ bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, VertexSet &seen
 }
 
 bool PdsState::setBlank(PdsState::Vertex vertex) {
-    assert(!isActive(vertex));
     if (isInactive(vertex)) {
         --m_numInactive;
         m_graph[vertex].pmu = PmuState::Blank;
+    } else if (isActive(vertex)) {
+        unsetActive(vertex);
     }
     return allObserved();
 }
 
 bool PdsState::setActive(PdsState::Vertex vertex) {
-    assert(!isInactive(vertex));
     if (!isActive(vertex)) {
+        if (isInactive(vertex)) {
+            --m_numInactive;
+        }
         ++m_numActive;
         m_graph[vertex].pmu = PmuState::Active;
         if (m_dependencies.hasVertex(vertex)) {
@@ -171,7 +180,6 @@ bool PdsState::setActive(PdsState::Vertex vertex) {
 }
 
 bool PdsState::unsetActive(PdsState::Vertex vertex) {
-    assert(isActive(vertex));
     if (isActive(vertex)) {
         std::vector<Vertex> propagating;
         std::vector<Vertex> queue;
@@ -228,8 +236,8 @@ bool PdsState::unsetActive(PdsState::Vertex vertex) {
 }
 
 bool PdsState::setInactive(PdsState::Vertex vertex) {
-    assert(!isActive(vertex));
     if (!isInactive(vertex)) {
+        if (isActive(vertex)) unsetActive(vertex);
         ++m_numInactive;
         m_graph[vertex].pmu = PmuState::Inactive;
         assert(activeState(vertex) == PmuState::Inactive);

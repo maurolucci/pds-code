@@ -302,6 +302,7 @@ void writePds(const PowerGrid& grid, const std::string& filename) {
     FILE* outfile = fopen(filename.c_str(), "wb");
     fmt::print(outfile, "PDS Instance V1.0\n");
     fmt::print(outfile, "G {} {}\n", grid.numVertices(), grid.numEdges());
+    assert(grid.numVertices() == size_t(ranges::distance(grid.vertices())));
     for (auto v: grid.vertices()) {
         const auto& data = grid[v];
         fmt::print(outfile, "V {} \"{}\" ", data.id, data.name);
