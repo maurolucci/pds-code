@@ -247,11 +247,7 @@ int run(int argc, const char** argv) {
             fmt::print("solving subproblem {}\n", i);
             printState(subproblem);
             result = combineSolveState(result, solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>()));
-            for (auto v: subproblem.graph().vertices()) {
-                if (subproblem.isActive(v)) {
-                    state.setActive(v);
-                }
-            }
+            state.applySubsolution(subproblem);
             auto tSubEnd = now();
             fmt::print("solved subproblem {} in {}\n", i, ms(tSubEnd - tSub));
             if (drawOptions.drawSubproblems && drawOptions.drawSolution) {

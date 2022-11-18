@@ -352,11 +352,7 @@ int main(int argc, const char** argv) {
                 for (auto substate: state.subproblems(true)) {
                     if (!substate.allObserved()) {
                         result = combineSolveState(result, solve(substate));
-                        for (auto v: substate.graph().vertices()) {
-                            if (substate.isActive(v) && state.graph().hasVertex(v)) {
-                                state.setActive(v);
-                            }
-                        }
+                        state.applySubsolution(substate);
                     }
                 }
             } else {

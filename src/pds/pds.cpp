@@ -598,20 +598,49 @@ std::vector<PdsState> PdsState::subproblems(bool nonZiSeparators) const {
                     subgraph.removeVertex(x);
                 }
             }
-            std::optional<Vertex> oneActive;
-            PdsState subproblem(std::move(subgraph));
-            for (auto x: subproblem.graph().vertices()) {
-                if (isActive(x)) {
-                    subproblem.setActive(x);
-                    oneActive = {x};
-                } else if (isInactive(x)) {
-                    subproblem.setInactive(x);
-                }
-            }
-            components.emplace_back(std::move(subproblem));
+            size_t numVertices = subgraph.numVertices(); unused(numVertices);
+#ifndef USE_HASHMAP
+            subgraph.compress();
+#endif
+            assert(numVertices == subgraph.numVertices());
+            assert(ssize_t(numVertices) == ranges::distance(subgraph.vertices()));
+            assert(ranges::all_of(subgraph.vertices(), [&subgraph](auto v) { return subgraph.hasVertex(v);}));
+            components.emplace_back(std::move(subgraph));
         }
     }
     return components;
+}
+
+void PdsState::applySubsolution(const pds::PdsState &other) {
+#ifdef USE_HASHMAP
+    for (auto v: other.graph().vertices()) {
+        if (other.isActive(v)) {
+            setActive(v);
+        }
+    }
+#else
+    if (graph().numVertices() == 0 || other.graph().numVertices() == 0) return;
+    auto ownVertices = graph().vertices();
+    auto ownIt = ranges::begin(ownVertices);
+    auto ownEnd = ranges::end(ownVertices);
+    auto otherVertices = other.graph().vertices();
+    auto otherIt = ranges::begin(otherVertices);
+    auto otherEnd = ranges::end(otherVertices);
+
+    while (ownIt != ownEnd && otherIt != otherEnd) {
+        const auto ownId = graph().getVertex(*ownIt).id;
+        const auto otherId = other.graph().getVertex(*otherIt).id;
+        if (ownId < otherId) ++ownIt;
+        else if (otherId < ownId) ++otherIt;
+        else {
+            if (other.isActive(*otherIt)) {
+                setActive(*ownIt);
+            }
+            ++ownIt; ++otherIt;
+        }
+    }
+
+#endif
 }
 
 SolveState combineSolveState(SolveState first, SolveState second) {

@@ -188,6 +188,8 @@ public:
 
     std::vector<PdsState> subproblems(bool nonZiSeparators = false) const;
 
+    void applySubsolution(const PdsState& other);
+
 };
 
 } // namespace pds
