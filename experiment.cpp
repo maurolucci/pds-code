@@ -39,8 +39,8 @@ auto now() {
 }
 
 template<typename T>
-auto ms(T time) {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(time).count();
+auto µs(T time) {
+    return std::chrono::duration_cast<std::chrono::microseconds>(time).count();
 }
 
 // Reductions
@@ -395,9 +395,9 @@ int main(int argc, const char** argv) {
                            "pmus"_a = pmus,
                            "solved"_a = state.allObserved(),
                            "result"_a = result,
-                           "t_total"_a = ms(t2 - t0),
-                           "t_reductions"_a = ms(t1 - t0),
-                           "t_solver"_a = ms(t2 - t1),
+                           "t_total"_a = µs(t2 - t0),
+                           "t_reductions"_a = µs(t1 - t0),
+                           "t_solver"_a = µs(t2 - t1),
                            "n"_a = n,
                            "m"_a = m,
                            "zi"_a = zi,
