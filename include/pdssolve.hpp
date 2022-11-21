@@ -136,6 +136,29 @@ SolveState solveGreedy(PdsState& state, bool applyReductions = true, Strategy st
     return SolveState::Heuristic;
 }
 
+SolveState fastGreedy(PdsState& state) {
+    //auto comp = [&state] (auto v, auto w) { return state.graph().degree(v) < state.graph().degree(w); };
+    auto vertices = state.graph().vertices()
+            | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
+            | ranges::views::transform([&state](auto v) { return std::pair(state.graph().degree(v), v); })
+            | ranges::to<std::vector>;
+    ranges::make_heap(vertices);
+    while (!state.allObserved() && !vertices.empty()) {
+        while (!state.graph().hasVertex(vertices.front().second) || !state.isBlank(vertices.front().second)) {
+            ranges::pop_heap(vertices);
+            vertices.pop_back();
+            if (vertices.empty()) break;
+        }
+        ranges::pop_heap(vertices);
+        auto v = vertices.back().second;
+        vertices.pop_back();
+        state.setActive(v);
+        exhaustiveReductions(state);
+    }
+    if (!state.allObserved()) return SolveState::Infeasible;
+    return SolveState::Heuristic;
+}
+
 using Bounds = std::pair<size_t, size_t>;
 Bounds sensorBounds(const PdsState& state) {
     size_t lower = 0, upper = 0, unobserved = 0;

@@ -178,6 +178,8 @@ int run(int argc, const char** argv) {
         solver = solveBrimkovExpanded;
     } else if (solve == "jovanovic"s) {
         solver = solveJovanovic;
+    } else if (solve == "fast-greedy"s) {
+        solver = [](auto& state, bool, double){ return fastGreedy(state);};
     } else if (solve == "greedy"s) {
         solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestObservationNeighborhood);};
     } else if (solve == "greedy-degree"s) {

@@ -168,7 +168,7 @@ public:
     inline const PowerGrid& graph() const { return m_graph; }
     inline const auto& observationGraph() const { return m_dependencies; }
 
-    inline PowerGrid && graph() { return std::move(m_graph); }
+    inline PowerGrid && moveGraph() { return std::move(m_graph); }
 
     bool collapseLeaves();
 

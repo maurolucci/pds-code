@@ -268,6 +268,8 @@ int main(int argc, const char** argv) {
         solve = [timeout](auto& state) { return solveBrimkovExpanded(state, false, timeout); };
     } else if (solverName == "ds" || solverName == "domination") {
         solve = [timeout](auto& state) { return solveDominatingSet(state, false, timeout); };
+    } else if (solverName == "branching") {
+        solve = [](auto& state) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
         solve = [](auto& state) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "none") {
