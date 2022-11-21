@@ -200,10 +200,14 @@ SolveState solveBranching(PdsState &state,
     fmt::print("heuristic result: {}\n", upper);
     size_t lower = 0;
     auto compare = [](const auto& first, const auto& second) { return first.first.first > second.first.first; };
-    using Element = std::pair<Bounds, PdsState>;
+    using Element = std::pair<Bounds, PowerGrid>;
     std::priority_queue<Element, std::vector<Element>, decltype(compare)> queue(compare);
-    queue.push({sensorBounds(state), state});
+    queue.push({sensorBounds(state), state.graph()});
     size_t explored = 0;
+    using namespace std::chrono_literals;
+    auto now = []() { return std::chrono::high_resolution_clock::now(); };
+    auto printPeriod = 1s;
+    auto previousPrint = now();
     while (!queue.empty()) {
         ++explored;
         PdsState top(std::move(queue.top().second));
@@ -211,7 +215,11 @@ SolveState solveBranching(PdsState &state,
         queue.pop();
         if (bounds.first > upper) continue;
         lower = bounds.first;
-        fmt::print("explored {} nodes\t{}\t{}\t{}\t{}\t{}\n", explored, lower, upper, bounds.first, bounds.second, top.allObserved());
+        auto t = now();
+        if (t - previousPrint > printPeriod) {
+            fmt::print("explored {} nodes\t{}\t{}\t{}\t{}\t{}\n", explored, lower, upper, bounds.first, bounds.second, top.allObserved());
+            previousPrint = t;
+        }
         upper = std::min(upper, bounds.second);
         if (bounds.first == bounds.second && top.allObserved()) {
             heuristic = top;
@@ -223,20 +231,21 @@ SolveState solveBranching(PdsState &state,
         activated.setActive(*best);
         top.setInactive(*best);
         if (useReductions) {
-            exhaustiveReductions(activated, true);
-            exhaustiveReductions(top, true);
+            exhaustiveReductions(activated);
+            exhaustiveReductions(top);
         }
         auto activatedBounds = sensorBounds(activated);
         auto disabledBounds = sensorBounds(top);
-        if (activatedBounds.first < upper && isFeasible(activated)) {// && activatedBounds.first <= activatedBounds.second
+        if (activatedBounds.first < upper) {// && isFeasible(activated)) {// && activatedBounds.first <= activatedBounds.second
             upper = std::min(upper, activatedBounds.second);
-            queue.template emplace(activatedBounds, std::move(activated));
+            queue.template emplace(activatedBounds, std::move(activated.moveGraph()));
         }
-        if (disabledBounds.first < upper && isFeasible(top)) { // && disabledBounds.first <= disabledBounds.second
+        if (disabledBounds.first < upper) {// && isFeasible(top)) { // && disabledBounds.first <= disabledBounds.second
             upper = std::min(upper, disabledBounds.second);
-            queue.emplace(disabledBounds, std::move(top));
+            queue.emplace(disabledBounds, std::move(top.moveGraph()));
         }
     }
+    fmt::print("finished after exploring {} nodes\t{}\t{}\n", explored, lower, upper);
     state = std::move(heuristic);
     fmt::print("solved by branching. result: {}\n", upper);
     return SolveState::Optimal;
