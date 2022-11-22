@@ -4,6 +4,45 @@
 
 namespace pds {
 
+struct ParseError : std::exception {
+private:
+    std::string reason;
+public:
+    ParseError(const std::string& reason, size_t line) : reason(fmt::format("{}: {}", line, reason)) { }
+    ParseError(const ParseError&) = default;
+    ParseError(ParseError&&) = default;
+
+
+    const char * what() const noexcept override {
+        return reason.c_str();
+    }
+};
+
+PowerGrid readTxtEdgeList(const std::string &filename, bool allZeroInjection) {
+    namespace fs = std::filesystem;
+    if (!fs::exists(fs::path(filename))) {
+        throw std::runtime_error("file not found: " + filename);
+    }
+    std::ifstream infile(filename);
+    size_t numVertices, numEdges;
+    infile >> numVertices >> numEdges;
+    PowerGrid graph;
+    map<size_t, PowerGrid::VertexDescriptor> vertices;
+    for (size_t i = 0; i < numVertices; ++i) {
+        vertices[i] = graph.addVertex(Bus {.name = std::to_string(i), .id=static_cast<long>(i), .zero_injection=allZeroInjection});
+    }
+    auto getVertex = [&vertices](auto i) {
+        if (!vertices.contains(i)) throw ParseError("invalid vertex", -1);
+        return vertices[i];
+    };
+    while (infile) {
+        PowerGrid::VertexDescriptor i, j;
+        infile >> i >> j;
+        graph.addEdge(getVertex(i), getVertex(j));
+    }
+    return graph;
+}
+
 PowerGrid readEdgeList(const std::string &filename, bool allZeroInjection) {
     namespace fs = std::filesystem;
     if (!fs::exists(fs::path(filename))) {
@@ -94,20 +133,6 @@ PowerGrid readPtxt(const std::string &filename, bool allZeroInjection) {
     }
     return graph;
 }
-
-struct ParseError : std::exception {
-private:
-    std::string reason;
-public:
-    ParseError(const std::string& reason, size_t line) : reason(fmt::format("{}: {}", line, reason)) { }
-    ParseError(const ParseError&) = default;
-    ParseError(ParseError&&) = default;
-
-
-    const char * what() const noexcept override {
-        return reason.c_str();
-    }
-};
 
 namespace {
 struct GraphMLAttribute {
@@ -333,6 +358,8 @@ PowerGrid readAutoGraph(const std::string &filename, bool allZeroInjection) {
         return readGraphML(filename, allZeroInjection);
     } else if (filename.ends_with(".graph")) {
         return readEdgeList(filename, allZeroInjection);
+    } else if (filename.ends_with(".txt")) {
+        return readTxtEdgeList(filename, allZeroInjection);
     } else if (filename.ends_with(".ptxt")) {
         return readPtxt(filename, allZeroInjection);
     } else if (filename.ends_with(".pds")) {
