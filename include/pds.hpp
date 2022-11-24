@@ -128,7 +128,7 @@ public:
 
     inline bool isObserved(Vertex vertex) const { return m_dependencies.hasVertex(vertex); }
 
-    inline bool isObservingEdge(Vertex source, Vertex target) const { return m_dependencies.edge(source, target).has_value(); }
+    inline bool isObservingEdge(Vertex source, Vertex target) const { return m_dependencies.hasEdge(source, target); }
 
     inline size_t unobservedDegree(Vertex v) const {
         assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));

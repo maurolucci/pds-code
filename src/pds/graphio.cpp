@@ -29,7 +29,7 @@ PowerGrid readTxtEdgeList(const std::string &filename, bool allZeroInjection) {
     PowerGrid graph;
     map<size_t, PowerGrid::VertexDescriptor> vertices;
     for (size_t i = 0; i < numVertices; ++i) {
-        vertices[i] = graph.addVertex(Bus {.name = std::to_string(i), .id=static_cast<long>(i), .zero_injection=allZeroInjection});
+        vertices[i] = graph.addVertex(Bus {.name = std::to_string(i), .id=static_cast<long>(i), .zero_injection=allZeroInjection, .pmu=PmuState::Blank});
     }
     auto getVertex = [&vertices](auto i) {
         if (!vertices.contains(i)) throw ParseError("invalid vertex", -1);
@@ -53,7 +53,7 @@ PowerGrid readEdgeList(const std::string &filename, bool allZeroInjection) {
     map<size_t, PowerGrid::VertexDescriptor> vertices;
     auto getVertex = [&graph, &vertices,allZeroInjection](size_t v) {
         if (vertices.contains(v)) { return vertices[v]; }
-        vertices[v] = graph.addVertex(Bus{.name=std::to_string(v), .id=static_cast<long>(v), .zero_injection=allZeroInjection});
+        vertices[v] = graph.addVertex(Bus{.name=std::to_string(v), .id=static_cast<long>(v), .zero_injection=allZeroInjection, .pmu=PmuState::Blank});
         return vertices[v];
     };
     while (infile) {
@@ -87,7 +87,7 @@ PowerGrid readPtxt(const std::string &filename, bool allZeroInjection) {
     map<size_t, PowerGrid::VertexDescriptor> vertices;
     auto getVertex = [&graph, &vertices,allZeroInjection](size_t v) {
         if (vertices.contains(v)) { return vertices[v]; }
-        vertices[v] = graph.addVertex(Bus{.name=std::to_string(v), .id=static_cast<long>(v), .zero_injection=allZeroInjection});
+        vertices[v] = graph.addVertex(Bus{.name=std::to_string(v), .id=static_cast<long>(v), .zero_injection=allZeroInjection, .pmu=PmuState::Blank});
         return vertices[v];
     };
     while (std::getline(infile, line)) {
@@ -239,9 +239,9 @@ std::vector<std::string_view> split(const std::string_view& in, char delim) {
 int parseInt(const std::string_view& token, size_t line) {
     try {
         return std::stoi(std::string{token});
-    } catch (std::invalid_argument) {
+    } catch (std::invalid_argument&) {
         throw ParseError { fmt::format("not a number: {}", token), line };
-    } catch (std::out_of_range) {
+    } catch (std::out_of_range&) {
         throw ParseError { fmt::format("invalid number: {}", token), line };
     }
 }

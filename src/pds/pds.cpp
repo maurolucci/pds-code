@@ -186,7 +186,7 @@ bool PdsState::unsetActive(PdsState::Vertex vertex) {
                 m_unobserved_degree[w] += 1;
                 if (!isActive(w)) {
                     // w is observed from v
-                    if (m_dependencies.edge(v, w).has_value()) {
+                    if (m_dependencies.hasEdge(v, w)) {
                         if (!enqueued.contains(w)) {
                             queue.push_back(w);
                             enqueued.insert(w);
@@ -237,9 +237,9 @@ bool PdsState::collapseLeaves() {
     auto vertices = m_graph.vertices() | ranges::to<std::vector>();
     for (auto v: vertices) {
         if (m_graph.degree(v) == 1 && !isActive(v)) {
-            Vertex neighbor;
+            Vertex neighbor{};
             for (auto w: m_graph.neighbors(v)) {
-                neighbor = w;
+                neighbor = w; break;
             }
             if (isInactive(v) || isBlank(neighbor)) {
                 if (m_graph.degree(neighbor) == 2 && isZeroInjection(neighbor)) {

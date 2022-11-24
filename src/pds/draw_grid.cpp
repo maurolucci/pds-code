@@ -76,6 +76,7 @@ EdgeStyle DefaultDrawingOptions::edgeStyle(pds::style::NodeState, pds::style::No
 }
 
 ogdf::Shape toOgdf(Shape shape) {
+    struct Unreachable {};
     switch (shape) {
         case Shape::Rectangle:
             return ogdf::Shape::Rect;
@@ -87,6 +88,7 @@ ogdf::Shape toOgdf(Shape shape) {
             return ogdf::Shape::Octagon;
         case Shape::Triangle:
             return ogdf::Shape::Triangle;
+        default: throw Unreachable{};
     }
 }
 
