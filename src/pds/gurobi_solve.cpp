@@ -4,6 +4,7 @@
 #include "gurobi_solve.hpp"
 
 #include <gurobi_c++.h>
+#include <unistd.h>
 
 namespace pds {
 
