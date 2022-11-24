@@ -14,11 +14,6 @@ FetchContent_Declare(
         GIT_TAG 94156450d991515faa07ccd3823a2592c000e49f
 )
 FetchContent_Declare(
-        OGDF
-        URL https://ogdf.uos.de/wp-content/uploads/2022/02/ogdf.v2022.02.zip
-        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-)
-FetchContent_Declare(
         fmt
         GIT_REPOSITORY https://github.com/fmtlib/fmt.git
         GIT_TAG c4ee726 # 9.0.0
@@ -28,7 +23,13 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/CinusMinus/htd.git
         GIT_TAG master
 )
-FetchContent_MakeAvailable(unordered_dense OGDF fmt htd)
+FetchContent_Declare(
+        OGDF
+        URL https://ogdf.uos.de/wp-content/uploads/2022/02/ogdf.v2022.02.zip
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+        PATCH_COMMAND patch -p 1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patch/0001-removed-redundant-template-parameters-in-DualGraphBa.patch"
+)
+FetchContent_MakeAvailable(OGDF unordered_dense fmt htd)
 # No warnings from OGDF headers
 get_target_property(TMP_OGDF_INCLUDE_DIRS OGDF INTERFACE_INCLUDE_DIRECTORIES)
 target_include_directories(OGDF SYSTEM INTERFACE ${TMP_OGDF_INCLUDE_DIRS})

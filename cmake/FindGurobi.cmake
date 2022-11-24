@@ -38,7 +38,6 @@ if(MSVC)
     HINTS ${GUROBI_DIR} $ENV{GUROBI_HOME}
     PATH_SUFFIXES lib)
 else()
-    message("not msvc")
   find_library(
     Gurobi_CXX_LIBRARY
     NAMES gurobi_c++

@@ -1,0 +1,25 @@
+From a84b1340d07b510695dfda51075015b85443c361 Mon Sep 17 00:00:00 2001
+Date: Wed, 23 Nov 2022 16:36:25 +0100
+Subject: [PATCH] removed redundant template parameters in DualGraphBase
+ destructor
+
+---
+ include/ogdf/basic/DualGraph.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/include/ogdf/basic/DualGraph.h b/include/ogdf/basic/DualGraph.h
+index fc22da0..0cb1b5b 100644
+--- a/include/ogdf/basic/DualGraph.h
++++ b/include/ogdf/basic/DualGraph.h
+@@ -132,7 +132,7 @@ public:
+ 	}
+ 
+ 	//! Destructor
+-	~DualGraphBase<isConst>()
++	~DualGraphBase()
+ 	{
+ 		clear();
+ 		delete m_cpGraph;
+-- 
+2.34.1
+
