@@ -27,7 +27,7 @@ FetchContent_Declare(
         OGDF
         URL https://ogdf.uos.de/wp-content/uploads/2022/02/ogdf.v2022.02.zip
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-        PATCH_COMMAND patch -p 1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patch/0001-removed-redundant-template-parameters-in-DualGraphBa.patch"
+        PATCH_COMMAND patch -Np 1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patch/0001-removed-redundant-template-parameters-in-DualGraphBa.patch"
 )
 FetchContent_MakeAvailable(OGDF unordered_dense fmt htd)
 # No warnings from OGDF headers
