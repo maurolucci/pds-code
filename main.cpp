@@ -108,7 +108,7 @@ int run(int argc, const char** argv) {
             ("reductions,r", "apply reductions before exact solving")
             (
                     "all-zi,z",
-                    po::value<bool>()->default_value(false)->implicit_value(true),
+                    po::value<bool>()->default_value(false)->implicit_value(true, "true"),
                     "consider all vertices zero-inection"
             )
             (
