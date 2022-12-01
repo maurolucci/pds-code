@@ -20,6 +20,10 @@ GRBEnv &getEnv() {
 }
 }
 
+void loadGurobi() {
+    getEnv();
+}
+
 SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>& xi, GRBModel& model) {
     model.optimize();
     if (model.get(GRB_IntAttr_Status) == GRB_INFEASIBLE) {

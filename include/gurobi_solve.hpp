@@ -11,6 +11,8 @@
 
 namespace pds {
 
+void loadGurobi();
+
 SolveState solve_pds(PdsState&, bool output = false, double timeLimit = 10 * 60);
 
 SolveState solveDominatingSet(PdsState& state, bool output = false, double timeLimit = 10 * 60);
