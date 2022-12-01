@@ -9,14 +9,24 @@
 namespace pds {
 
 namespace {
+GRBEnv &getEnvWithOutput() {
+    static thread_local GRBEnv env;
+    return env;
+}
 GRBEnv &getEnv() {
     // Suppress Academic License Info by redicreting stdout
-    auto oldstdout = dup(STDOUT_FILENO);
-    FILE* result = freopen("/dev/null", "a", stdout);
-    if (!result) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
-    static thread_local GRBEnv env;
-    dup2(oldstdout, STDOUT_FILENO);
-    return env;
+    static thread_local bool loaded = false;
+    if (!loaded) {
+        auto oldstdout = dup(STDOUT_FILENO);
+        FILE *result = freopen("/dev/null", "a", stdout);
+        if (!result) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
+        auto& env = getEnvWithOutput();
+        dup2(oldstdout, STDOUT_FILENO);
+        loaded = true;
+        return env;
+    } else {
+        return getEnvWithOutput();
+    }
 }
 }
 

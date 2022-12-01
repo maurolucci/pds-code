@@ -186,7 +186,7 @@ public:
 
     bool solveTrivial();
 
-    std::vector<PdsState> subproblems(bool nonZiSeparators = false) const;
+    std::vector<PdsState> subproblems() const;
 
     void applySubsolution(const PdsState& other);
 

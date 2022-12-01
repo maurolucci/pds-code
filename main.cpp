@@ -227,7 +227,7 @@ int run(int argc, const char** argv) {
         fmt::print("reductions took {}\n", ms(tReductions - tSolveStart));
     }
 
-    vector subproblems = state.subproblems(true);
+    vector subproblems = state.subproblems();
     ranges::sort(subproblems,
                  [](const pds::PdsState &left, const pds::PdsState &right) -> bool {
                      return left.graph().numVertices() < right.graph().numVertices();

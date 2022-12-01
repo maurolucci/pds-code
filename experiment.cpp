@@ -352,7 +352,7 @@ int main(int argc, const char** argv) {
             SolveState result = SolveState::Optimal;
             auto reduced = state;
             if (subproblems) {
-                for (auto substate: state.subproblems(true)) {
+                for (auto substate: state.subproblems()) {
                     if (!substate.allObserved()) {
                         result = combineSolveState(result, solve(substate));
                         state.applySubsolution(substate);

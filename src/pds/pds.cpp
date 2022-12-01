@@ -550,19 +550,20 @@ void recurseComponent(
         PdsState::Vertex start,
         const PdsState& state,
         set<PdsState::Vertex>& seen,
-        set<PdsState::Vertex>& currentComponent,
-        bool nonZiSeparators
+        set<PdsState::Vertex>& currentComponent
 ) {
-    if (seen.contains(start)) return;
+    std::vector<PdsState::Vertex> queue;
+    queue.push_back(start);
     seen.insert(start);
-    currentComponent.insert(start);
-    for (auto w: state.graph().neighbors(start)) {
-        if (!state.isActive(w)) {
-            if (!seen.contains(w) && (!nonZiSeparators || !isBlockedEdge(state, start, w))) {
-                recurseComponent(w, state, seen, currentComponent, nonZiSeparators);
+    while (!queue.empty()) {
+        auto current = queue.back();
+        queue.pop_back();
+        currentComponent.insert(current);
+        for (auto w: state.graph().neighbors(current)) {
+            if (!seen.contains(w)) {
+                seen.insert(w);
+                queue.push_back(w);
             }
-        } else {
-            currentComponent.insert(w);
         }
     }
 }
@@ -578,13 +579,13 @@ bool PdsState::solveTrivial() {
     return allObserved();
 }
 
-std::vector<PdsState> PdsState::subproblems(bool nonZiSeparators) const {
+std::vector<PdsState> PdsState::subproblems() const {
     std::vector<PdsState> components;
     set<Vertex> seen;
     for (auto v: m_graph.vertices()) {
         if (!isActive(v) && !seen.contains(v)) {
             set<Vertex> currentComponent;
-            recurseComponent(v, *this, seen, currentComponent, nonZiSeparators);
+            recurseComponent(v, *this, seen, currentComponent);
             PowerGrid subgraph{graph()};
             for (auto x: subgraph.vertices()) {
                 if (!currentComponent.contains(x)) {

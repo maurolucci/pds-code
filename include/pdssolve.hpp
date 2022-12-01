@@ -195,7 +195,7 @@ SolveState solveBranching(PdsState &state,
         exhaustiveReductions(state, true);
     }
     auto heuristic = state;
-    solveGreedy(heuristic, true, strategy);
+    fastGreedy(heuristic);
     auto upper = sensorBounds(heuristic).second;
     fmt::print("heuristic result: {}\n", upper);
     size_t lower = 0;
