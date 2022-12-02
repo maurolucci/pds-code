@@ -3,15 +3,13 @@
 //
 
 #include <mpgraphs/graph.hpp>
-#include <mpgraphs/boost_adapter.hpp>
-#include <boost/property_map/property_map.hpp>
-#include <boost/property_map/dynamic_property_map.hpp>
 #include <range/v3/all.hpp>
-#include <boost/graph/graphml.hpp>
 
 #include <boost/program_options.hpp>
 
 #include <fmt/format.h>
+#include <iostream>
+#include <fstream>
 
 #include "map.hpp"
 
@@ -140,19 +138,11 @@ Graph randomCactus(size_t n, Rng rng = Rng()) {
 namespace po = boost::program_options;
 
 void writeGraph(const Graph& graph, std::ostream& out) {
-    pds::map<Vertex, long> zeroInjection;
-    for (auto v: graph.vertices()) {
-        zeroInjection[v] = 1;
+    out << graph.numVertices() << ' ' << graph.numEdges() << "\n\n";
+    for (auto e: graph.edges()) {
+        auto[s, t] = graph.endpoints(e);
+        out << s << ' ' << t << '\n';
     }
-    boost::associative_property_map ziMap(zeroInjection);
-    boost::dynamic_properties properties(boost::ignore_other_properties);
-    properties.property("zero_injection", ziMap);
-    pds::map<Vertex, size_t> vertexIndex;
-    for (size_t i = 0; auto v: graph.vertices()) {
-        vertexIndex.insert({v, i});
-        ++i;
-    }
-    boost::write_graphml(out, graph, boost::associative_property_map(vertexIndex), properties);
 }
 
 int main(int argc, char** argv) {
