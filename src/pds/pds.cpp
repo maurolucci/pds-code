@@ -301,8 +301,13 @@ bool PdsState::collapseDegreeTwo() {
         if (m_graph.degree(v) == 2 && isZeroInjection(v)) {
             std::vector<Vertex> neighbors = m_graph.neighbors(v) | ranges::to<std::vector>();
             auto [x, y] = std::tie(neighbors[0], neighbors[1]); { }
-            if (!m_graph.edge(x, y)) {
-                if (isInactive(v)) {
+            if (isBlank(v)) {
+                if (isBlank(x) || isBlank(y)) {
+                    setInactive(v);
+                }
+            }
+            if (isInactive(v)) {
+                if (!m_graph.edge(x, y)) {
                     auto otherNeighbor = [this] (auto i, auto j) {
                         return (m_graph.neighbors(i) | ranges::views::filter([this,j](auto v) { return v != j && !isObserved(v);}) | ranges::to_vector)[0];
                     };
@@ -347,23 +352,23 @@ bool PdsState::collapseDegreeTwo() {
                         addEdge(x, y);
                         changed = true;
                     }
-                }
-                for (auto [s, t]: {std::tie(x, y), std::tie(y, x)}) {
-                    if (!isZeroInjection(s) && isInactive(s) && !isZeroInjection(t) && isBlank(t)) {
-                        setActive(t);
-                        changed = true;
+                } else {
+                    for (auto [s, t]: {std::tie(x, y), std::tie(y, x)}) {
+                        if (isBlank(t) && m_graph.degree(s) == 2 && isInactive(s)) {
+                            setActive(t);
+                            changed = true;
+                        }
                     }
                 }
-            } else {
-                if (m_graph.degree(x) == 2 && isBlank(y)) {
-                    setActive(y);
-                    changed = true;
-                } else if (m_graph.degree(y) == 2 && isBlank(x)) {
-                    setActive(x);
-                    changed = true;
+                if (!isZeroInjection(x) && !isZeroInjection(y)) {
+                    for (auto [s, t]: {std::tie(x, y), std::tie(y, x)}) {
+                        if (isInactive(s) && isBlank(t)) {
+                            setActive(t);
+                            changed = true;
+                        }
+                    }
                 }
             }
-
         }
     }
     return changed;
