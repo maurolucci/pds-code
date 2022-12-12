@@ -53,7 +53,7 @@ template<typename T>
 using VertexMap = mpgraphs::map<PowerGrid::VertexDescriptor, T>;
 #else
 using Timestamp = std::uint8_t;
-using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected, true, Timestamp>;
+using PowerGrid = mpgraphs::VecGraph<Bus, mpgraphs::EdgeDirection::Undirected, true, Timestamp, std::uint32_t>;
 using ObservationGraph = mpgraphs::VecGraph<mpgraphs::Empty, mpgraphs::EdgeDirection::Bidirectional, true, Timestamp>;
 using VertexSet = mpgraphs::VecSet<PowerGrid::VertexDescriptor, Timestamp>;
 template<typename T>

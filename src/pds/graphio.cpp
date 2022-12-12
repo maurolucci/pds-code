@@ -159,9 +159,8 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
     if (!graphml) throw ParseError("no graphml content", doc.GetLineNum());
     auto graph = graphml->FirstChildElement("graph");
     if (!graph) throw ParseError("no graph", graphml->GetLineNum());
-    auto attributes = graphml->FirstChildElement("key");
     map<string, GraphMLAttribute> nodeAttributes;
-    while (attributes) {
+    for (auto attributes = graphml->FirstChildElement("key"); attributes != nullptr; attributes = attributes->NextSiblingElement("key")) {
         const char *id, *type, *element, *name;
         auto queryAttribute = [&doc, &attributes](const char* name, const char** attr) -> bool {
             auto err = attributes->QueryAttribute(name, attr);
@@ -177,12 +176,10 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
         ) {
             nodeAttributes[id] = {type, name};
         }
-        attributes = attributes->NextSiblingElement("key");
-
     }
-    auto node = graph->FirstChildElement("node");
+
     map<std::string, PowerGrid::VertexDescriptor> vertices;
-    while (node) {
+    for (auto node = graph->FirstChildElement("node"); node != nullptr; node = node->NextSiblingElement("node")) {
         const char* key;
         if (node->QueryAttribute("id", &key)) throw ParseError("invalid node", node->GetLineNum());
         auto vertex = outgraph.addVertex(Bus {
@@ -192,8 +189,8 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
             .pmu=PmuState::Blank
         });
         vertices[key] = vertex;
-        auto data = node->FirstChildElement("data");
-        while (data) {
+
+        for (auto data = node->FirstChildElement("data"); data != nullptr; data = data->NextSiblingElement("data")) {
             auto text = data->GetText();
             if (!text) throw ParseError("could not read text", data->GetLineNum());
             if (!data->QueryAttribute("key", &key)) {
@@ -203,18 +200,14 @@ PowerGrid readGraphML(const std::string &filename, bool all_zero_injection) {
                     outgraph.getVertex(vertex).name = text;
                 }
             }
-            data = data->NextSiblingElement("data");
         }
-        node = node->NextSiblingElement("node");
     }
-    auto edge = graph->FirstChildElement("edge");
-    while (edge) {
+    for (auto edge = graph->FirstChildElement("edge"); edge != nullptr; edge = edge->NextSiblingElement("edge")) {
         const char* source, * target;
         if (edge->QueryAttribute("source", &source)) throw ParseError("cannot parse edge source", edge->GetLineNum());
         if (edge->QueryAttribute("target", &target)) throw ParseError("cannot parse edge target", edge->GetLineNum());
         if (!vertices.contains(source) || !vertices.contains(target)) throw ParseError("invalid edge", edge->GetLineNum());
         outgraph.addEdge(vertices[source], vertices[target]);
-        edge = edge->NextSiblingElement("edge");
     }
     return outgraph;
 }
