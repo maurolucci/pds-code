@@ -261,20 +261,20 @@ int main(int argc, const char** argv) {
     }
 
     string solverName = vm["solve"].as<string>();
-    std::function<SolveState(PdsState&)> solve;
+    std::function<SolveState(PdsState&, double)> solve;
     if (solverName == "gurobi") {
         loadGurobi();
-        solve = [timeout](auto &state) { return solve_pds(state, false, timeout); };
+        solve = [](auto &state, double timeout) { return solve_pds(state, false, timeout); };
     } else if (solverName == "brimkov") {
-        solve = [timeout](auto& state) { return solveBrimkovExpanded(state, false, timeout); };
+        solve = [](auto& state, double timeout) { return solveBrimkovExpanded(state, false, timeout); };
     } else if (solverName == "ds" || solverName == "domination") {
-        solve = [timeout](auto& state) { return solveDominatingSet(state, false, timeout); };
+        solve = [](auto& state, double timeout) { return solveDominatingSet(state, false, timeout); };
     } else if (solverName == "branching") {
-        solve = [](auto& state) { return solveBranching(state, true, greedy_strategies::largestDegree); };
+        solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
-        solve = [](auto& state) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
+        solve = [](auto& state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "none") {
-        solve = [](auto&) { return SolveState::Other; };
+        solve = [](auto&, double) { return SolveState::Other; };
     } else {
         fmt::print(stderr, "invalid solve: {}", solverName);
         return 2;
@@ -352,14 +352,18 @@ int main(int argc, const char** argv) {
             SolveState result = SolveState::Optimal;
             auto reduced = state;
             if (subproblems) {
+                double remainingTimeout = timeout;
+                auto checkpoint = t1;
                 for (auto& substate: state.subproblems()) {
                     if (!substate.allObserved()) {
-                        result = combineSolveState(result, solve(substate));
+                        auto tSubproblem = now();
+                        double remainingTimeout = std::max(1.0, timeout - std::chrono::duration_cast<std::chrono::seconds>(tSubproblem - checkpoint).count());
+                        result = combineSolveState(result, solve(substate, remainingTimeout));
                         state.applySubsolution(substate);
                     }
                 }
             } else {
-                result = solve(state);
+                result = solve(state, timeout);
             }
             auto t2 = now();
             if (drawdir) {
