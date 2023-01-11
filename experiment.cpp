@@ -352,7 +352,6 @@ int main(int argc, const char** argv) {
             SolveState result = SolveState::Optimal;
             auto reduced = state;
             if (subproblems) {
-                double remainingTimeout = timeout;
                 auto checkpoint = t1;
                 for (auto& substate: state.subproblems()) {
                     if (!substate.allObserved()) {
