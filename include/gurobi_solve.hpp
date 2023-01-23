@@ -14,8 +14,13 @@ namespace pds {
 inline const double TIME_LIMIT = 10 * 60;
 
 /// Opaque implementation does not leak internal usage of Gurobi
-struct MIPModelImplementation;
-using MIPModel = std::unique_ptr<MIPModelImplementation>;
+struct MIPModel {
+    struct Implementation;
+    std::unique_ptr<pds::MIPModel::Implementation> impl;
+    MIPModel() = default;
+    MIPModel(MIPModel&& other) = default;
+    virtual ~MIPModel();
+};
 
 void preloadMIPSolver();
 
@@ -35,8 +40,8 @@ template<class F>
 //requires std::is_invocable_v<PdsState&>
 SolveState solve_pds(PdsState& state, bool output, double timeLimit, F model) {
     auto mip = model(state);
-    auto result = solveMIP(model, output, timeLimit);
-    applySolution(model);
+    auto result = solveMIP(mip, output, timeLimit);
+    applySolution(state, mip);
     return result;
 }
 

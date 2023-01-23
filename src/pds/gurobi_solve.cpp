@@ -30,10 +30,13 @@ GRBEnv &getEnv() {
 }
 }
 
-struct MIPModelImplementation {
+struct MIPModel::Implementation {
     GRBModel model;
     map<PowerGrid::VertexDescriptor, GRBVar> xi;
+    Implementation(GRBEnv& env) : model(env) { }
 };
+
+MIPModel::~MIPModel() { }
 
 void preloadMIPSolver() {
     getEnv();
@@ -63,29 +66,50 @@ SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>&
     }
 }
 
-//SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
-//    auto active = state.active();
-//    auto observed = state.observed();
-//    bool result = solve_pds(state.graph(), active, output, timeLimit);
-//    for (auto v: state.graph().vertices()) {
-//        if (active[v] == PmuState::Active) {
-//            state.setActive(v);
-//        }
-//    }
-//    return result;
-//}
+SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
+    auto& model = mipmodel.impl->model;
+    auto& xi = mipmodel.impl->xi;
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
 
-MIPModel modelJovanovicExpanded(PdsState& state, bool output, double timeLimit) {
+    model.optimize();
+    switch (model.get(GRB_IntAttr_Status)) {
+        case GRB_INFEASIBLE:
+            return SolveState::Infeasible;
+        case GRB_OPTIMAL:
+            return SolveState::Optimal;
+        case GRB_TIME_LIMIT:
+            return SolveState::Timeout;
+        default:
+            return SolveState::Other;
+    }
+}
+
+void applySolution(PdsState& state, MIPModel &mipmodel) {
+    auto& model = mipmodel.impl->model;
+    auto& xi = mipmodel.impl->xi;
+    model.
+    for (auto v: state.graph().vertices()) {
+        if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+            state.setActive(v);
+        } else {
+            state.setInactive(v);
+        }
+    }
+}
+
+MIPModel modelJovanovicExpanded(PdsState& state) {
     namespace r3 = ranges;
     try {
-        auto model = GRBModel(getEnv());
-        model.set(GRB_IntParam_LogToConsole, int{output});
+        MIPModel mipmodel;
+        mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
+        auto& model = mipmodel.impl->model;
         model.set(GRB_StringParam_LogFile, "gurobi.log");
-        model.set(GRB_DoubleParam_TimeLimit, timeLimit);
         //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
         //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
         //GRBVar *si_p = model.addVars(num_vertices(graph));
-        map<PowerGrid::VertexDescriptor, GRBVar> xi;
+        auto& xi = mipmodel.impl->xi;
         map<PowerGrid::VertexDescriptor, GRBVar> si;
         map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
         auto &graph = static_cast<const PdsState &>(state).graph();
@@ -173,7 +197,7 @@ MIPModel modelJovanovicExpanded(PdsState& state, bool output, double timeLimit) 
             }
         }
 
-        return std::make_unique(MIPModelImplementation{model, xi});
+        return mipmodel;
     } catch (GRBException ex) {
         fmt::print(stderr, "Gurobi Exception {}: {}\n", ex.getErrorCode(), ex.getMessage());
         throw ex;
@@ -332,5 +356,7 @@ SolveState solveJovanovic(PdsState& state, bool output, double timeLimit) {
     struct NotImplemented : public std::exception {};
     throw NotImplemented{};
 }
+
+
 
 } // namespace pds
