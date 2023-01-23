@@ -263,7 +263,7 @@ int main(int argc, const char** argv) {
     string solverName = vm["solve"].as<string>();
     std::function<SolveState(PdsState&, double)> solve;
     if (solverName == "gurobi") {
-        loadGurobi();
+        preloadMIPSolver();
         solve = [](auto &state, double timeout) { return solve_pds(state, false, timeout); };
     } else if (solverName == "brimkov") {
         solve = [](auto& state, double timeout) { return solveBrimkovExpanded(state, false, timeout); };

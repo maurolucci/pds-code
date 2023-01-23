@@ -30,7 +30,12 @@ GRBEnv &getEnv() {
 }
 }
 
-void loadGurobi() {
+struct MIPModelImplementation {
+    GRBModel model;
+    map<PowerGrid::VertexDescriptor, GRBVar> xi;
+};
+
+void preloadMIPSolver() {
     getEnv();
 }
 
@@ -70,7 +75,7 @@ SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>&
 //    return result;
 //}
 
-SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
+MIPModel modelJovanovicExpanded(PdsState& state, bool output, double timeLimit) {
     namespace r3 = ranges;
     try {
         auto model = GRBModel(getEnv());
@@ -168,7 +173,7 @@ SolveState solve_pds(PdsState& state, bool output, double timeLimit) {
             }
         }
 
-        return solveModel(state, xi, model);
+        return std::make_unique(MIPModelImplementation{model, xi});
     } catch (GRBException ex) {
         fmt::print(stderr, "Gurobi Exception {}: {}\n", ex.getErrorCode(), ex.getMessage());
         throw ex;
@@ -314,6 +319,12 @@ SolveState solveBrimkov(PdsState& state, bool output, double timeLimit) {
     }
 
     return solveModel(state, xi, model);
+}
+
+SolveState solveAzamiBrimkov(PdsState& state, bool output, double timeLimit) {
+    unused(state, output, timeLimit);
+    struct NotImplemented : public std::exception {};
+    throw NotImplemented{};
 }
 
 SolveState solveJovanovic(PdsState& state, bool output, double timeLimit) {
