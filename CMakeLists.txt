@@ -77,4 +77,6 @@ target_link_libraries(experiment PUBLIC pdslib pdslib-gurobi fmt::fmt Boost::pro
 add_executable(draw_grid drawGrid.cpp)
 target_link_libraries(draw_grid PUBLIC pdslib fmt::fmt Boost::program_options OGDF)
 
+add_executable(percent_propagating percentPropagating.cpp)
+target_link_libraries(percent_propagating PUBLIC pdslib fmt::fmt Boost::program_options)
 add_subdirectory(testgraphs)
