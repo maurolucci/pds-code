@@ -85,6 +85,22 @@ struct DrawOptions {
     bool drawAny() { return drawInput || drawSolution || drawReductions || drawSubproblems; }
 };
 
+auto getModel(const std::string& name) {
+    if (name == "gurobi" || name == "jovanovic") {
+        return pds::modelJovanovicExpanded;
+    } else if (name == "brimkov") {
+        return pds::modelBrimkov;
+    } else if (name == "brimkov2") {
+        return pds::modelBrimkovExpanded;
+    } else if (name == "azami" || name == "azami-brimkov") {
+        return pds::modelAzamiBrimkov;
+    } else if (name == "domination") {
+        return pds::modelDomination;
+    } else {
+        throw std::invalid_argument("unknown model " + name);
+    }
+}
+
 int run(int argc, const char** argv) {
     using namespace pds;
     using std::string, std::vector;
@@ -163,35 +179,34 @@ int run(int argc, const char** argv) {
         }
     }
 
-    string solve = vm["solver"].as<string>();
 
-    std::function<SolveState(PdsState& state, bool output, double timeLimit)> solver;
-    if (solve == "gurobi"s) {
-        solver = solve_pds;
-    } else if (solve == "none"s) {
-        solver = [](auto&, auto, auto) { return SolveState::Other; };
-    } else if (solve == "domination"s) {
-        solver = solveDominatingSet;
-    } else if (solve == "brimkov-orig"s) {
-        solver = solveBrimkov;
-    } else if (solve == "brimkov"s) {
-        solver = solveBrimkovExpanded;
-    } else if (solve == "jovanovic"s) {
-        solver = solveJovanovic;
-    } else if (solve == "fast-greedy"s) {
-        solver = [](auto& state, bool, double){ return fastGreedy(state);};
-    } else if (solve == "greedy"s) {
-        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestObservationNeighborhood);};
-    } else if (solve == "greedy-degree"s) {
-        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);};
-    } else if (solve == "greedy-median"s) {
-        solver = [&vm](auto& state, bool, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);};
-    } else if (solve == "branching"s) {
-        solver = [&vm](auto& state, bool, double){ return solveBranching(state, vm.count("reductions")); };
+    string solverName = vm["solve"].as<string>();
+    std::function<SolveState(PdsState&, double)> solve;
+    if (solverName == "branching") {
+        solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
+    } else if (solverName == "greedy") {
+        solve = [&vm](auto& state, double) { return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree); };
+    } else if (solverName == "fast-greedy"s) {
+        solve = [](auto& state, double){ return fastGreedy(state);};
+    } else if (solverName == "greedy-degree"s) {
+        solve = [&vm](auto& state, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);};
+    } else if (solverName == "greedy-median"s) {
+        solve = [&vm](auto& state, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);};
+    } else if (solverName == "none") {
+        solve = [](auto&, double) { return SolveState::Other; };
     } else {
-        fmt::print("unrecognized solver {}\n", solve);
+        try {
+            solve = [&vm,model=getModel(solverName)](auto &state, double timeout) {
+                return solvePowerDominatingSet(state,
+                                               vm.count("print-solve"),
+                                               timeout,
+                                               model);
+            };
+        } catch(std::invalid_argument& ex) {
+            fmt::print(stderr, "{}", ex.what());
+            return 2;
+        }
     }
-
     if (!vm.count("graph")) {
         fmt::print(stderr, "no input given\n");
         return 1;
@@ -248,7 +263,7 @@ int run(int argc, const char** argv) {
             auto tSub = now();
             fmt::print("solving subproblem {}\n", i);
             printState(subproblem);
-            result = combineSolveState(result, solver(subproblem, vm.count("print-solve"), vm["time-limit"].as<double>()));
+            result = combineSolveState(result, solve(subproblem, vm["time-limit"].as<double>()));
             state.applySubsolution(subproblem);
             auto tSubEnd = now();
             fmt::print("solved subproblem {} in {} ({} active)\n", i, ms(tSubEnd - tSub), subproblem.numActive());
@@ -258,7 +273,7 @@ int run(int argc, const char** argv) {
             ++i;
         }
     } else {
-        result = solver(state, vm.count("print-solve"), vm["time-limit"].as<double>());
+        result = solve(state, vm["time-limit"].as<double>());
     }
 
     if (result == SolveState::Infeasible) {

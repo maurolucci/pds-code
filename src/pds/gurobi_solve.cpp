@@ -68,8 +68,11 @@ SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>&
 
 SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
     auto& model = mipmodel.impl->model;
-    auto& xi = mipmodel.impl->xi;
+    auto oldstdout = dup(STDOUT_FILENO);
+    FILE *result = freopen("/dev/null", "a", stdout);
+    if (!result) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
     model.set(GRB_StringParam_LogFile, "gurobi.log");
+    dup2(oldstdout, STDOUT_FILENO);
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
 
@@ -87,9 +90,7 @@ SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
 }
 
 void applySolution(PdsState& state, MIPModel &mipmodel) {
-    auto& model = mipmodel.impl->model;
     auto& xi = mipmodel.impl->xi;
-    model.
     for (auto v: state.graph().vertices()) {
         if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
             state.setActive(v);
@@ -105,10 +106,6 @@ MIPModel modelJovanovicExpanded(PdsState& state) {
         MIPModel mipmodel;
         mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
         auto& model = mipmodel.impl->model;
-        model.set(GRB_StringParam_LogFile, "gurobi.log");
-        //GRBVar *xi_p = model.addVars(num_vertices(graph), GRB_BINARY);
-        //GRBVar *pij_p = model.addVars(2 * num_edges(graph), GRB_BINARY);
-        //GRBVar *si_p = model.addVars(num_vertices(graph));
         auto& xi = mipmodel.impl->xi;
         map<PowerGrid::VertexDescriptor, GRBVar> si;
         map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
@@ -204,12 +201,11 @@ MIPModel modelJovanovicExpanded(PdsState& state) {
     }
 }
 
-SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
-    auto model = GRBModel(getEnv());
-    model.set(GRB_IntParam_LogToConsole, int{output});
-    model.set(GRB_StringParam_LogFile, "gurobi.log");
-    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    map <PowerGrid::VertexDescriptor, GRBVar> xi;
+MIPModel modelDomination(PdsState& state) {
+    MIPModel mipmodel;
+    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
+    auto& model = mipmodel.impl->model;
+    auto& xi = mipmodel.impl->xi;
     for (auto v: state.graph().vertices()) {
         xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
     }
@@ -221,15 +217,14 @@ SolveState solveDominatingSet(PdsState& state, bool output, double timeLimit) {
         model.addConstr(sum >= 1);
     }
 
-    return solveModel(state, xi, model);
+    return mipmodel;
 }
 
-SolveState solveBrimkovExpanded(PdsState& state, bool output, double timeLimit) {
-    auto model = GRBModel(getEnv());
-    model.set(GRB_IntParam_LogToConsole, int{output});
-    model.set(GRB_StringParam_LogFile, "gurobi.log");
-    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    map <PowerGrid::VertexDescriptor, GRBVar> xi;
+MIPModel modelBrimkovExpanded(PdsState& state) {
+    MIPModel mipmodel;
+    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
+    auto& model = mipmodel.impl->model;
+    auto& xi = mipmodel.impl->xi;
     map <PowerGrid::VertexDescriptor, GRBVar> si;
     map <PowerGrid::EdgeDescriptor, GRBVar> ye;
     auto T = static_cast<double>(state.graph().numVertices());
@@ -294,16 +289,14 @@ SolveState solveBrimkovExpanded(PdsState& state, bool output, double timeLimit) 
             }
         }
     }
-
-    return solveModel(state, xi, model);
+    return mipmodel;
 }
 
-SolveState solveBrimkov(PdsState& state, bool output, double timeLimit) {
-    auto model = GRBModel(getEnv());
-    model.set(GRB_IntParam_LogToConsole, int{output});
-    model.set(GRB_StringParam_LogFile, "gurobi.log");
-    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    map <PowerGrid::VertexDescriptor, GRBVar> xi;
+MIPModel modelBrimkov(PdsState& state) {
+    MIPModel mipmodel;
+    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
+    auto& model = mipmodel.impl->model;
+    auto& xi = mipmodel.impl->xi;
     map <PowerGrid::VertexDescriptor, GRBVar> si;
     map <PowerGrid::EdgeDescriptor, GRBVar> ye;
     size_t T = state.graph().numVertices();
@@ -341,22 +334,13 @@ SolveState solveBrimkov(PdsState& state, bool output, double timeLimit) {
             }
         }
     }
-
-    return solveModel(state, xi, model);
+    return mipmodel;
 }
 
-SolveState solveAzamiBrimkov(PdsState& state, bool output, double timeLimit) {
-    unused(state, output, timeLimit);
+MIPModel modelAzamiBrimkov(PdsState& state) {
+    unused(state);
     struct NotImplemented : public std::exception {};
     throw NotImplemented{};
 }
-
-SolveState solveJovanovic(PdsState& state, bool output, double timeLimit) {
-    unused(state, output, timeLimit);
-    struct NotImplemented : public std::exception {};
-    throw NotImplemented{};
-}
-
-
 
 } // namespace pds

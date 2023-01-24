@@ -204,6 +204,22 @@ void writeSolutionStatistics(const std::string_view& name, const PdsState& state
 
 // Main
 
+auto getModel(const std::string& name) {
+    if (name == "gurobi" || name == "jovanovic") {
+        return pds::modelJovanovicExpanded;
+    } else if (name == "brimkov") {
+        return pds::modelBrimkov;
+    } else if (name == "brimkov2") {
+        return pds::modelBrimkovExpanded;
+    } else if (name == "azami" || name == "azami-brimkov") {
+        return pds::modelAzamiBrimkov;
+    } else if (name == "domination") {
+        return pds::modelDomination;
+    } else {
+        throw std::invalid_argument("unknown model " + name);
+    }
+}
+
 int main(int argc, const char** argv) {
     namespace po = boost::program_options;
     namespace fs = std::filesystem;
@@ -262,22 +278,24 @@ int main(int argc, const char** argv) {
 
     string solverName = vm["solve"].as<string>();
     std::function<SolveState(PdsState&, double)> solve;
-    if (solverName == "gurobi") {
-        preloadMIPSolver();
-        solve = [](auto &state, double timeout) { return solve_pds(state, false, timeout); };
-    } else if (solverName == "brimkov") {
-        solve = [](auto& state, double timeout) { return solveBrimkovExpanded(state, false, timeout); };
-    } else if (solverName == "ds" || solverName == "domination") {
-        solve = [](auto& state, double timeout) { return solveDominatingSet(state, false, timeout); };
-    } else if (solverName == "branching") {
+    if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
         solve = [](auto& state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "none") {
         solve = [](auto&, double) { return SolveState::Other; };
     } else {
-        fmt::print(stderr, "invalid solve: {}", solverName);
-        return 2;
+        try {
+            solve = [model=getModel(solverName)](auto &state, double timeout) {
+                return solvePowerDominatingSet(state,
+                                               false,
+                                               timeout,
+                                               model);
+            };
+        } catch(std::invalid_argument& ex) {
+            fmt::print(stderr, "{}", ex.what());
+            return 2;
+        }
     }
 
     std::optional<fs::path> drawdir;

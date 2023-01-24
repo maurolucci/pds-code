@@ -36,28 +36,18 @@ SolveState solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMI
 
 void applySolution(PdsState&, MIPModel& model);
 
-template<class F>
+template<class F = decltype(modelJovanovicExpanded)>
 //requires std::is_invocable_v<PdsState&>
-SolveState solve_pds(PdsState& state, bool output, double timeLimit, F model) {
+SolveState solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, F model = modelJovanovicExpanded) {
     auto mip = model(state);
     auto result = solveMIP(mip, output, timeLimit);
     applySolution(state, mip);
     return result;
 }
 
-inline SolveState solve_pds(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT) {
-    return solve_pds(state, output, timeLimit, modelJovanovicExpanded);
-}
-
-SolveState solveDominatingSet(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT);
-
-SolveState solveBrimkovExpanded(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT);
-
-SolveState solveBrimkov(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT);
-
-SolveState solveAzamiBrimkov(PdsState&state, bool output = false, double timeLimit = TIME_LIMIT);
-
-SolveState solveJovanovic(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT);
+//inline SolveState solve_pds(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT) {
+//    return solve_pds(state, output, timeLimit, modelJovanovicExpanded);
+//}
 
 } //namespace pds
 #endif //PDS_GUROBI_SOLVE_HPP
