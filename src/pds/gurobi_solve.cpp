@@ -201,6 +201,63 @@ MIPModel modelJovanovicExpanded(PdsState& state) {
     }
 }
 
+MIPModel modelJovanovic(PdsState& state) {
+    MIPModel mipmodel;
+    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
+    auto& model = mipmodel.impl->model;
+    auto& xi = mipmodel.impl->xi;
+    map<PowerGrid::VertexDescriptor, GRBVar> si;
+    map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
+    auto &graph = static_cast<const PdsState &>(state).graph();
+    const auto N = static_cast<double>(graph.numVertices());
+    const auto M = static_cast<double>(2 * graph.numVertices());
+    for (auto v: graph.vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
+        xi[v].set(GRB_StringAttr_VarName, fmt::format("x_{}", v));
+        si.try_emplace(v, model.addVar(1.0, N + 1, 0.0, GRB_CONTINUOUS));
+        si[v].set(GRB_StringAttr_VarName, fmt::format("s_{}", v));
+        for (auto w: graph.neighbors(v)) {
+            pij.try_emplace({v, w}, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+            pij[{v, w}].set(GRB_StringAttr_VarName, fmt::format("p_{},{}", v, w));
+            if (!state.isZeroInjection(v)) {
+                model.addConstr(pij[{v, w}] == 0.0);
+            }
+        }
+        if (state.isActive(v)) {
+            model.addConstr(xi[v] == 1.0);
+        }
+        if (state.isInactive(v)) {
+            model.addConstr(xi[v] == 0.0);
+        }
+    }
+    for (auto v: graph.vertices()) {
+        //model.addConstr(si[v] <= xi[v] + M * (1.0 - xi[v]));
+        GRBLinExpr outSum;
+        GRBLinExpr inSum;
+        GRBLinExpr observingNeighbors = xi.at(v);
+        GRBLinExpr observingEdges;
+        for (auto w: graph.neighbors(v)) {
+            //model.addConstr(si[v] <= xi[w] + M * (1.0 - xi[w]));
+            outSum += pij[{v, w}];
+            inSum += pij[{w, v}];
+            observingNeighbors += xi[w];
+            observingEdges += pij[{w, v}];
+        }
+        model.addConstr(si[v] <= M * (observingNeighbors + observingEdges));
+        model.addConstr(outSum <= 1);
+        model.addConstr(inSum <= 1);
+        model.addConstr(si[v] <= N);
+        for (auto w: graph.neighbors(v)) {
+            for (auto t: ranges::concat_view(graph.neighbors(w), ranges::single_view(w))) {
+                if (t != v) {
+                    model.addConstr(si[v] >= si[t] + 1 - M * (1.0 - pij[{w, v}]));
+                }
+            }
+        }
+    }
+    return mipmodel;
+}
+
 MIPModel modelDomination(PdsState& state) {
     MIPModel mipmodel;
     mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());

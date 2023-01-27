@@ -205,8 +205,10 @@ void writeSolutionStatistics(const std::string_view& name, const PdsState& state
 // Main
 
 auto getModel(const std::string& name) {
-    if (name == "gurobi" || name == "jovanovic") {
+    if (name == "gurobi" || name == "jovanovic2") {
         return pds::modelJovanovicExpanded;
+    } else if (name == "jovanovic") {
+        return pds::modelJovanovic;
     } else if (name == "brimkov") {
         return pds::modelBrimkov;
     } else if (name == "brimkov2") {

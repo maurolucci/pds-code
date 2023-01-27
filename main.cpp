@@ -86,8 +86,10 @@ struct DrawOptions {
 };
 
 auto getModel(const std::string& name) {
-    if (name == "gurobi" || name == "jovanovic") {
+    if (name == "gurobi" || name == "jovanovic2") {
         return pds::modelJovanovicExpanded;
+    } else if (name == "jovanovic") {
+        return pds::modelJovanovic;
     } else if (name == "brimkov") {
         return pds::modelBrimkov;
     } else if (name == "brimkov2") {
@@ -180,7 +182,7 @@ int run(int argc, const char** argv) {
     }
 
 
-    string solverName = vm["solve"].as<string>();
+    string solverName = vm["solver"].as<string>();
     std::function<SolveState(PdsState&, double)> solve;
     if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
