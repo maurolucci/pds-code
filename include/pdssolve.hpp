@@ -18,8 +18,8 @@ bool exhaustiveSimpleReductions(PdsState& state, F callback = pds::unused) {
         changed = false;
         if (state.disableLowDegree()) { callback(state, "low_degree"); changed = true; }
         while (state.collapseLeaves()) { callback(state, "leaves"); changed = true; }
-        if (state.reduceObservedNonZi()) { callback(state, "non_zi"); changed = true; }
         while (state.collapseDegreeTwo()) { callback(state, "path"); changed = true; }
+        if (state.reduceObservedNonZi()) { callback(state, "non_zi"); changed = true; }
         if (state.collapseObservedEdges()) { callback(state, "observed_edges"); changed = true; }
         anyChanged |= changed;
     } while (changed);

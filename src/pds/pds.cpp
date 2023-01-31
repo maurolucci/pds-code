@@ -114,19 +114,19 @@ bool PdsState::observe(Vertex vertex, Vertex origin) {
 }
 
 bool PdsState::disableLowDegreeRecursive(PdsState::Vertex start, VertexSet &seen) {
-    auto hasBlankNeighbor = [this] (auto v) {
-        return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w) || isBlank(w);} );
-    };
     bool changed = false;
     seen.insert(start);
-    if (m_graph.degree(start) <= 2 && hasBlankNeighbor(start) && isZeroInjection(start) && isBlank(start)) {
-        setInactive(start);
-        changed = true;
-    }
     for (auto w: m_graph.neighbors(start)) {
         if (!seen.contains(w)) {
             changed |= disableLowDegreeRecursive(w, seen);
         }
+    }
+    auto hasBlankNeighbor = [this] (auto v) {
+        return ranges::any_of(m_graph.neighbors(v), [this](auto w) { return isActive(w) || isBlank(w);} );
+    };
+    if (m_graph.degree(start) <= 2 && hasBlankNeighbor(start) && isZeroInjection(start) && isBlank(start)) {
+        setInactive(start);
+        changed = true;
     }
     return changed;
 }
@@ -272,7 +272,7 @@ bool PdsState::disableLowDegree() {
     assert(m_seen.empty());
     for (auto v: m_graph.vertices()) {
         if (m_graph.degree(v) >= 3) {
-            changed = disableLowDegreeRecursive(v, m_seen);
+            changed |= disableLowDegreeRecursive(v, m_seen);
         }
     }
     for (auto v: m_graph.vertices()) {
@@ -314,7 +314,7 @@ bool PdsState::collapseDegreeTwo() {
                     if (!isObserved(v) && isObserved(x) && isInactive(x) && isZeroInjection(x) && m_unobserved_degree[x] == 2 && m_graph.degree(otherNeighbor(x, v)) == 2 && isZeroInjection(otherNeighbor(x, v))) {
                         // v must be unobserved if x is observed
                         auto z = otherNeighbor(x, v);
-                        if (!m_graph.edge(y, z).has_value()) {
+                        if (!m_graph.hasEdge(y, z)) {
                             assert(!isObserved(z) && z != v && m_graph.edge(v, x) && m_graph.edge(x, z) &&
                                    m_graph.degree(z) == 2);
                             assert(isObserved(x) && !isObserved(v) && !isObserved(z));
@@ -331,7 +331,7 @@ bool PdsState::collapseDegreeTwo() {
                     } else if (!isObserved(v) && isObserved(y) && isInactive(y) && isZeroInjection(y) && m_unobserved_degree[y] == 2 && m_graph.degree(otherNeighbor(y, v)) == 2 && isZeroInjection(otherNeighbor(y, v))) {
                         // v must be unobserved if x is observed
                         auto z = otherNeighbor(y, v);
-                        if (!m_graph.edge(x, z).has_value()) {
+                        if (!m_graph.hasEdge(x, z)) {
                             assert(!isObserved(z) && z != v && m_graph.edge(v, y) && m_graph.edge(y, z) &&  m_graph.degree(z) == 2);
                             assert(isObserved(y) && !isObserved(v) && !isObserved(z));
                             m_graph.removeEdge(y, z);
