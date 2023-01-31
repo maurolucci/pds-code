@@ -395,9 +395,29 @@ MIPModel modelBrimkov(PdsState& state) {
 }
 
 MIPModel modelAzamiBrimkov(PdsState& state) {
-    unused(state);
-    struct NotImplemented : public std::exception {};
-    throw NotImplemented{};
+    MIPModel mipmodel;
+    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
+    auto& model = mipmodel.impl->model;
+    auto &graph = static_cast<const PdsState &>(state).graph();
+    auto& xi = mipmodel.impl->xi;
+    map <std::pair<size_t, PowerGrid::VertexDescriptor>, GRBVar> si;
+    map <std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> ye;
+    size_t T = graph.numVertices();
+    for (auto v: graph.vertices()) {
+        xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
+        GRBLinExpr vObserved;
+        for (size_t i = 0; i < T; ++i) {
+            si.try_emplace({i, v}, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+            vObserved += si[{i, v}];
+        }
+        model.addConstr(vObserved >= 0);
+        for (auto w: graph.neighbors(v)) {
+            ye.try_emplace({v, w}, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
+        }
+    }
+    struct Unimplemented{ };
+    throw Unimplemented{};
+    return mipmodel;
 }
 
 } // namespace pds
