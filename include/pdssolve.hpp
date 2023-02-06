@@ -64,59 +64,11 @@ bool noNecessaryReductions(PdsState &state, bool firstRun = true, F callback = u
 }
 
 namespace greedy_strategies {
-std::optional<PdsState::Vertex> largestObservationNeighborhood(const PdsState &state) {
-    using Vertex = PdsState::Vertex;
-    std::optional<Vertex> best;
-    size_t bestObserved = 0;
-    set<Vertex> active;
-    for (auto v: state.graph().vertices()) {
-        if (state.isActive(v)) { active.insert(v); }
-    }
-    for (auto v: state.graph().vertices()) {
-        if (state.isBlank(v)) {
-            size_t numObserved = state.numObserved(); //TODO
-            if (!best || bestObserved < numObserved) {
-                best = {v};
-                bestObserved = numObserved;
-            }
-        }
-    }
-    return best;
-}
+std::optional<PdsState::Vertex> largestObservationNeighborhood(const PdsState &state);
 
-std::optional<PdsState::Vertex> largestDegree(const PdsState &state) {
-    using Vertex = PdsState::Vertex;
-    std::optional<Vertex> best;
-    size_t bestObserved = 0;
-    for (auto v: state.graph().vertices()) {
-        if (state.isBlank(v)) {
-            if (!best || bestObserved < state.graph().degree(v)) {
-                best = {v};
-                bestObserved = state.graph().degree(v);
-            }
-        }
-    }
-    return best;
-}
+std::optional<PdsState::Vertex> largestDegree(const PdsState &state);
 
-std::optional<PdsState::Vertex> medianDegree(const PdsState &state) {
-    using Vertex = PdsState::Vertex;
-    std::vector<Vertex> vertices;
-    for (auto v: state.graph().vertices()) {
-        if (state.isBlank(v)) {
-            vertices.push_back(v);
-        }
-    }
-    if (vertices.size() == 0) return {};
-    auto deg = [&state](auto v) { return state.graph().degree(v);};
-    auto best = vertices.begin() + (vertices.size() + 1) / 2;
-    ranges::nth_element(vertices, best, [deg](auto v, auto w) { return deg(v) < deg(w);});
-    if (best != vertices.end()) {
-        return {*best};
-    } else {
-        return {};
-    }
-}
+std::optional<PdsState::Vertex> medianDegree(const PdsState &state);
 }
 
 template<
@@ -136,56 +88,10 @@ SolveState solveGreedy(PdsState& state, bool applyReductions = true, Strategy st
     return SolveState::Heuristic;
 }
 
-SolveState fastGreedy(PdsState& state) {
-    //auto comp = [&state] (auto v, auto w) { return state.graph().degree(v) < state.graph().degree(w); };
-    auto vertices = state.graph().vertices()
-            | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
-            | ranges::views::transform([&state](auto v) { return std::pair(state.graph().degree(v), v); })
-            | ranges::to<std::vector>;
-    ranges::make_heap(vertices);
-    while (!state.allObserved() && !vertices.empty()) {
-        while (!state.graph().hasVertex(vertices.front().second) || !state.isBlank(vertices.front().second)) {
-            ranges::pop_heap(vertices);
-            vertices.pop_back();
-            if (vertices.empty()) break;
-        }
-        ranges::pop_heap(vertices);
-        auto v = vertices.back().second;
-        vertices.pop_back();
-        state.setActive(v);
-        exhaustiveReductions(state);
-    }
-    if (!state.allObserved()) return SolveState::Infeasible;
-    return SolveState::Heuristic;
-}
+SolveState fastGreedy(PdsState& state);
 
 using Bounds = std::pair<size_t, size_t>;
-Bounds sensorBounds(const PdsState& state) {
-    size_t lower = 0, upper = 0, unobserved = 0;
-    for (auto v: state.graph().vertices()) {
-        if (state.isActive(v)) {
-            lower += 1;
-            upper += 1;
-        }
-        if (!state.isObserved(v)) {
-            unobserved += 1;
-            if (state.isBlank(v)) {
-                upper += 1;
-            }
-        }
-    }
-    return {lower + (unobserved > 0), upper + (unobserved > 0)};
-}
-
-bool isFeasible(const PdsState& state) {
-    auto copy = state;
-    for (auto v: state.graph().vertices()) {
-        if (!state.isInactive(v)) {
-            copy.setActive(v);
-        }
-    }
-    return copy.allObserved();
-}
+Bounds sensorBounds(const PdsState& state);
 
 template< std::invocable<const PdsState&> Strategy = std::optional<PdsState::Vertex>(const PdsState&) >
 SolveState solveBranching(PdsState &state,
@@ -206,8 +112,10 @@ SolveState solveBranching(PdsState &state,
     size_t explored = 0;
     using namespace std::chrono_literals;
     auto now = []() { return std::chrono::high_resolution_clock::now(); };
+    auto sec = [](auto time) { return std::chrono::duration_cast<std::chrono::seconds>(time).count(); };
     auto printPeriod = 1s;
     auto previousPrint = now();
+    auto start = previousPrint;
     while (!queue.empty()) {
         ++explored;
         PdsState top(std::move(queue.top().second));
@@ -217,7 +125,7 @@ SolveState solveBranching(PdsState &state,
         lower = bounds.first;
         auto t = now();
         if (t - previousPrint > printPeriod) {
-            fmt::print("explored {} nodes\t{}\t{}\t{}\t{}\t{}\n", explored, lower, upper, bounds.first, bounds.second, top.allObserved());
+            fmt::print("explored {} nodes\t{}\t{}\t{}\t{}\t{}\t{}s\n", explored, lower, upper, bounds.first, bounds.second, top.allObserved(), sec(t - start));
             previousPrint = t;
         }
         upper = std::min(upper, bounds.second);

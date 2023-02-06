@@ -47,7 +47,7 @@ function(enable_warnings target)
             /W4>)
 endfunction()
 
-add_library(pdslib STATIC src/pds/pds.cpp src/pds/draw_grid.cpp src/pds/graphio.cpp)
+add_library(pdslib STATIC src/pds/pds.cpp src/pds/draw_grid.cpp src/pds/graphio.cpp src/pds/pdssolve.cpp)
 target_include_directories(pdslib PUBLIC include)
 target_link_libraries(pdslib PRIVATE tinyxml2::tinyxml2)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)

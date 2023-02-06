@@ -151,6 +151,10 @@ public:
         return m_dependencies.numVertices();
     }
 
+    inline size_t numUnobserved() const {
+        return graph().numVertices() - numObserved();
+    }
+
     inline size_t numActive() const {
         assert(ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); })) == (ssize_t)m_numActive);
         return m_numActive;
@@ -159,6 +163,10 @@ public:
     inline size_t numInactive() const {
         assert(ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isInactive(v); })) == (ssize_t)m_numInactive);
         return m_numInactive;
+    }
+
+    inline size_t numBlank() const {
+        return graph().numVertices() - numActive() - numInactive();
     }
 
     inline size_t numZeroInjection() const {
