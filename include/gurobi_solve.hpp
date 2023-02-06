@@ -9,15 +9,18 @@
 
 #include "pds.hpp"
 
+// Forward declaration to avoid full gurobi header inclusion
+struct GRBModel;
+struct GRBVar;
+
 namespace pds {
 
 inline const double TIME_LIMIT = 10 * 60;
 
-/// Opaque implementation does not leak internal usage of Gurobi
 struct MIPModel {
-    struct Implementation;
-    std::unique_ptr<pds::MIPModel::Implementation> impl;
-    MIPModel() = default;
+    std::unique_ptr<GRBModel> model;
+    map<PowerGrid::VertexDescriptor, GRBVar> xi;
+    MIPModel();
     MIPModel(MIPModel&& other) = default;
     virtual ~MIPModel();
 };

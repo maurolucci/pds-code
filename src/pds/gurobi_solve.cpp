@@ -30,12 +30,7 @@ GRBEnv &getEnv() {
 }
 }
 
-struct MIPModel::Implementation {
-    GRBModel model;
-    map<PowerGrid::VertexDescriptor, GRBVar> xi;
-    Implementation(GRBEnv& env) : model(env) { }
-};
-
+MIPModel::MIPModel() : model(std::make_unique<GRBModel>(getEnv())), xi() { }
 MIPModel::~MIPModel() { }
 
 void preloadMIPSolver() {
@@ -67,7 +62,7 @@ SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>&
 }
 
 SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
-    auto& model = mipmodel.impl->model;
+    auto& model = *mipmodel.model;
     auto oldstdout = dup(STDOUT_FILENO);
     FILE *result = freopen("/dev/null", "a", stdout);
     if (!result) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
@@ -89,8 +84,8 @@ SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
     }
 }
 
-void applySolution(PdsState& state, MIPModel &mipmodel) {
-    auto& xi = mipmodel.impl->xi;
+void applySolution(PdsState& state, MIPModel &model) {
+    auto& xi = model.xi;
     for (auto v: state.graph().vertices()) {
         if (xi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
             state.setActive(v);
@@ -104,9 +99,8 @@ MIPModel modelJovanovicExpanded(PdsState& state) {
     namespace r3 = ranges;
     try {
         MIPModel mipmodel;
-        mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
-        auto& model = mipmodel.impl->model;
-        auto& xi = mipmodel.impl->xi;
+        auto& model = *mipmodel.model;
+        auto& xi = mipmodel.xi;
         map<PowerGrid::VertexDescriptor, GRBVar> si;
         map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
         auto &graph = static_cast<const PdsState &>(state).graph();
@@ -203,9 +197,8 @@ MIPModel modelJovanovicExpanded(PdsState& state) {
 
 MIPModel modelJovanovic(PdsState& state) {
     MIPModel mipmodel;
-    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
-    auto& model = mipmodel.impl->model;
-    auto& xi = mipmodel.impl->xi;
+    auto& model = *mipmodel.model;
+    auto& xi = mipmodel.xi;
     map<PowerGrid::VertexDescriptor, GRBVar> si;
     map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
     auto &graph = static_cast<const PdsState &>(state).graph();
@@ -260,9 +253,8 @@ MIPModel modelJovanovic(PdsState& state) {
 
 MIPModel modelDomination(PdsState& state) {
     MIPModel mipmodel;
-    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
-    auto& model = mipmodel.impl->model;
-    auto& xi = mipmodel.impl->xi;
+    auto& model = *mipmodel.model;
+    auto& xi = mipmodel.xi;
     for (auto v: state.graph().vertices()) {
         xi.try_emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY));
     }
@@ -279,9 +271,8 @@ MIPModel modelDomination(PdsState& state) {
 
 MIPModel modelBrimkovExpanded(PdsState& state) {
     MIPModel mipmodel;
-    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
-    auto& model = mipmodel.impl->model;
-    auto& xi = mipmodel.impl->xi;
+    auto& model = *mipmodel.model;
+    auto& xi = mipmodel.xi;
     map <PowerGrid::VertexDescriptor, GRBVar> si;
     map <PowerGrid::EdgeDescriptor, GRBVar> ye;
     auto T = static_cast<double>(state.graph().numVertices());
@@ -351,9 +342,8 @@ MIPModel modelBrimkovExpanded(PdsState& state) {
 
 MIPModel modelBrimkov(PdsState& state) {
     MIPModel mipmodel;
-    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
-    auto& model = mipmodel.impl->model;
-    auto& xi = mipmodel.impl->xi;
+    auto& model = *mipmodel.model;
+    auto& xi = mipmodel.xi;
     map <PowerGrid::VertexDescriptor, GRBVar> si;
     map <PowerGrid::EdgeDescriptor, GRBVar> ye;
     size_t T = state.graph().numVertices();
@@ -396,10 +386,9 @@ MIPModel modelBrimkov(PdsState& state) {
 
 MIPModel modelAzamiBrimkov(PdsState& state) {
     MIPModel mipmodel;
-    mipmodel.impl = std::make_unique<MIPModel::Implementation>(getEnv());
-    auto& model = mipmodel.impl->model;
+    auto& model = *mipmodel.model;
     auto &graph = static_cast<const PdsState &>(state).graph();
-    auto& xi = mipmodel.impl->xi;
+    auto& xi = mipmodel.xi;
     map <std::pair<size_t, PowerGrid::VertexDescriptor>, GRBVar> si;
     map <std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> ye;
     size_t T = graph.numVertices();
