@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from powersimdata import Grid
 import networkx as nx
 import numpy as np
@@ -11,6 +12,7 @@ if __name__ == '__main__':
         grid = Grid(con)
         graph = nx.Graph()
         graph.add_edges_from(np.array(grid.branch[['from_bus_id', 'to_bus_id']]))
+        graph.add_edges_from(np.array(grid.dcline[['from_bus_id', 'to_bus_id']]))
         for n in graph.nodes:
             graph.nodes[n]['zero_injection'] = 1
         for plant in grid.plant['bus_id']:
