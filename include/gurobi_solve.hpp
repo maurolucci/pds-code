@@ -38,6 +38,8 @@ MIPModel modelAzamiBrimkov(PdsState& state);
 
 SolveState solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT);
 
+SolveState solveBozeman(PdsState& state, bool output = false, double timeLimit = TIME_LIMIT);
+
 void applySolution(PdsState&, MIPModel& model);
 
 template<class F = decltype(modelJovanovicExpanded)>

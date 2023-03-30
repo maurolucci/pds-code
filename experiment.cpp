@@ -286,6 +286,8 @@ int main(int argc, const char** argv) {
         solve = [](auto& state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "none") {
         solve = [](auto&, double) { return SolveState::Other; };
+    } else if (solverName == "bozeman") {
+        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit); };
     } else {
         try {
             solve = [model=getModel(solverName)](auto &state, double timeout) {

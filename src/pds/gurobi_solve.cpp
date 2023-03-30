@@ -6,6 +6,8 @@
 #include <gurobi_c++.h>
 #include <unistd.h>
 
+#include "graphio.hpp"
+
 namespace pds {
 
 namespace {
@@ -407,6 +409,114 @@ MIPModel modelAzamiBrimkov(PdsState& state) {
     struct Unimplemented{ };
     throw Unimplemented{};
     return mipmodel;
+}
+
+using Fort = std::vector<PowerGrid::VertexDescriptor>;
+
+Fort smallestFort(PdsState &state, bool output, double timeLimit) {
+    GRBModel model(getEnv());
+    unused(state, output, timeLimit);
+    VertexMap<GRBVar> xi;
+    for (auto v: state.graph().vertices()) {
+        xi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("f_{}", v)));
+    }
+    GRBLinExpr allXi;
+    for (auto v: state.graph().vertices()) {
+        if (state.isObserved(v)) {
+            model.addConstr(xi[v] == 0);
+        }
+        allXi += xi[v];
+        for (auto w: state.graph().neighbors(v)) {
+            GRBLinExpr sum;
+            for (auto u: state.graph().neighbors(w)) {
+                if (u != v) {
+                    sum += xi[u];
+                }
+            }
+            model.addConstr(xi[w] + sum >= xi[v]);
+        }
+    }
+    model.addConstr(allXi >= 1);
+    model.optimize();
+    Fort fort;
+    switch (model.get(GRB_IntAttr_Status)) {
+        case GRB_OPTIMAL:
+        case GRB_TIME_LIMIT:
+            for (auto v: state.graph().vertices()) {
+                if (xi[v].get(GRB_DoubleAttr_X) > 0.5) {
+                    fort.push_back(v);
+                }
+            }
+            return fort;
+        default:
+            return {};
+    }
+}
+
+SolveState solveBozeman(PdsState &state, bool output, double timeLimit) {
+    unused(state, output, timeLimit);
+    auto lastSolution = state;
+    writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
+
+    std::vector<Fort> forts;
+    VertexSet seen;
+    GRBModel model(getEnv());
+    VertexMap<GRBVar> pi;
+    for (auto v: state.graph().vertices()) {
+        pi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("p_{}", v)));
+        if (state.isActive(v)) {
+            model.addConstr(pi.at(v) == 1);
+        }
+        if (state.isInactive(v)) {
+            model.addConstr(pi.at(v) == 0);
+        }
+    }
+    while(true) {
+        forts.push_back(smallestFort(lastSolution, output, timeLimit));
+        writePds(lastSolution.graph(), fmt::format("out/1_intermediate_{:04}.pds", forts.size()));
+        auto fortSolution = lastSolution;
+        for (auto v: state.graph().vertices()) { fortSolution.setBlank(v); }
+        for (auto v: forts.back()) { fortSolution.setInactive(v); }
+        writePds(fortSolution.graph(), fmt::format("out/2_fort_{:04}.pds", forts.size()));
+        if (forts.back().empty()) break;
+        GRBLinExpr fortSum;
+        for (auto v: forts.back()) {
+            fortSum += pi.at(v);
+            for (auto w: state.graph().neighbors(v)) {
+                fortSum += pi.at(w);
+            }
+        }
+        model.addConstr(fortSum >= 1);
+        fmt::print("fort: {}\n", forts.back());
+        model.optimize();
+        auto status = model.get(GRB_IntAttr_Status);
+        switch (status) {
+            case GRB_OPTIMAL:
+            case GRB_TIME_LIMIT:
+                for (auto v: state.graph().vertices()) {
+                    if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                        lastSolution.setActive(v);
+                    } else {
+                        lastSolution.setBlank(v);
+                    }
+                }
+            default:
+                break;
+        }
+        if (status != GRB_OPTIMAL) break;
+    }
+
+    std::swap(state, lastSolution);
+
+    auto status = model.get(GRB_IntAttr_Status);
+    switch (status) {
+        case GRB_OPTIMAL:
+            return SolveState::Optimal;
+        case GRB_TIME_LIMIT:
+            return SolveState::Timeout;
+        default:
+            return SolveState::Other;
+    }
 }
 
 } // namespace pds
