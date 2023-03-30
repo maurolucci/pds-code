@@ -46,6 +46,28 @@ SolveState fastGreedy(PdsState &state) {
     return SolveState::Heuristic;
 }
 
+SolveState topDownGreedy(PdsState &state) {
+    auto vertices = state.graph().vertices()
+                    | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
+                    | ranges::views::transform([&state](auto v) { return std::pair(-ssize_t(state.graph().degree(v)), v); })
+                    | ranges::to<std::vector>;
+    for (auto v: vertices) {
+        state.setActive(v.second);
+    }
+    if (!state.allObserved()) return SolveState::Infeasible;
+    ranges::make_heap(vertices);
+    while (!vertices.empty()) {
+        ranges::pop_heap(vertices);
+        auto v = vertices.back().second;
+        vertices.pop_back();
+        state.setInactive(v);
+        if (!state.allObserved()) {
+            state.setActive(v);
+        }
+    }
+    return SolveState::Heuristic;
+}
+
 namespace greedy_strategies {
 std::optional<PdsState::Vertex> medianDegree(const PdsState &state) {
     using Vertex = PdsState::Vertex;

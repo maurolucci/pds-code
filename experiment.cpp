@@ -284,8 +284,12 @@ int main(int argc, const char** argv) {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
         solve = [](auto& state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
+    } else if (solverName == "fast") {
+        solve = [](auto& state, double) { return fastGreedy(state); };
+    } else if (solverName == "topdown") {
+        solve = [](auto& state, double) { return topDownGreedy(state); };
     } else if (solverName == "none") {
-        solve = [](auto&, double) { return SolveState::Other; };
+        solve = [](auto &, double) { return SolveState::Other; };
     } else if (solverName == "bozeman") {
         solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit); };
     } else {

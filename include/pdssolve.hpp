@@ -90,6 +90,8 @@ SolveState solveGreedy(PdsState& state, bool applyReductions = true, Strategy st
 
 SolveState fastGreedy(PdsState& state);
 
+SolveState topDownGreedy(PdsState &state);
+
 using Bounds = std::pair<size_t, size_t>;
 Bounds sensorBounds(const PdsState& state);
 
