@@ -443,12 +443,69 @@ Fort smallestFort(PdsState &state, bool output, double timeLimit) {
     }
     model.addConstr(allXi >= 1);
     model.optimize();
-    Fort fort;
+    VertexList fort;
+    switch (model.get(GRB_IntAttr_Status)) {
+        case GRB_OPTIMAL:
+        case GRB_TIME_LIMIT:
+            assert(seen.empty());
+            for (auto v: state.graph().vertices()) {
+                if (xi[v].get(GRB_DoubleAttr_X) > 0.5) {
+                    if (!seen.contains(v)) fort.push_back(v);
+                    for (auto w: state.graph().neighbors(v)) {
+                        if (!seen.contains(w)) fort.push_back(w);
+                    }
+                }
+            }
+            for (auto v: fort) seen.erase(v);
+            assert(seen.empty());
+            return fort;
+        default:
+            return {};
+    }
+}
+VertexList bozemanFortNeighborhood2(const PdsState &state, bool output, double timeLimit) {
+    GRBModel model(getEnv());
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    //model.set(GRB_StringParam_LogFile, "gurobi.log");
+    //model.set(GRB_DoubleParam_MIPGap, 0.05);
+    //model.set(GRB_DoubleParam_MIPGapAbs, 10);
+    unused(state, output, timeLimit);
+    VertexMap<GRBVar> xi;
+    VertexMap<GRBVar> ni;
+    for (auto v: state.graph().vertices()) {
+        xi.emplace(v, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("f_{}", v)));
+        ni.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("n_{}", v)));
+    }
+    //model.setObjective(GRBLinExpr{0.0});
+    GRBLinExpr allXi;
+    for (auto v: state.graph().vertices()) {
+        if (state.isObserved(v)) {
+            model.addConstr(xi[v] == 0);
+        }
+        allXi += xi[v];
+        GRBLinExpr neighborSum;
+        for (auto w: state.graph().neighbors(v)) {
+            neighborSum += xi.at(w);
+            if (!state.isZeroInjection(w)) continue;
+            GRBLinExpr sum;
+            for (auto u: state.graph().neighbors(w)) {
+                if (u != v) {
+                    sum += xi[u];
+                }
+            }
+            model.addConstr(xi[w] + sum >= xi[v]);
+        }
+        model.addConstr(neighborSum <= state.graph().numVertices() * ni.at(v));
+    }
+    model.addConstr(allXi >= 1);
+    model.optimize();
+    VertexList fort;
     switch (model.get(GRB_IntAttr_Status)) {
         case GRB_OPTIMAL:
         case GRB_TIME_LIMIT:
             for (auto v: state.graph().vertices()) {
-                if (xi[v].get(GRB_DoubleAttr_X) > 0.5) {
+                if (ni.at(v).get(GRB_DoubleAttr_X) > 0.5) {
                     fort.push_back(v);
                 }
             }
@@ -458,75 +515,256 @@ Fort smallestFort(PdsState &state, bool output, double timeLimit) {
     }
 }
 
-SolveState solveBozeman(PdsState &state, bool output, double timeLimit) {
-    unused(state, output, timeLimit);
-    auto lastSolution = state;
-    writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
+namespace { struct Unimplemented {}; }
+std::vector<VertexList> components(const PdsState& state, VertexSet& seen) {
+    const auto& graph = state.graph();
+    std::vector<VertexList> components;
+    VertexList stack;
+    for (auto start: graph.vertices()) {
+        if (!seen.contains(start)) {
+            stack.push_back(start);
+            seen.insert(start);
+            VertexList comp;
+            while (!stack.empty()) {
+                auto current = stack.back(); stack.pop_back();
+                comp.push_back(current);
+                for (auto w: graph.neighbors(current)) {
+                    if (!seen.contains(w)) {
+                        seen.insert(w);
+                        stack.push_back(w);
+                    }
+                }
+            }
+            components.push_back(comp);
+        }
+    }
+    for (auto& comp: components) {
+        for (auto v: comp) {
+            seen.erase(v);
+        }
+    }
+    return components;
+}
 
-    std::vector<Fort> forts;
-    VertexSet seen;
+namespace {
+auto now() {
+    return std::chrono::high_resolution_clock::now();
+}
+}
+
+VertexList loganFortNeighborhood(const PdsState& state, bool output, double timeLimit, VertexSet& seen) {
+    VertexSet junctions;
+    std::vector<PowerGrid::VertexDescriptor> junctionVertices;
+    for (auto v: state.graph().vertices()) {
+        if (state.graph().degree(v) + state.isZeroInjection(v) >= 3) {
+            junctions.insert(v);
+            seen.insert(v);
+            junctionVertices.push_back(v);
+        }
+    }
+    auto comp = components(state, seen);
+    for (auto v: junctionVertices) {
+        seen.erase(v);
+    }
     GRBModel model(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
     model.set(GRB_StringParam_LogFile, "gurobi.log");
-    VertexMap<GRBVar> pi;
-    for (auto v: state.graph().vertices()) {
-        pi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("p_{}", v)));
-        if (state.isActive(v)) {
-            model.addConstr(pi.at(v) == 1);
+    VertexMap<GRBVar> fv;
+    VertexMap<GRBVar> mv;
+    std::vector<GRBVar> fp;
+    for (auto v: junctionVertices) {
+        fv.emplace(v, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("F_{}", v)));
+        mv.emplace(v, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("M_{}", v)));
+    }
+    for (size_t i = 0; i < comp.size(); ++i) {
+        fp.push_back(model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("F_p{}", i)));
+    }
+    GRBLinExpr sumMvFp;
+    GRBLinExpr objective;
+    GRBLinExpr weightedSumMvFp;
+    GRBLinExpr activeSum;
+    for (auto v: junctionVertices) {
+        sumMvFp += mv.at(v);
+        if (state.isObserved(v)) {
+            weightedSumMvFp += mv.at(v);
         }
-        if (state.isInactive(v)) {
-            model.addConstr(pi.at(v) == 0);
+        if (state.isActive(v)) {
+            activeSum += mv.at(v);
         }
     }
-    while(true) {
-        forts.push_back(smallestFort(lastSolution, output, timeLimit));
-        writePds(lastSolution.graph(), fmt::format("out/1_intermediate_{:04}.pds", forts.size()));
-        auto fortSolution = lastSolution;
-        for (auto v: state.graph().vertices()) { fortSolution.setBlank(v); }
-        for (auto v: forts.back()) { fortSolution.setInactive(v); }
-        writePds(fortSolution.graph(), fmt::format("out/2_fort_{:04}.pds", forts.size()));
-        if (forts.back().empty()) break;
-        GRBLinExpr fortSum;
-        for (auto v: forts.back()) {
-            fortSum += pi.at(v);
-            for (auto w: state.graph().neighbors(v)) {
-                fortSum += pi.at(w);
+    for (size_t i = 0; i < comp.size(); ++i) {
+        sumMvFp += comp.size() * fp.at(i);
+        for (auto v: comp[i]) {
+            if (state.isObserved(v)) { weightedSumMvFp += fp.at(i); }
+            if (state.isActive(v)) { activeSum += fp.at(i); }
+        }
+    }
+    model.setObjective(sumMvFp);
+    //model.addConstr(-weightedSumMvFp == 0); // 7
+    model.addConstr(activeSum == 0);
+    model.addConstr(sumMvFp >= 1);
+    for (auto u: junctionVertices) {
+        model.addConstr(fv.at(u) <= mv.at(u));
+        for (auto v: state.graph().neighbors(u)) {
+            if (junctions.contains(v)) {
+                model.addConstr(fv.at(v) <= mv.at(u));
             }
         }
-        model.addConstr(fortSum >= 1);
-        model.optimize();
-        auto status = model.get(GRB_IntAttr_Status);
-        size_t bound = 0;
+    }
+    for (size_t i = 0; i < comp.size(); ++i) {
+        const auto& path = comp[i];
+        for (auto u: path) {
+            for (auto v: state.graph().neighbors(u)) {
+                if (seen.contains(v)) continue;
+                seen.insert(v);
+                if (junctions.contains(v)) {
+                    model.addConstr(fv.at(v) <= fp.at(i));
+                    model.addConstr(fp.at(i) <= mv.at(v));
+                }
+            }
+        }
+        for (auto v: path) {
+            seen.erase(v);
+            for (auto w: state.graph().neighbors(v)) {
+                seen.erase(w);
+            }
+        }
+    }
+    assert(seen.empty());
+    for (auto v: junctionVertices) {
+        GRBLinExpr neighborSum;
+        for (auto u: state.graph().neighbors(v)) {
+            if (junctions.contains(u)) { neighborSum += fv.at(u); }
+        }
+        for (size_t i = 0; i < comp.size(); ++i) {
+            const auto& path = comp[i];
+            for (auto p: path) { seen.insert(p); }
+            size_t common = 0;
+            for (auto w: state.graph().neighbors(v)) {
+                if (seen.contains(w)) { ++common; }
+            }
+            if (common) { neighborSum += common * fp.at(i); }
+            for (auto p: path) { seen.erase(p); }
+        }
+        model.addConstr(2 * (mv.at(v) - fv.at(v)) <= neighborSum);
+    }
+    assert(seen.empty());
+    model.optimize();
+    VertexList fort;
+    switch (model.get(GRB_IntAttr_Status)) {
+        case GRB_OPTIMAL:
+        case GRB_TIME_LIMIT:
+            for (auto v: junctionVertices) {
+                if (mv.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                    fort.push_back(v);
+                }
+            }
+            for (size_t i = 0; i < comp.size(); ++i) {
+                if (fp.at(i).get(GRB_DoubleAttr_X) > 0.5) {
+                    for (auto v: comp[i]) { fort.push_back(v); }
+                }
+            }
+            return fort;
+        default:
+            return {};
+    }
+}
+
+SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int variant) {
+    unused(state, output, timeLimit);
+    auto lastSolution = state;
+    writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
+
+    try {
+        std::vector<VertexList> forts;
+        VertexSet seen;
+        GRBModel model(getEnv());
+        model.set(GRB_IntParam_LogToConsole, int{output});
+        model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+        model.set(GRB_StringParam_LogFile, "gurobi.log");
+        VertexMap<GRBVar> pi;
+        for (auto v: state.graph().vertices()) {
+            pi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("p_{}", v)));
+            if (state.isActive(v)) {
+                model.addConstr(pi.at(v) == 1);
+            }
+            if (state.isInactive(v)) {
+                model.addConstr(pi.at(v) == 0);
+            }
+        }
+        auto startingTime = now();
+        int status;
+        while (true) {
+            auto currentTime = now();
+            double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
+            switch(variant) {
+                case 1:
+                    forts.push_back(loganFortNeighborhood(lastSolution, output, remainingTimeout, seen));
+                    break;
+                case 2:
+                    forts.push_back(bozemanFortNeighborhood2(lastSolution, output, remainingTimeout));
+                    break;
+                case 0:
+                default:
+                    forts.push_back(bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen));
+            }
+            //writePds(lastSolution.graph(), fmt::format("out/1_intermediate_{:04}.pds", forts.size()));
+            //auto fortSolution = lastSolution;
+            //for (auto v: state.graph().vertices()) { if (state.isInactive(v)) { fortSolution.setBlank(v); } }
+            //for (auto v: forts.back()) { fortSolution.setInactive(v); }
+            //writePds(fortSolution.graph(), fmt::format("out/2_fort_{:04}.pds", forts.size()));
+            if (forts.back().empty()) break;
+            GRBLinExpr fortSum;
+            for (auto v: forts.back()) {
+                if (lastSolution.isActive(v)) {
+                    fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n", v, lastSolution.numObserved(), lastSolution.graph().numVertices());
+                }
+                if (state.isBlank(v)) {
+                    fortSum += pi.at(v);
+                }
+            }
+            model.addConstr(fortSum >= 1);
+            currentTime = now();
+            remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
+            model.set(GRB_DoubleParam_TimeLimit, remainingTimeout);
+            model.optimize();
+            status = model.get(GRB_IntAttr_Status);
+            size_t bound = 0;
+            if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
+            if (lastSolution.allObserved()) status = GRB_OPTIMAL;
+            switch (status) {
+                case GRB_OPTIMAL:
+                case GRB_TIME_LIMIT:
+                    bound = model.get(GRB_DoubleAttr_ObjBound);
+                    for (auto v: state.graph().vertices()) {
+                        if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                            lastSolution.setActive(v);
+                        } else {
+                            lastSolution.setBlank(v);
+                        }
+                    }
+                default:
+                    break;
+            }
+            fmt::print("fort {:4}: {}\nLB: {}\n", forts.size(), forts.back(), bound);
+            if (status != GRB_OPTIMAL || lastSolution.allObserved()) break;
+        }
+        std::swap(state, lastSolution);
+
         switch (status) {
             case GRB_OPTIMAL:
+                return SolveState::Optimal;
             case GRB_TIME_LIMIT:
-                bound = model.get(GRB_DoubleAttr_ObjBound);
-                for (auto v: state.graph().vertices()) {
-                    if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
-                        lastSolution.setActive(v);
-                    } else {
-                        lastSolution.setBlank(v);
-                    }
-                }
+                return SolveState::Timeout;
             default:
-                break;
+                return SolveState::Other;
         }
-        fmt::print("fort {:4}: {}\nLB: {}\n", forts.size(), forts.back(), bound);
-        if (status != GRB_OPTIMAL) break;
+    } catch (const GRBException& ex) {
+        fmt::print(stderr, "Gurobi Error [{}]: {}\n", ex.getErrorCode(), ex.getMessage());
+        throw ex;
     }
 
-    std::swap(state, lastSolution);
-
-    auto status = model.get(GRB_IntAttr_Status);
-    switch (status) {
-        case GRB_OPTIMAL:
-            return SolveState::Optimal;
-        case GRB_TIME_LIMIT:
-            return SolveState::Timeout;
-        default:
-            return SolveState::Other;
-    }
 }
 
 } // namespace pds

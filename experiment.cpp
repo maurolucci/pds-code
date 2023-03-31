@@ -290,8 +290,12 @@ int main(int argc, const char** argv) {
         solve = [](auto& state, double) { return topDownGreedy(state); };
     } else if (solverName == "none") {
         solve = [](auto &, double) { return SolveState::Other; };
+    } else if (solverName == "logan") {
+        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 1); };
     } else if (solverName == "bozeman") {
-        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit); };
+        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 0); };
+    } else if (solverName == "bozeman2") {
+        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 2); };
     } else {
         try {
             solve = [model=getModel(solverName)](auto &state, double timeout) {
