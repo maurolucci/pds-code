@@ -415,11 +415,15 @@ using Fort = std::vector<PowerGrid::VertexDescriptor>;
 
 Fort smallestFort(PdsState &state, bool output, double timeLimit) {
     GRBModel model(getEnv());
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
     unused(state, output, timeLimit);
     VertexMap<GRBVar> xi;
     for (auto v: state.graph().vertices()) {
         xi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("f_{}", v)));
     }
+    //model.setObjective(GRBLinExpr{0.0});
     GRBLinExpr allXi;
     for (auto v: state.graph().vertices()) {
         if (state.isObserved(v)) {
@@ -427,6 +431,7 @@ Fort smallestFort(PdsState &state, bool output, double timeLimit) {
         }
         allXi += xi[v];
         for (auto w: state.graph().neighbors(v)) {
+            if (!state.isZeroInjection(w)) continue;
             GRBLinExpr sum;
             for (auto u: state.graph().neighbors(w)) {
                 if (u != v) {
@@ -461,6 +466,9 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit) {
     std::vector<Fort> forts;
     VertexSet seen;
     GRBModel model(getEnv());
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
     VertexMap<GRBVar> pi;
     for (auto v: state.graph().vertices()) {
         pi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("p_{}", v)));
@@ -487,12 +495,13 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit) {
             }
         }
         model.addConstr(fortSum >= 1);
-        fmt::print("fort: {}\n", forts.back());
         model.optimize();
         auto status = model.get(GRB_IntAttr_Status);
+        size_t bound = 0;
         switch (status) {
             case GRB_OPTIMAL:
             case GRB_TIME_LIMIT:
+                bound = model.get(GRB_DoubleAttr_ObjBound);
                 for (auto v: state.graph().vertices()) {
                     if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
                         lastSolution.setActive(v);
@@ -503,6 +512,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit) {
             default:
                 break;
         }
+        fmt::print("fort {:4}: {}\nLB: {}\n", forts.size(), forts.back(), bound);
         if (status != GRB_OPTIMAL) break;
     }
 
