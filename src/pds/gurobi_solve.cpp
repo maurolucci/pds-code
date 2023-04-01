@@ -411,9 +411,9 @@ MIPModel modelAzamiBrimkov(PdsState& state) {
     return mipmodel;
 }
 
-using Fort = std::vector<PowerGrid::VertexDescriptor>;
+using VertexList = std::vector<PowerGrid::VertexDescriptor>;
 
-Fort smallestFort(PdsState &state, bool output, double timeLimit) {
+VertexList bozemanFortNeighborhood(const PdsState &state, bool output, double timeLimit, VertexSet& seen) {
     GRBModel model(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -674,11 +674,41 @@ VertexList loganFortNeighborhood(const PdsState& state, bool output, double time
 SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int variant) {
     unused(state, output, timeLimit);
     auto lastSolution = state;
-    writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
+    //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
 
     try {
         std::vector<VertexList> forts;
         VertexSet seen;
+        {
+            assert(seen.empty());
+            for (auto v: state.graph().vertices()) { seen.insert(v); }
+            for (auto v: state.graph().vertices()) {
+                if (!state.isObserved(v)) {
+                    seen.erase(v);
+                    for (auto w: state.graph().neighbors(v)) {
+                        seen.erase(w);
+                    }
+                }
+            }
+            auto unobserved = components(state, seen);
+            for (auto v: state.graph().vertices()) { seen.erase(v); }
+            assert(seen.empty());
+            for (auto& comp: unobserved) {
+                VertexList fort;
+                assert(seen.empty());
+                for (auto v: comp) {
+                    if (!seen.contains(v)) {
+                        fort.push_back(v);
+                        seen.insert(v);
+                    }
+                }
+                for (auto v: fort) {
+                    seen.erase(v);
+                }
+                assert(seen.empty());
+                forts.emplace_back(std::move(fort));
+            }
+        }
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, int{output});
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -695,19 +725,20 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
         }
         auto startingTime = now();
         int status;
+        size_t processedForts = 0;
         while (true) {
             auto currentTime = now();
             double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
             switch(variant) {
                 case 1:
-                    forts.push_back(loganFortNeighborhood(lastSolution, output, remainingTimeout, seen));
+                    forts.emplace_back(loganFortNeighborhood(lastSolution, output, remainingTimeout, seen));
                     break;
                 case 2:
-                    forts.push_back(bozemanFortNeighborhood2(lastSolution, output, remainingTimeout));
+                    forts.emplace_back(bozemanFortNeighborhood2(lastSolution, output, remainingTimeout));
                     break;
                 case 0:
                 default:
-                    forts.push_back(bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen));
+                    forts.emplace_back(bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen));
             }
             //writePds(lastSolution.graph(), fmt::format("out/1_intermediate_{:04}.pds", forts.size()));
             //auto fortSolution = lastSolution;
@@ -715,16 +746,24 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
             //for (auto v: forts.back()) { fortSolution.setInactive(v); }
             //writePds(fortSolution.graph(), fmt::format("out/2_fort_{:04}.pds", forts.size()));
             if (forts.back().empty()) break;
-            GRBLinExpr fortSum;
-            for (auto v: forts.back()) {
-                if (lastSolution.isActive(v)) {
-                    fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n", v, lastSolution.numObserved(), lastSolution.graph().numVertices());
+            for (; processedForts < forts.size(); ++processedForts) {
+                GRBLinExpr fortSum;
+                size_t blank = 0;
+                for (auto v: forts[processedForts]) {
+                    if (lastSolution.isActive(v)) {
+                        fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
+                                   v,
+                                   lastSolution.numObserved(),
+                                   lastSolution.graph().numVertices());
+                    }
+                    if (state.isBlank(v)) {
+                        fortSum += pi.at(v);
+                        ++blank;
+                    }
                 }
-                if (state.isBlank(v)) {
-                    fortSum += pi.at(v);
-                }
+                model.addConstr(fortSum >= 1);
+                fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
             }
-            model.addConstr(fortSum >= 1);
             currentTime = now();
             remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
             model.set(GRB_DoubleParam_TimeLimit, remainingTimeout);
@@ -747,7 +786,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                 default:
                     break;
             }
-            fmt::print("fort {:4}: {}\nLB: {}\n", forts.size(), forts.back(), bound);
+            fmt::print("LB: {} (status {})\n", bound, status);
             if (status != GRB_OPTIMAL || lastSolution.allObserved()) break;
         }
         std::swap(state, lastSolution);
