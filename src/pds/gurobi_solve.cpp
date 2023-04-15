@@ -810,7 +810,6 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     auto blank = state.graph().vertices()
                     | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
                     | ranges::to<std::vector>;
-    fmt::print("finding forts in {} blank vertices\n", blank.size());
     for (auto v: blank) { state.setActive(v); }
     std::vector<VertexList> forts;
     ranges::shuffle(blank);
@@ -860,9 +859,11 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
         VertexSet seen;
         auto forts = initialForts2(state, seen);
         GRBModel model(getEnv());
-        model.set(GRB_IntParam_LogToConsole, int{output});
+        model.set(GRB_IntParam_LogToConsole, false);
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-        model.set(GRB_StringParam_LogFile, "gurobi.log");
+        if (output) {
+            model.set(GRB_StringParam_LogFile, "gurobi.log");
+        }
         VertexMap<GRBVar> pi;
         for (auto v: state.graph().vertices()) {
             pi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("p_{}", v)));
@@ -881,15 +882,16 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
             double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
             switch(variant) {
                 case 1:
-                    forts.emplace_back(loganFortNeighborhood(lastSolution, output, remainingTimeout, seen));
+                    forts.emplace_back(loganFortNeighborhood(lastSolution, false, remainingTimeout, seen));
                     break;
                 case 2:
-                    forts.emplace_back(bozemanFortNeighborhood2(lastSolution, output, remainingTimeout));
+                    forts.emplace_back(bozemanFortNeighborhood2(lastSolution, false, remainingTimeout));
                     break;
                 case 3:
-                    forts.emplace_back(bozemanFortNeighborhood3(lastSolution, output, remainingTimeout));
+                    forts.emplace_back(bozemanFortNeighborhood3(lastSolution, false, remainingTimeout));
                     break;
                 case 4: {
+                    if (output) { fmt::print("finding forts in {} blank vertices\n", lastSolution.numBlank()); }
                     auto more_forts = initialForts3(lastSolution, seen);
                     for (auto f: more_forts) {
                         forts.emplace_back(std::move(f));
@@ -909,7 +911,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                 GRBLinExpr fortSum;
                 size_t blank = 0;
                 for (auto& v: forts[processedForts]) {
-                    if (lastSolution.isActive(v)) {
+                    if (output && lastSolution.isActive(v)) {
                         fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
                                    v,
                                    lastSolution.numObserved(),
@@ -921,7 +923,9 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                     }
                 }
                 model.addConstr(fortSum >= 1);
-                fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
+                if (output) {
+                    fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
+                }
             }
             currentTime = now();
             remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
@@ -945,7 +949,9 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                 default:
                     break;
             }
-            fmt::print("LB: {} (status {})\n", bound, status);
+            if(output) {
+                fmt::print("LB: {} (status {})\n", bound, status);
+            }
             if (status != GRB_OPTIMAL || lastSolution.allObserved()) break;
         }
         std::swap(state, lastSolution);

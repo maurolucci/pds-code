@@ -243,6 +243,7 @@ int main(int argc, const char** argv) {
             ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
             ("write,w", po::value<string>()->implicit_value("solutions"s), "write solutions to the specified directory")
             ("stat-file", po::value<string>(), "write statistics about solutions")
+            ("verbose,v", "print additional solver status info")
     ;
     po::positional_options_description pos;
     pos.add("graph", -1);
@@ -280,6 +281,8 @@ int main(int argc, const char** argv) {
 
     string solverName = vm["solve"].as<string>();
     std::function<SolveState(PdsState&, double)> solve;
+    bool verbose = vm.count("verbose");
+    preloadMIPSolver();
     if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
@@ -291,20 +294,20 @@ int main(int argc, const char** argv) {
     } else if (solverName == "none") {
         solve = [](auto &, double) { return SolveState::Other; };
     } else if (solverName == "logan") {
-        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 1); };
+        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 1); };
     } else if (solverName == "bozeman") {
-        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 0); };
+        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 0); };
     } else if (solverName == "bozeman2") {
-        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 2); };
+        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 2); };
     } else if (solverName == "bozeman3") {
-        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 3); };
+        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 3); };
     } else if (solverName == "forts") {
-        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 4); };
+        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 4); };
     } else {
         try {
-            solve = [model=getModel(solverName)](auto &state, double timeout) {
+            solve = [model=getModel(solverName),verbose](auto &state, double timeout) {
                 return solvePowerDominatingSet(state,
-                                               false,
+                                               verbose,
                                                timeout,
                                                model);
             };
