@@ -296,6 +296,10 @@ int main(int argc, const char** argv) {
         solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 0); };
     } else if (solverName == "bozeman2") {
         solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 2); };
+    } else if (solverName == "bozeman3") {
+        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 3); };
+    } else if (solverName == "forts") {
+        solve = [](auto& state, double timeLimit) { return solveBozeman(state, false, timeLimit, 4); };
     } else {
         try {
             solve = [model=getModel(solverName)](auto &state, double timeout) {

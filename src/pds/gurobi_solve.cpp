@@ -484,7 +484,64 @@ VertexList bozemanFortNeighborhood2(const PdsState &state, bool output, double t
             model.addConstr(xi[v] == 0);
         }
         allXi += xi[v];
-        GRBLinExpr neighborSum;
+        GRBLinExpr neighborSum{xi.at(v)};
+        for (auto w: state.graph().neighbors(v)) {
+            neighborSum += xi.at(w);
+            if (!state.isZeroInjection(w)) continue;
+            GRBLinExpr sum;
+            for (auto u: state.graph().neighbors(w)) {
+                if (u != v) {
+                    sum += xi[u];
+                }
+            }
+            model.addConstr(xi[w] + sum >= xi[v]);
+            //model.addConstr(ni.at(v) >= xi.at(w));
+        }
+        //model.addConstr(ni.at(v) >= xi.at(v));
+        model.addConstr(neighborSum <= state.graph().numVertices() * ni.at(v));
+    }
+    model.addConstr(allXi >= 1);
+    model.optimize();
+    VertexList fort;
+    switch (model.get(GRB_IntAttr_Status)) {
+        case GRB_OPTIMAL:
+        case GRB_TIME_LIMIT:
+            for (auto v: state.graph().vertices()) {
+                if (ni.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                    fort.push_back(v);
+                }
+            }
+            return fort;
+        default:
+            return {};
+    }
+}
+
+VertexList bozemanFortNeighborhood3(const PdsState &state, bool output, double timeLimit) {
+    GRBModel model(getEnv());
+    model.set(GRB_IntParam_LogToConsole, int{output});
+    model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    model.set(GRB_StringParam_LogFile, "gurobi.log");
+    //model.set(GRB_DoubleParam_MIPGap, 0.05);
+    //model.set(GRB_DoubleParam_MIPGapAbs, 10);
+    unused(state, output, timeLimit);
+    VertexMap<GRBVar> xi;
+    VertexMap<GRBVar> ni;
+    for (auto v: state.graph().vertices()) {
+        double weight = state.isInactive(v) ? 0.0 : 1.0;
+        xi.emplace(v, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("f_{}", v)));
+        ni.emplace(v, model.addVar(0.0, 1.0, weight, GRB_BINARY, fmt::format("n_{}", v)));
+    }
+    //model.setObjective(GRBLinExpr{0.0});
+    GRBLinExpr allXi;
+    for (auto v: state.graph().vertices()) {
+        if (state.isObserved(v)) {
+            model.addConstr(xi[v] == 0);
+        }
+        if (state.isBlank(v)) {
+            allXi += xi[v];
+        }
+        GRBLinExpr neighborSum{xi.at(v)};
         for (auto w: state.graph().neighbors(v)) {
             neighborSum += xi.at(w);
             if (!state.isZeroInjection(w)) continue;
@@ -671,44 +728,137 @@ VertexList loganFortNeighborhood(const PdsState& state, bool output, double time
     }
 }
 
+std::vector<VertexList> initialForts(const PdsState& state, VertexSet& seen) {
+    std::vector<VertexList> forts;
+    assert(seen.empty());
+    for (auto v: state.graph().vertices()) { seen.insert(v); }
+    for (auto v: state.graph().vertices()) {
+        if (!state.isObserved(v)) {
+            seen.erase(v);
+            for (auto w: state.graph().neighbors(v)) {
+                seen.erase(w);
+            }
+        }
+    }
+    auto unobserved = components(state, seen);
+    for (auto v: state.graph().vertices()) { seen.erase(v); }
+    assert(seen.empty());
+    for (auto& comp: unobserved) {
+        VertexList fort;
+        assert(seen.empty());
+        for (auto v: comp) {
+            if (!seen.contains(v)) {
+                fort.push_back(v);
+                seen.insert(v);
+            }
+        }
+        for (auto v: fort) {
+            seen.erase(v);
+        }
+        assert(seen.empty());
+        forts.emplace_back(std::move(fort));
+    }
+    return forts;
+}
+
+std::vector<VertexList> initialForts2(PdsState& state, VertexSet& seen) {
+    auto blank = state.graph().vertices()
+                 | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
+                 | ranges::to<std::vector>;
+    //ranges::shuffle(blank);
+    for (auto v: blank) { state.setActive(v); }
+    size_t first_blank = 0;
+    std::vector<VertexList> forts;
+    for (size_t i = 0; i < blank.size(); ++i) {
+        assert(state.isActive(blank[i]));
+        state.setBlank(blank[i]);
+        if (!state.allObserved()) {
+            VertexList fort;
+            for (auto v: state.graph().neighbors(blank[i])) {
+                if (!state.isObserved(v)) {
+                    seen.insert(v);
+                    fort.push_back(v);
+                }
+            }
+            if (!state.isObserved(blank[i])) {
+                seen.insert(blank[i]);
+                fort.push_back(blank[i]);
+            }
+            assert(!fort.empty());
+            size_t start = 0;
+            while (start < fort.size()) {
+                auto current = fort[start]; ++start;
+                for (auto other: state.graph().neighbors(current)) {
+                    if (!seen.contains(other) && (!state.isObserved(current) || !state.isObserved(other))) {
+                        seen.insert(other);
+                        fort.push_back(other);
+                    }
+                }
+            }
+            for (auto v: fort) { seen.erase(v); }
+            for (; first_blank <= i; ++first_blank) {
+                state.setActive(blank[first_blank]);
+            }
+            forts.emplace_back(std::move(fort));
+        }
+    }
+    for (auto v: blank) { state.setBlank(v); }
+    return forts;
+}
+
+std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
+    auto blank = state.graph().vertices()
+                    | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
+                    | ranges::to<std::vector>;
+    fmt::print("finding forts in {} blank vertices\n", blank.size());
+    for (auto v: blank) { state.setActive(v); }
+    std::vector<VertexList> forts;
+    ranges::shuffle(blank);
+    size_t blank_size = blank.size();
+    size_t i = 0;
+    while (i < blank_size) {
+        for (i = 0; i < blank_size; ++i) {
+            assert(state.isActive(blank[i]));
+            state.setBlank(blank[i]);
+            if (!state.allObserved()) {
+                VertexList fort;
+                seen.insert(blank[i]);
+                fort.push_back(blank[i]);
+                assert(!fort.empty());
+                size_t start = 0;
+                while (start < fort.size()) {
+                    auto current = fort[start]; ++start;
+                    for (auto other: state.graph().neighbors(current)) {
+                        if (!seen.contains(other) && (!state.isObserved(current) || !state.isObserved(other))) {
+                            seen.insert(other);
+                            fort.push_back(other);
+                        }
+                    }
+                }
+                for (auto v: fort) { seen.erase(v); }
+                for (size_t j = 0; j < blank_size; ++j) {
+                    state.setActive(blank[j]);
+                }
+                assert(blank_size > 0);
+                --blank_size;
+                std::swap(blank[i], blank[blank_size]);
+                forts.emplace_back(std::move(fort));
+                break;
+            }
+        }
+    }
+    for (auto v: blank) { state.setBlank(v); }
+    return forts;
+}
+
 SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int variant) {
     unused(state, output, timeLimit);
     auto lastSolution = state;
     //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
 
     try {
-        std::vector<VertexList> forts;
         VertexSet seen;
-        {
-            assert(seen.empty());
-            for (auto v: state.graph().vertices()) { seen.insert(v); }
-            for (auto v: state.graph().vertices()) {
-                if (!state.isObserved(v)) {
-                    seen.erase(v);
-                    for (auto w: state.graph().neighbors(v)) {
-                        seen.erase(w);
-                    }
-                }
-            }
-            auto unobserved = components(state, seen);
-            for (auto v: state.graph().vertices()) { seen.erase(v); }
-            assert(seen.empty());
-            for (auto& comp: unobserved) {
-                VertexList fort;
-                assert(seen.empty());
-                for (auto v: comp) {
-                    if (!seen.contains(v)) {
-                        fort.push_back(v);
-                        seen.insert(v);
-                    }
-                }
-                for (auto v: fort) {
-                    seen.erase(v);
-                }
-                assert(seen.empty());
-                forts.emplace_back(std::move(fort));
-            }
-        }
+        auto forts = initialForts2(state, seen);
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, int{output});
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -736,6 +886,15 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                 case 2:
                     forts.emplace_back(bozemanFortNeighborhood2(lastSolution, output, remainingTimeout));
                     break;
+                case 3:
+                    forts.emplace_back(bozemanFortNeighborhood3(lastSolution, output, remainingTimeout));
+                    break;
+                case 4: {
+                    auto more_forts = initialForts3(lastSolution, seen);
+                    for (auto f: more_forts) {
+                        forts.emplace_back(std::move(f));
+                    }
+                    break; }
                 case 0:
                 default:
                     forts.emplace_back(bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen));
@@ -749,7 +908,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
             for (; processedForts < forts.size(); ++processedForts) {
                 GRBLinExpr fortSum;
                 size_t blank = 0;
-                for (auto v: forts[processedForts]) {
+                for (auto& v: forts[processedForts]) {
                     if (lastSolution.isActive(v)) {
                         fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
                                    v,
