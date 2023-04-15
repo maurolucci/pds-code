@@ -877,6 +877,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
         auto startingTime = now();
         int status;
         size_t processedForts = 0;
+        size_t solvedNeighborhoods = 0;
         while (true) {
             auto currentTime = now();
             double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
@@ -929,6 +930,22 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
             }
             currentTime = now();
             remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
+            {
+                auto filename = fmt::format("hs/{:04}.hs", solvedNeighborhoods);
+                ++solvedNeighborhoods;
+                FILE* file = fopen(filename.c_str(), "w");
+                fmt::print(file, "{} {}\n", state.graph().numVertices(), forts.size());
+                for (auto& f: forts) {
+                    VertexList fortBlank;
+                    for (auto v: f) {
+                        if (state.isBlank(v)) {
+                            fortBlank.push_back(v);
+                        }
+                    }
+                    fmt::print(file, "{}\n", fmt::join(fortBlank, " "));
+                }
+                fclose(file);
+            }
             model.set(GRB_DoubleParam_TimeLimit, remainingTimeout);
             model.optimize();
             status = model.get(GRB_IntAttr_Status);
