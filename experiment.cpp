@@ -390,7 +390,9 @@ int main(int argc, const char** argv) {
             auto reduced = state;
             if (subproblems) {
                 auto checkpoint = t1;
-                for (auto& substate: state.subproblems()) {
+                auto subproblems = state.subproblems();
+                ranges::sort(subproblems, [](const auto& left, const auto& right) { return left.graph().numVertices() < right.graph().numVertices(); });
+                for (auto& substate: subproblems) {
                     if (!substate.allObserved()) {
                         auto tSubproblem = now();
                         double remainingTimeout = std::max(1.0, timeout - std::chrono::duration_cast<std::chrono::seconds>(tSubproblem - checkpoint).count());
