@@ -806,6 +806,69 @@ std::vector<VertexList> initialForts2(PdsState& state, VertexSet& seen) {
     return forts;
 }
 
+template<class Span>
+size_t localSearchFortShrinker(PdsState& state, Span blank) {
+    constexpr size_t INVALID = -1;
+    size_t currentMin = state.numUnobserved();
+    size_t blank_size = blank.size();
+    size_t bestVertex = INVALID;
+    do {
+        bestVertex = INVALID;
+        currentMin = state.numUnobserved();
+        for (size_t i = blank_size; i--;) {
+            state.setActive(blank[i]);
+            if (!state.allObserved() && state.numUnobserved() <= currentMin) {
+                bestVertex = i;
+            }
+            state.setBlank(blank[i]);
+        }
+        if (bestVertex != INVALID) {
+            state.setActive(blank[bestVertex]);
+            --blank_size;
+            std::swap(blank[bestVertex], blank[blank_size]);
+        }
+    } while (bestVertex != INVALID);
+    return blank.size() - blank_size;
+}
+
+template<class Span>
+size_t greedyFortShrinker(PdsState& state, Span deselected) {
+    if (deselected.empty()) return 0;
+    ranges::shuffle(deselected);
+    size_t skip = 0;
+    size_t vertex_count = deselected.size();
+    for (size_t i = vertex_count; i--; ) {
+        state.setActive(deselected[i]);
+        if (!state.allObserved()) {
+            ++skip;
+            std::swap(deselected[deselected.size() - skip], deselected[i]);
+        } else {
+            state.setBlank(deselected[i]);
+        }
+    }
+    return skip;
+}
+
+inline VertexList findFort(PdsState& state, PdsState::Vertex start, VertexSet& seen) {
+    VertexList fort;
+    seen.insert(start);
+    fort.push_back(start);
+    assert(!fort.empty());
+    size_t front = 0;
+    while (front < fort.size()) {
+        auto current = fort[front];
+        ++front;
+        for (auto other: state.graph().neighbors(current)) {
+            if (!seen.contains(other) && (!state.isObserved(current) || !state.isObserved(other))) {
+                seen.insert(other);
+                fort.push_back(other);
+            }
+        }
+    }
+    for (auto v: fort) { seen.erase(v); }
+    return fort;
+}
+
 std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     auto blank = state.graph().vertices()
                     | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
@@ -816,34 +879,25 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     size_t blank_size = blank.size();
     size_t i = 0;
     while (i < blank_size) {
-        for (i = 0; i < blank_size; ++i) {
-            assert(state.isActive(blank[i]));
-            state.setBlank(blank[i]);
-            if (!state.allObserved()) {
-                VertexList fort;
-                seen.insert(blank[i]);
-                fort.push_back(blank[i]);
-                assert(!fort.empty());
-                size_t start = 0;
-                while (start < fort.size()) {
-                    auto current = fort[start]; ++start;
-                    for (auto other: state.graph().neighbors(current)) {
-                        if (!seen.contains(other) && (!state.isObserved(current) || !state.isObserved(other))) {
-                            seen.insert(other);
-                            fort.push_back(other);
-                        }
-                    }
+        state.setBlank(blank[i]);
+        if (!state.allObserved()) {
+            auto fort = findFort(state, blank[i], seen);
+            assert(!fort.empty());
+            assert(fort.front() == blank[i]);
+            size_t reselected = localSearchFortShrinker(state, std::span(fort.begin(), fort.size()));
+            if (reselected) {
+                forts.emplace_back(findFort(state, blank[i], seen));
+                for (size_t j = 1; j <= reselected; ++j) {
+                    state.setBlank(fort[fort.size() - j]);
                 }
-                for (auto v: fort) { seen.erase(v); }
-                for (size_t j = 0; j < blank_size; ++j) {
-                    state.setActive(blank[j]);
-                }
-                assert(blank_size > 0);
-                --blank_size;
-                std::swap(blank[i], blank[blank_size]);
+            } else {
                 forts.emplace_back(std::move(fort));
-                break;
             }
+            state.setActive(blank[i]);
+            --blank_size;
+            std::swap(blank[i], blank[blank_size]);
+        } else {
+            ++i;
         }
     }
     for (auto v: blank) { state.setBlank(v); }
@@ -942,6 +996,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                             fortBlank.push_back(v);
                         }
                     }
+                    ranges::sort(fortBlank);
                     fmt::print(file, "{}\n", fmt::join(fortBlank, " "));
                 }
                 fclose(file);
