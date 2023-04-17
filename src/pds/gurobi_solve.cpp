@@ -817,8 +817,10 @@ size_t localSearchFortShrinker(PdsState& state, Span blank) {
         currentMin = state.numUnobserved();
         for (size_t i = blank_size; i--;) {
             state.setActive(blank[i]);
-            if (!state.allObserved() && state.numUnobserved() <= currentMin) {
-                bestVertex = i;
+            if (!state.allObserved()) {
+                if (state.numUnobserved() <= currentMin) {
+                    bestVertex = i;
+                }
             }
             state.setBlank(blank[i]);
         }
@@ -956,11 +958,6 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                 default:
                     forts.emplace_back(bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen));
             }
-            //writePds(lastSolution.graph(), fmt::format("out/1_intermediate_{:04}.pds", forts.size()));
-            //auto fortSolution = lastSolution;
-            //for (auto v: state.graph().vertices()) { if (state.isInactive(v)) { fortSolution.setBlank(v); } }
-            //for (auto v: forts.back()) { fortSolution.setInactive(v); }
-            //writePds(fortSolution.graph(), fmt::format("out/2_fort_{:04}.pds", forts.size()));
             if (forts.back().empty()) break;
             for (; processedForts < forts.size(); ++processedForts) {
                 GRBLinExpr fortSum;
@@ -1014,8 +1011,10 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                     for (auto v: state.graph().vertices()) {
                         if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
                             lastSolution.setActive(v);
-                        } else {
+                        } else if (state.isBlank(v)) {
                             lastSolution.setBlank(v);
+                        } else {
+                            lastSolution.setInactive(v);
                         }
                     }
                 default:
