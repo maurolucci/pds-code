@@ -75,7 +75,7 @@ template<
         std::invocable<const PdsState&> Strategy = std::optional<PdsState::Vertex>(const PdsState&),
         std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)
 >
-SolveState solveGreedy(PdsState& state, bool applyReductions = true, Strategy strategy = greedy_strategies::largestObservationNeighborhood, F callback = unused) {
+SolveResult solveGreedy(PdsState& state, bool applyReductions = true, Strategy strategy = greedy_strategies::largestObservationNeighborhood, F callback = unused) {
     while (!state.allObserved()) {
         if (applyReductions) {
             exhaustiveReductions(state, true, callback);
@@ -85,18 +85,18 @@ SolveState solveGreedy(PdsState& state, bool applyReductions = true, Strategy st
         if (!best) break;
         state.setActive(*best);
     }
-    return SolveState::Heuristic;
+    return {size_t{0}, state.numActive(), SolveState::Heuristic};
 }
 
-SolveState fastGreedy(PdsState& state);
+SolveResult fastGreedy(PdsState& state);
 
-SolveState topDownGreedy(PdsState &state);
+SolveResult topDownGreedy(PdsState &state);
 
 using Bounds = std::pair<size_t, size_t>;
 Bounds sensorBounds(const PdsState& state);
 
 template< std::invocable<const PdsState&> Strategy = std::optional<PdsState::Vertex>(const PdsState&) >
-SolveState solveBranching(PdsState &state,
+SolveResult solveBranching(PdsState &state,
                     bool useReductions,
                     Strategy strategy = greedy_strategies::largestDegree) {
     if (useReductions) {
@@ -158,7 +158,7 @@ SolveState solveBranching(PdsState &state,
     fmt::print("finished after exploring {} nodes\t{}\t{}\n", explored, lower, upper);
     state = std::move(heuristic);
     fmt::print("solved by branching. result: {}\n", upper);
-    return SolveState::Optimal;
+    return {lower, upper, SolveState::Optimal};
 }
 
 } //namespace pds

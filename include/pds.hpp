@@ -30,6 +30,12 @@ enum class SolveState {
     Other
 };
 
+struct SolveResult {
+    size_t lower;
+    size_t upper;
+    SolveState state;
+};
+
 SolveState combineSolveState(SolveState first, SolveState second);
 
 enum class PmuState : signed char {
@@ -116,21 +122,21 @@ public:
     void addEdge(Vertex source, Vertex target);
     void removeVertex(Vertex v);
 
-    inline bool isZeroInjection(Vertex vertex) const { return m_graph[vertex].zero_injection; }
+    [[nodiscard]] inline bool isZeroInjection(Vertex vertex) const { return m_graph[vertex].zero_injection; }
 
-    inline PmuState activeState(Vertex vertex) const { return m_graph[vertex].pmu; }
+    [[nodiscard]] inline PmuState activeState(Vertex vertex) const { return m_graph[vertex].pmu; }
 
-    inline bool isActive(Vertex vertex) const { return activeState(vertex) == PmuState::Active; }
+    [[nodiscard]] inline bool isActive(Vertex vertex) const { return activeState(vertex) == PmuState::Active; }
 
-    inline bool isBlank(Vertex vertex) const { return activeState(vertex) == PmuState::Blank; }
+    [[nodiscard]] inline bool isBlank(Vertex vertex) const { return activeState(vertex) == PmuState::Blank; }
 
-    inline bool isInactive(Vertex vertex) const { return activeState(vertex) == PmuState::Inactive; }
+    [[nodiscard]] inline bool isInactive(Vertex vertex) const { return activeState(vertex) == PmuState::Inactive; }
 
-    inline bool isObserved(Vertex vertex) const { return m_dependencies.hasVertex(vertex); }
+    [[nodiscard]] inline bool isObserved(Vertex vertex) const { return m_dependencies.hasVertex(vertex); }
 
-    inline bool isObservingEdge(Vertex source, Vertex target) const { return m_dependencies.hasEdge(source, target); }
+    [[nodiscard]] inline bool isObservingEdge(Vertex source, Vertex target) const { return m_dependencies.hasEdge(source, target); }
 
-    inline size_t unobservedDegree(Vertex v) const {
+    [[nodiscard]] inline size_t unobservedDegree(Vertex v) const {
         assert(m_unobserved_degree.at(v) == ranges::distance(m_graph.neighbors(v) | ranges::views::filter([this](auto v) { return !isObserved(v);})));
         return m_unobserved_degree.at(v);
     }
@@ -143,38 +149,38 @@ public:
 
     bool setBlank(Vertex vertex);
 
-    inline bool allObserved() const {
+    [[nodiscard]] inline bool allObserved() const {
         return numObserved() == graph().numVertices();
     }
 
-    inline size_t numObserved() const {
+    [[nodiscard]] inline size_t numObserved() const {
         return m_dependencies.numVertices();
     }
 
-    inline size_t numUnobserved() const {
+    [[nodiscard]] inline size_t numUnobserved() const {
         return graph().numVertices() - numObserved();
     }
 
-    inline size_t numActive() const {
+    [[nodiscard]] inline size_t numActive() const {
         assert(ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isActive(v); })) == (ssize_t)m_numActive);
         return m_numActive;
     }
 
-    inline size_t numInactive() const {
+    [[nodiscard]] inline size_t numInactive() const {
         assert(ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isInactive(v); })) == (ssize_t)m_numInactive);
         return m_numInactive;
     }
 
-    inline size_t numBlank() const {
+    [[nodiscard]] inline size_t numBlank() const {
         return graph().numVertices() - numActive() - numInactive();
     }
 
-    inline size_t numZeroInjection() const {
+    [[nodiscard]] inline size_t numZeroInjection() const {
         return ranges::distance(graph().vertices() | ranges::views::filter([this](auto v) { return isZeroInjection(v); }));
     }
 
-    inline const PowerGrid& graph() const { return m_graph; }
-    inline const auto& observationGraph() const { return m_dependencies; }
+    [[nodiscard]] inline const PowerGrid& graph() const { return m_graph; }
+    [[nodiscard]] inline const auto& observationGraph() const { return m_dependencies; }
 
     inline PowerGrid && moveGraph() { return std::move(m_graph); }
 
@@ -192,9 +198,7 @@ public:
 
     bool collapseObservedEdges();
 
-    bool solveTrivial();
-
-    std::vector<PdsState> subproblems() const;
+    [[nodiscard]] std::vector<PdsState> subproblems() const;
 
     void applySubsolution(const PdsState& other);
 

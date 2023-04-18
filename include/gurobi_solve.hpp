@@ -36,18 +36,18 @@ MIPModel modelBrimkov(PdsState& state);
 MIPModel modelBrimkovExpanded(PdsState& state);
 MIPModel modelAzamiBrimkov(PdsState& state);
 
-SolveState solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT);
+SolveResult solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT);
 
-SolveState solveBozeman(PdsState& state, int output = 0, double timeLimit = TIME_LIMIT, int fortGenerator = 0);
+SolveResult solveBozeman(PdsState& state, int output = 0, double timeLimit = TIME_LIMIT, int fortGenerator = 0);
 
 void applySolution(PdsState&, MIPModel& model);
 
 template<class F = decltype(modelJovanovicExpanded)>
 //requires std::is_invocable_v<PdsState&>
-inline SolveState solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, F model = modelJovanovicExpanded) {
+inline SolveResult solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, F model = modelJovanovicExpanded) {
     auto mip = model(state);
     auto result = solveMIP(mip, output, timeLimit);
-    if (result != SolveState::Infeasible) {
+    if (result.state != SolveState::Infeasible) {
         applySolution(state, mip);
     }
     return result;

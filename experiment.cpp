@@ -280,7 +280,7 @@ int main(int argc, const char** argv) {
     }
 
     string solverName = vm["solve"].as<string>();
-    std::function<SolveState(PdsState&, double)> solve;
+    std::function<SolveResult(PdsState&, double)> solve;
     bool verbose = vm.count("verbose");
     preloadMIPSolver();
     if (solverName == "branching") {
@@ -292,7 +292,7 @@ int main(int argc, const char** argv) {
     } else if (solverName == "topdown") {
         solve = [](auto& state, double) { return topDownGreedy(state); };
     } else if (solverName == "none") {
-        solve = [](auto &, double) { return SolveState::Other; };
+        solve = [](auto & state, double) { return SolveResult{ size_t{0}, state.numActive() + state.numBlank(), SolveState::Other }; };
     } else if (solverName == "smith") {
         solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 1); };
     } else if (solverName == "bozeman") {
@@ -386,7 +386,7 @@ int main(int argc, const char** argv) {
             size_t pmusReduced = state.numActive();
             size_t blankReduced = nReduced - state.numActive() - state.numInactive();
             auto t1 = now();
-            SolveState result = SolveState::Optimal;
+            SolveResult result = {state.numActive(), state.numActive(), SolveState::Optimal };
             auto reduced = state;
             if (subproblems) {
                 auto checkpoint = t1;
@@ -396,8 +396,12 @@ int main(int argc, const char** argv) {
                     if (!substate.allObserved()) {
                         auto tSubproblem = now();
                         double remainingTimeout = std::max(1.0, timeout - std::chrono::duration_cast<std::chrono::seconds>(tSubproblem - checkpoint).count());
-                        result = combineSolveState(result, solve(substate, remainingTimeout));
+                        size_t initialActive = substate.numActive();
+                        auto subresult = solve(substate, remainingTimeout);
+                        result.state = combineSolveState(result.state, subresult.state);
                         state.applySubsolution(substate);
+                        result.lower += std::max(subresult.lower, initialActive) - initialActive;
+                        result.upper += std::max(subresult.upper, initialActive) - initialActive;
                     }
                 }
             } else {
@@ -432,12 +436,13 @@ int main(int argc, const char** argv) {
             using namespace fmt::literals;
             for (auto file: outputs) {
                 fmt::print(file,
-                           "{name},{run},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
+                           "{name},{run},{lower_bound},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
                            "name"_a = filename,
                            "run"_a = i,
+                           "lower_bound"_a = result.lower,
                            "pmus"_a = pmus,
                            "solved"_a = state.allObserved(),
-                           "result"_a = result,
+                           "result"_a = result.state,
                            "t_total"_a = µs(t2 - t0),
                            "t_reductions"_a = µs(t1 - t0),
                            "t_solver"_a = µs(t2 - t1),

@@ -183,7 +183,7 @@ int run(int argc, const char** argv) {
 
 
     string solverName = vm["solver"].as<string>();
-    std::function<SolveState(PdsState&, double)> solve;
+    std::function<SolveResult(PdsState&, double)> solve;
     if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
@@ -195,7 +195,7 @@ int run(int argc, const char** argv) {
     } else if (solverName == "greedy-median"s) {
         solve = [&vm](auto& state, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::medianDegree);};
     } else if (solverName == "none") {
-        solve = [](auto&, double) { return SolveState::Other; };
+        solve = [](auto&, double) { return SolveResult{{}, {}, SolveState::Other}; };
     } else {
         try {
             solve = [&vm,model=getModel(solverName)](auto &state, double timeout) {
@@ -258,15 +258,19 @@ int run(int argc, const char** argv) {
         }
     }
 
-    SolveState result = SolveState::Optimal;
+    SolveResult result{state.numActive(), state.numActive(), SolveState::Optimal};
 
     if (vm.count("subproblem")) {
         for (size_t i = 0; auto &subproblem: subproblems) {
             auto tSub = now();
             fmt::print("solving subproblem {}\n", i);
             printState(subproblem);
-            result = combineSolveState(result, solve(subproblem, vm["time-limit"].as<double>()));
+            size_t initialActive = subproblem.numActive();
+            auto subresult = solve(subproblem, vm["time-limit"].as<double>());
+            result.state = combineSolveState(result.state, subresult.state);
             state.applySubsolution(subproblem);
+            result.lower += std::max(subresult.lower, initialActive) - initialActive;
+            result.upper += std::max(subresult.upper, initialActive) - initialActive;
             auto tSubEnd = now();
             fmt::print("solved subproblem {} in {} ({} active)\n", i, ms(tSubEnd - tSub), subproblem.numActive());
             if (drawOptions.drawSubproblems && drawOptions.drawSolution) {
@@ -278,7 +282,7 @@ int run(int argc, const char** argv) {
         result = solve(state, vm["time-limit"].as<double>());
     }
 
-    if (result == SolveState::Infeasible) {
+    if (result.state == SolveState::Infeasible) {
         auto tSolveEnd = now();
         fmt::print("model proved infeasible after {}\n", ms(tSolveEnd - tSolveStart));
         return 1;

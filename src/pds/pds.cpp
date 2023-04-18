@@ -573,17 +573,6 @@ void recurseComponent(
     }
 }
 
-bool PdsState::solveTrivial() {
-    if (!allObserved()) {
-        auto blank_filter = [this] (Vertex v) -> bool { return isBlank(v); };
-        auto possibleLocations = m_graph.vertices() | ranges::views::filter(blank_filter) | ranges::to<std::vector>();
-        if (possibleLocations.size() == 1) {
-            setActive(possibleLocations[0]);
-        }
-    }
-    return allObserved();
-}
-
 std::vector<PdsState> PdsState::subproblems() const {
     std::vector<PdsState> components;
     set<Vertex> seen;

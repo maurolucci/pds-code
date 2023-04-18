@@ -63,7 +63,7 @@ SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>&
     }
 }
 
-SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
+SolveResult solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
     auto& model = *mipmodel.model;
     auto oldstdout = dup(STDOUT_FILENO);
     FILE *result = freopen("/dev/null", "a", stdout);
@@ -76,13 +76,13 @@ SolveState solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
     model.optimize();
     switch (model.get(GRB_IntAttr_Status)) {
         case GRB_INFEASIBLE:
-            return SolveState::Infeasible;
+            return { size_t{1}, size_t{0}, SolveState::Infeasible };
         case GRB_OPTIMAL:
-            return SolveState::Optimal;
+            return { size_t(model.get(GRB_DoubleAttr_ObjBound)), size_t(model.get(GRB_DoubleAttr_ObjVal)), SolveState::Optimal };
         case GRB_TIME_LIMIT:
-            return SolveState::Timeout;
+            return { size_t(model.get(GRB_DoubleAttr_ObjBound)), size_t(model.get(GRB_DoubleAttr_ObjVal)), SolveState::Timeout };
         default:
-            return SolveState::Other;
+            return { size_t{1}, size_t{0}, SolveState::Other };
     }
 }
 
@@ -906,7 +906,7 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     return forts;
 }
 
-SolveState solveBozeman(PdsState &state, int output, double timeLimit, int variant) {
+SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int variant) {
     unused(state, output, timeLimit);
     auto lastSolution = state;
     //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
@@ -1044,11 +1044,11 @@ SolveState solveBozeman(PdsState &state, int output, double timeLimit, int varia
 
         switch (status) {
             case GRB_OPTIMAL:
-                return SolveState::Optimal;
+                return {bound, bound, SolveState::Optimal};
             case GRB_TIME_LIMIT:
-                return SolveState::Timeout;
+                return {bound, (state.numActive() + state.numBlank()), SolveState::Timeout};
             default:
-                return SolveState::Other;
+                return {size_t{0}, state.numActive() + state.numBlank(), SolveState::Timeout};
         }
     } catch (const GRBException& ex) {
         fmt::print(stderr, "Gurobi Error [{}]: {}\n", ex.getErrorCode(), ex.getMessage());
