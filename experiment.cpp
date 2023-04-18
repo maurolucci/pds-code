@@ -293,7 +293,7 @@ int main(int argc, const char** argv) {
         solve = [](auto& state, double) { return topDownGreedy(state); };
     } else if (solverName == "none") {
         solve = [](auto &, double) { return SolveState::Other; };
-    } else if (solverName == "logan") {
+    } else if (solverName == "smith") {
         solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 1); };
     } else if (solverName == "bozeman") {
         solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 0); };

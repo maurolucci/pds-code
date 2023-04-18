@@ -906,11 +906,12 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     return forts;
 }
 
-SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int variant) {
+SolveState solveBozeman(PdsState &state, int output, double timeLimit, int variant) {
     unused(state, output, timeLimit);
     auto lastSolution = state;
     //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
 
+    size_t bound = 0;
     try {
         VertexSet seen;
         auto forts = initialForts2(state, seen);
@@ -934,6 +935,7 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
         int status;
         size_t processedForts = 0;
         size_t solvedNeighborhoods = 0;
+        size_t totalFortSize = 0;
         while (true) {
             auto currentTime = now();
             double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
@@ -975,9 +977,13 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
                     }
                 }
                 model.addConstr(fortSum >= 1);
-                if (output) {
+                totalFortSize += forts[processedForts].size();
+                if (output > 1) {
                     fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
                 }
+            }
+            if (output) {
+                fmt::print("#forts: {}, avg size: {:.2f}\n", forts.size(), double(totalFortSize) / forts.size());
             }
             currentTime = now();
             remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
@@ -1001,28 +1007,37 @@ SolveState solveBozeman(PdsState &state, bool output, double timeLimit, int vari
             model.set(GRB_DoubleParam_TimeLimit, remainingTimeout);
             model.optimize();
             status = model.get(GRB_IntAttr_Status);
-            size_t bound = 0;
+            size_t new_bound = 0;
             if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
             if (lastSolution.allObserved()) status = GRB_OPTIMAL;
             switch (status) {
+                case GRB_USER_OBJ_LIMIT:
+                    new_bound = model.get(GRB_DoubleAttr_ObjVal);
+                    break;
                 case GRB_OPTIMAL:
                 case GRB_TIME_LIMIT:
-                    bound = model.get(GRB_DoubleAttr_ObjBound);
-                    for (auto v: state.graph().vertices()) {
-                        if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
-                            lastSolution.setActive(v);
-                        } else if (state.isBlank(v)) {
-                            lastSolution.setBlank(v);
-                        } else {
-                            lastSolution.setInactive(v);
-                        }
-                    }
+                    new_bound = model.get(GRB_DoubleAttr_ObjBound);
+                    break;
                 default:
+                    fmt::print(stderr, "unexpected status: {}\n", status);
                     break;
             }
+            for (auto v: state.graph().vertices()) {
+                if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                    lastSolution.setActive(v);
+                } else if (state.isBlank(v)) {
+                    lastSolution.setBlank(v);
+                } else {
+                    lastSolution.setInactive(v);
+                }
+            }
+            if (bound > new_bound) { fmt::print(stderr, "!!!bound decreased!!!\n"); }
+            bound = new_bound;
+            model.set(GRB_DoubleParam_BestObjStop, bound);
             if(output) {
                 fmt::print("LB: {} (status {})\n", bound, status);
             }
+            if (status == GRB_USER_OBJ_LIMIT) status = GRB_OPTIMAL;
             if (status != GRB_OPTIMAL || lastSolution.allObserved()) break;
         }
         std::swap(state, lastSolution);
