@@ -189,7 +189,7 @@ int run(int argc, const char** argv) {
     } else if (solverName == "greedy") {
         solve = [&vm](auto& state, double) { return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree); };
     } else if (solverName == "fast-greedy"s) {
-        solve = [](auto& state, double){ return fastGreedy(state);};
+        solve = [](auto& state, double){ return fastGreedy(state, true);};
     } else if (solverName == "greedy-degree"s) {
         solve = [&vm](auto& state, double){ return solveGreedy(state, vm.count("reductions"), greedy_strategies::largestDegree);};
     } else if (solverName == "greedy-median"s) {

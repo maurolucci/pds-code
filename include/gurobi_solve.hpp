@@ -38,7 +38,7 @@ MIPModel modelAzamiBrimkov(PdsState& state);
 
 SolveResult solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT);
 
-SolveResult solveBozeman(PdsState& state, int output = 0, double timeLimit = TIME_LIMIT, int fortGenerator = 0);
+SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int fortGenerator, int greedyUpper);
 
 void applySolution(PdsState&, MIPModel& model);
 

@@ -243,6 +243,7 @@ int main(int argc, const char** argv) {
             ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
             ("write,w", po::value<string>()->implicit_value("solutions"s), "write solutions to the specified directory")
             ("stat-file", po::value<string>(), "write statistics about solutions")
+            ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
             ("verbose,v", "print additional solver status info")
     ;
     po::positional_options_description pos;
@@ -283,26 +284,27 @@ int main(int argc, const char** argv) {
     std::function<SolveResult(PdsState&, double)> solve;
     bool verbose = vm.count("verbose");
     preloadMIPSolver();
+    int greedyBoundMode = vm["greedy-bounds"].as<int>();
     if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
         solve = [](auto& state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "fast") {
-        solve = [](auto& state, double) { return fastGreedy(state); };
+        solve = [](auto& state, double) { return fastGreedy(state, true); };
     } else if (solverName == "topdown") {
         solve = [](auto& state, double) { return topDownGreedy(state); };
     } else if (solverName == "none") {
         solve = [](auto & state, double) { return SolveResult{ size_t{0}, state.numActive() + state.numBlank(), SolveState::Other }; };
     } else if (solverName == "smith") {
-        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 1); };
+        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 1, greedyBoundMode); };
     } else if (solverName == "bozeman") {
-        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 0); };
+        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 0, greedyBoundMode); };
     } else if (solverName == "bozeman2") {
-        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 2); };
+        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 2, greedyBoundMode); };
     } else if (solverName == "bozeman3") {
-        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 3); };
+        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 3, greedyBoundMode); };
     } else if (solverName == "forts") {
-        solve = [verbose](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 4); };
+        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 4, greedyBoundMode); };
     } else {
         try {
             solve = [model=getModel(solverName),verbose](auto &state, double timeout) {

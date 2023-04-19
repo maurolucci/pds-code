@@ -88,9 +88,9 @@ SolveResult solveGreedy(PdsState& state, bool applyReductions = true, Strategy s
     return {size_t{0}, state.numActive(), SolveState::Heuristic};
 }
 
-SolveResult fastGreedy(PdsState& state);
+SolveResult fastGreedy(PdsState &state, int useReductions = true);
 
-SolveResult topDownGreedy(PdsState &state);
+SolveResult topDownGreedy(PdsState &state, bool activateAll = true, std::span<PdsState::Vertex> vertices = {});
 
 using Bounds = std::pair<size_t, size_t>;
 Bounds sensorBounds(const PdsState& state);
@@ -103,7 +103,7 @@ SolveResult solveBranching(PdsState &state,
         exhaustiveReductions(state, true);
     }
     auto heuristic = state;
-    fastGreedy(heuristic);
+    fastGreedy(heuristic, true);
     auto upper = sensorBounds(heuristic).second;
     fmt::print("heuristic result: {}\n", upper);
     size_t lower = 0;

@@ -7,6 +7,7 @@
 #include <unistd.h>
 
 #include "graphio.hpp"
+#include "pdssolve.hpp"
 
 namespace pds {
 
@@ -906,10 +907,14 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     return forts;
 }
 
-SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int variant) {
+SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int variant, int greedyUpper) {
     unused(state, output, timeLimit);
     auto lastSolution = state;
     //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
+    auto blankVertices = state.graph().vertices()
+            | ranges::views::filter([&state] (auto v) { return state.isBlank(v); })
+            | ranges::to<std::vector<PdsState::Vertex>>;
+    PdsState upperBound = state;
 
     size_t bound = 0;
     try {
@@ -936,6 +941,7 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
         size_t processedForts = 0;
         size_t solvedNeighborhoods = 0;
         size_t totalFortSize = 0;
+        size_t upper = state.numActive() + state.numBlank();
         while (true) {
             auto currentTime = now();
             double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
@@ -974,6 +980,9 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
                     if (state.isBlank(v)) {
                         fortSum += pi.at(v);
                         ++blank;
+                    } else if (state.isInactive(v)) {
+                        // might have been changed by initialFortNeighborhood
+                        lastSolution.setInactive(v);
                     }
                 }
                 model.addConstr(fortSum >= 1);
@@ -1022,6 +1031,18 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
                     fmt::print(stderr, "unexpected status: {}\n", status);
                     break;
             }
+            if (greedyUpper) {
+                fastGreedy(lastSolution, (greedyUpper - 1) * 2);
+                size_t initial = lastSolution.numActive();
+                topDownGreedy(lastSolution, false, blankVertices);
+                if (lastSolution.numActive() < upper) {
+                    upper = lastSolution.numActive();
+                    if (output) {
+                        fmt::print("greedy {} → {}\n", initial, lastSolution.numActive());
+                    }
+                    std::swap(upperBound, lastSolution);
+                }
+            }
             for (auto v: state.graph().vertices()) {
                 if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
                     lastSolution.setActive(v);
@@ -1031,22 +1052,40 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
                     lastSolution.setInactive(v);
                 }
             }
-            if (bound > new_bound) { fmt::print(stderr, "!!!bound decreased!!!\n"); }
-            bound = new_bound;
+            if (bound > new_bound) {
+                if (status != GRB_TIME_LIMIT) { fmt::print(stderr, "!!!bound decreased!!!\n"); }
+            } else {
+                bound = new_bound;
+            }
+            if (bound == upper) {
+                std::swap(lastSolution, upperBound);
+                if (output) {
+                    fmt::print("greedy solution is optimal\n");
+                }
+            }
             model.set(GRB_DoubleParam_BestObjStop, bound);
             if(output) {
-                fmt::print("LB: {} (status {})\n", bound, status);
+                fmt::print("LB: {}, UB: {} (status {})\n", bound, upper, status);
             }
             if (status == GRB_USER_OBJ_LIMIT) status = GRB_OPTIMAL;
             if (status != GRB_OPTIMAL || lastSolution.allObserved()) break;
         }
         std::swap(state, lastSolution);
+        if (greedyUpper) {
+            fastGreedy(state, (greedyUpper - 1) * 2);
+            upper = std::min(upper, state.numActive());
+        } else {
+            upper = state.numActive() + state.numBlank();
+        }
+        if (upper == bound) {
+            status = GRB_OPTIMAL;
+        }
 
         switch (status) {
             case GRB_OPTIMAL:
                 return {bound, bound, SolveState::Optimal};
             case GRB_TIME_LIMIT:
-                return {bound, (state.numActive() + state.numBlank()), SolveState::Timeout};
+                return {bound, upper, SolveState::Timeout};
             default:
                 return {size_t{0}, state.numActive() + state.numBlank(), SolveState::Timeout};
         }
