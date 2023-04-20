@@ -1060,16 +1060,24 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
                 auto filename = fmt::format("hs/{:04}.hs", solvedNeighborhoods);
                 ++solvedNeighborhoods;
                 FILE* file = fopen(filename.c_str(), "w");
-                fmt::print(file, "{} {}\n", state.graph().numVertices(), forts.size());
+                fmt::print(file, "{} {}\n", state.graph().numVertices(), forts.size() + state.numActive());
+                for (auto v: state.graph().vertices()) {
+                    if (state.isActive(v)) {
+                        fmt::print(file, "{}\n", v);
+                    }
+                }
                 for (auto& f: forts) {
                     VertexList fortBlank;
+                    bool skip = false;
                     for (auto v: f) {
-                        if (state.isBlank(v)) {
+                        if (!state.isInactive(v)) {
                             fortBlank.push_back(v);
                         }
                     }
-                    ranges::sort(fortBlank);
-                    fmt::print(file, "{}\n", fmt::join(fortBlank, " "));
+                    if (!skip) {
+                        ranges::sort(fortBlank);
+                        fmt::print(file, "{}\n", fmt::join(fortBlank, " "));
+                    }
                 }
                 fclose(file);
             }
