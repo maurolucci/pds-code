@@ -107,7 +107,7 @@ MIPModel modelJovanovicExpanded(PdsState& state) {
         map<PowerGrid::VertexDescriptor, GRBVar> si;
         map<std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>, GRBVar> pij;
         auto &graph = static_cast<const PdsState &>(state).graph();
-        const double M = 2 * graph.numVertices();
+        const double M = static_cast<double>(2 * graph.numVertices());
         {
             for (auto v: graph.vertices()) {
                 xi.insert({v, model.addVar(0.0, M, 1.0, GRB_BINARY)});
@@ -924,8 +924,17 @@ struct Callback : public GRBCallback {
            upperBound(&upperBound), blank(blank), earlyStop(earlyStop)
     { }
     void callback() override {
+        if (where == GRB_CB_MIP) {
+            if (getIntInfo(GRB_CB_MIP_SOLCNT) > 0) {
+                auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBST) + 0.5);
+                auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBND));
+                if (objVal <= *upper && !solution->allObserved() && earlyStop && objBound > *lower) {
+                    abort();
+                }
+            }
+        }
         if (where == GRB_CB_MIPSOL) {
-            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBST));
+            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBST) + 0.5);
             auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBND));
             if (objVal <= *upper) {
                 for (auto v: blank) {
@@ -942,7 +951,9 @@ struct Callback : public GRBCallback {
                     if (earlyStop && objBound > *lower) { abort(); }
                 } else if (objVal < *upper) {
                     fmt::print("gurobi H {}\n", objVal);
+                    *upper = objVal;
                     *upperBound = *solution;
+                    if (*upper <= *lower) { abort(); }
                 }
             }
         }
@@ -967,6 +978,8 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, false);
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+        model.set(GRB_IntParam_NumericFocus, 1);
+        model.set(GRB_IntParam_Presolve, GRB_PRESOLVE_AGGRESSIVE);
         if (output) {
             model.set(GRB_StringParam_LogFile, "gurobi.log");
         }
@@ -1016,11 +1029,13 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
                 GRBLinExpr fortSum;
                 size_t blank = 0;
                 for (auto& v: forts[processedForts]) {
-                    if (output && lastSolution.isActive(v)) {
-                        fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
-                                   v,
-                                   lastSolution.numObserved(),
-                                   lastSolution.graph().numVertices());
+                    if (lastSolution.isActive(v)) {
+                        if (output) {
+                            fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
+                                       v,
+                                       lastSolution.numObserved(),
+                                       lastSolution.graph().numVertices());
+                        }
                     }
                     if (state.isBlank(v)) {
                         fortSum += pi.at(v);
@@ -1083,7 +1098,7 @@ SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int vari
                     }
                     break;
                 case GRB_USER_OBJ_LIMIT:
-                    new_bound = model.get(GRB_DoubleAttr_ObjVal);
+                    new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal));
                     break;
                 case GRB_OPTIMAL:
                 case GRB_TIME_LIMIT:
