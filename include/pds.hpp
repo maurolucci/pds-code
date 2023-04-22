@@ -65,6 +65,7 @@ using VertexSet = mpgraphs::VecSet<PowerGrid::VertexDescriptor, Timestamp>;
 template<typename T>
 using VertexMap = mpgraphs::VecMap<PowerGrid::VertexDescriptor, T, Timestamp>;
 #endif
+using VertexList = std::vector<PowerGrid::VertexDescriptor>;
 
 template<class T>
 size_t intersectionSize(const set<T>& first, const set<T>& second) {

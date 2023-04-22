@@ -5,7 +5,6 @@
 
 #include <boost/program_options.hpp>
 #include <fmt/format.h>
-#include <fmt/os.h>
 #include <fmt/chrono.h>
 
 #include <htd/main.hpp>
@@ -14,7 +13,7 @@
 #include "graphio.hpp"
 #include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
-#include "draw_grid.hpp"
+#include "fort_solve.hpp"
 
 using namespace pds;
 

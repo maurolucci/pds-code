@@ -12,6 +12,7 @@
 // Forward declaration to avoid full gurobi header inclusion
 struct GRBModel;
 struct GRBVar;
+struct GRBEnv;
 
 namespace pds {
 
@@ -26,6 +27,7 @@ struct MIPModel {
 };
 
 void preloadMIPSolver();
+GRBEnv& getEnv();
 
 void relaxMIPModel(MIPModel&);
 
@@ -37,8 +39,6 @@ MIPModel modelBrimkovExpanded(PdsState& state);
 MIPModel modelAzamiBrimkov(PdsState& state);
 
 SolveResult solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT);
-
-SolveResult solveBozeman(PdsState &state, int output, double timeLimit, int fortGenerator, int greedyUpper);
 
 void applySolution(PdsState&, MIPModel& model);
 
