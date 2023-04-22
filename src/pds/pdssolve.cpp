@@ -42,7 +42,7 @@ SolveResult fastGreedy(PdsState &state, int useReductions) {
             ranges::pop_heap(vertices);
             auto v = vertices.back().second;
             vertices = vertices.subspan(0, vertices.size() - 1);
-            if (!state.isObserved(v) || state.unobservedDegree(v) == 0) {
+            if (!state.isObserved(v) || state.unobservedDegree(v) != 0) {
                 state.setActive(v);
                 if (useReductions == 1) { exhaustiveReductions(state); }
                 if (useReductions == 2) { dominationReductions(state); }
