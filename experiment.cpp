@@ -201,6 +201,18 @@ void writeSolutionStatistics(const std::string_view& name, const PdsState& state
     );
 }
 
+struct FortStats {
+    double avgSize;
+    size_t fortCount;
+    size_t numHs;
+};
+
+void writeFortStats(const std::string_view& name, size_t run, const FortStats stat, FILE* out) {
+    using namespace fmt::literals;
+    // name,run,forts,avg_size,num_hitting_sets
+    fmt::print(out, "{},{},{},{},{}\n", name, run, stat.fortCount, stat.avgSize, stat.numHs);
+}
+
 // Main
 
 auto getModel(const std::string& name) {
@@ -243,6 +255,9 @@ int main(int argc, const char** argv) {
             ("write,w", po::value<string>()->implicit_value("solutions"s), "write solutions to the specified directory")
             ("stat-file", po::value<string>(), "write statistics about solutions")
             ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
+            ("fort-stats", po::value<string>(), "file for fort statistics")
+            ("early-stop", "stop hitting set solver when violating hitting set is found")
+            ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
             ("verbose,v", "print additional solver status info")
     ;
     po::positional_options_description pos;
@@ -282,8 +297,54 @@ int main(int argc, const char** argv) {
     string solverName = vm["solve"].as<string>();
     std::function<SolveResult(PdsState&, double)> solve;
     bool verbose = vm.count("verbose");
+    bool earlyStop = vm.count("early-stop");
     preloadMIPSolver();
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
+    size_t subproblemNumber = 0;
+    string currentName;
+    if (vm.count("write-forts")) {
+        std::string fortsDirName = vm["write-forts"].as<string>();
+        fs::create_directories(fs::absolute(fs::path(fortsDirName)));
+    }
+    FortStats fortStats;
+    callback::FortCallback fortCallback = [&,solved=size_t{0}] (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
+        if (vm.count("fort-stats") && when == pds::callback::When::FINAL) {
+            size_t totalFortSize = 0;
+            for (auto& fort: forts) {
+                totalFortSize += fort.size();
+            }
+            double averageSize = double(totalFortSize) / double(forts.size());
+            fortStats = {averageSize, forts.size(), solved};
+        }
+        if (vm.count("write-forts")) {
+            {
+                auto hs_file = fmt::format("hs/{}-{}-hs-{:04}.hs", currentName, subproblemNumber, solved);
+                FILE* file = fopen(hs_file.c_str(), "w");
+                fmt::print(file, "{} {}\n", state.graph().numVertices(), forts.size() + state.numActive());
+                // ensure that active vertices are selected to get the correct bound
+                for (auto v: state.graph().vertices()) {
+                    if (state.isActive(v)) {
+                        fmt::print(file, "1 {}\n", v);
+                    }
+                }
+                for (auto& f: forts) {
+                    VertexList fortBlank;
+                    bool skip = false;
+                    for (auto v: f) {
+                        if (!state.isInactive(v)) {
+                            fortBlank.push_back(v);
+                        }
+                    }
+                    if (!skip) {
+                        ranges::sort(fortBlank);
+                        fmt::print(file, "{} {}\n", fortBlank.size(), fmt::join(fortBlank, " "));
+                    }
+                }
+                fclose(file);
+            }
+        }
+        ++solved;
+    };
     if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
@@ -295,22 +356,29 @@ int main(int argc, const char** argv) {
     } else if (solverName == "none") {
         solve = [](auto & state, double) { return SolveResult{ size_t{0}, state.numActive() + state.numBlank(), SolveState::Other }; };
     } else if (solverName == "smith") {
-        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 1, greedyBoundMode); };
+        solve = [=](auto& state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 1, greedyBoundMode, earlyStop, fortCallback);
+        };
     } else if (solverName == "bozeman") {
-        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 0, greedyBoundMode); };
+        solve = [=](auto& state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 0, greedyBoundMode, earlyStop, fortCallback);
+        };
     } else if (solverName == "bozeman2") {
-        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 2, greedyBoundMode); };
+        solve = [=](auto& state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 2, greedyBoundMode, earlyStop, fortCallback);
+        };
     } else if (solverName == "bozeman3") {
-        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 3, greedyBoundMode); };
+        solve = [=](auto& state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 3, greedyBoundMode, earlyStop, fortCallback);
+        };
     } else if (solverName == "forts") {
-        solve = [=](auto& state, double timeLimit) { return solveBozeman(state, verbose, timeLimit, 4, greedyBoundMode); };
+        solve = [=](auto& state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 4, greedyBoundMode, earlyStop, fortCallback);
+        };
     } else {
         try {
             solve = [model=getModel(solverName),verbose](auto &state, double timeout) {
-                return solvePowerDominatingSet(state,
-                                               verbose,
-                                               timeout,
-                                               model);
+                return solvePowerDominatingSet(state, verbose, timeout, model);
             };
         } catch(std::invalid_argument& ex) {
             fmt::print(stderr, "{}", ex.what());
@@ -362,6 +430,14 @@ int main(int argc, const char** argv) {
         fmt::print(statFile, "# degrees format: <#zi+inactive>:<#zi+blank>:<#zi+active>:<#nonzi+inactive>:<#nonzi+blank>:<#nonzi.active>;...\n");
         fmt::print(statFile, "{}", "name,n,m,n_zero_injection,n_pmu,n_inactive,n_blank,n_observed,propagation_distance,tree_width,degrees\n");
     }
+    FILE* fortStatFile = nullptr;
+    if (vm.count("fort-stats")) {
+        auto fortStatFileName = vm["fort-stats"].as<string>();
+        fs::create_directories(fs::absolute(fs::path(fortStatFileName)).parent_path());
+        fortStatFile = fopen(fortStatFileName.c_str(), "w");
+        fmt::print(fortStatFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
+        fmt::print(fortStatFile, "{}", "name,run,forts,avg_size,num_hitting_sets\n");
+    }
 
     for (auto out: outputs) {
         fmt::print(out, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
@@ -369,8 +445,10 @@ int main(int argc, const char** argv) {
     }
 
     for (const std::string& filename: inputs) {
+        currentName = fs::path(filename).filename().string();
+        currentName = currentName.substr(0, currentName.rfind('.'));
         PdsState inputState(readAutoGraph(filename, allZeroInjection));
-        for (size_t i = 0; i < repetitions; ++i) {
+        for (size_t run = 0; run < repetitions; ++run) {
             auto state = inputState;
             size_t n = state.graph().numVertices();
             size_t m = state.graph().numEdges();
@@ -417,7 +495,7 @@ int main(int argc, const char** argv) {
                 auto name = fs::path(filename).filename().string();
                 auto end = name.rfind('.');
                 name = name.substr(0, end);
-                auto solPath = *solDir / fmt::format("{}_{}.pds", name, i);
+                auto solPath = *solDir / fmt::format("{}_{}.pds", name, run);
                 auto solution = inputState.graph();
                 for (auto v: solution.vertices()) {
                     if (!state.graph().hasVertex(v)) {
@@ -439,7 +517,7 @@ int main(int argc, const char** argv) {
                 fmt::print(file,
                            "{name},{run},{lower_bound},{pmus},{solved},{result},{t_total},{t_reductions},{t_solver},{n},{m},{zi},{nReduced},{mReduced},{ziReduced},{pmuReduced},{blankReduced}\n",
                            "name"_a = filename,
-                           "run"_a = i,
+                           "run"_a = run,
                            "lower_bound"_a = result.lower,
                            "pmus"_a = pmus,
                            "solved"_a = state.allObserved(),
@@ -459,6 +537,9 @@ int main(int argc, const char** argv) {
             }
             if (statFile != nullptr) {
                 writeSolutionStatistics(filename, state, statFile);
+            }
+            if (fortStatFile != nullptr) {
+                writeFortStats(filename, run, fortStats, fortStatFile);
             }
         }
     }
