@@ -674,8 +674,6 @@ SolveResult solveBozeman(
             model.optimize();
             status = model.get(GRB_IntAttr_Status);
             size_t new_bound = 0;
-            if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
-            if (lastSolution.allObserved()) status = GRB_OPTIMAL;
             switch (status) {
                 case GRB_INTERRUPTED:
                     if (static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)) < upperBound) {
@@ -683,9 +681,9 @@ SolveResult solveBozeman(
                     }
                     break;
                 case GRB_USER_OBJ_LIMIT:
+                case GRB_OPTIMAL:
                     new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal));
                     break;
-                case GRB_OPTIMAL:
                 case GRB_TIME_LIMIT:
                     new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound));
                     break;
@@ -703,8 +701,13 @@ SolveResult solveBozeman(
                 }
             }
             if (lowerBound > new_bound) {
-                if (status != GRB_TIME_LIMIT) { fmt::print("!!!lowerBound decreased {} → {}!!!\n", lowerBound, new_bound); }
-            } else {
+                if (status != GRB_TIME_LIMIT) {
+                    fmt::print("!!!lowerBound decreased {} → {}!!!\n", lowerBound, new_bound);
+                    if (size_t(model.get(GRB_DoubleAttr_ObjVal))) {
+                        fmt::print("!!!wrong lower bound: obj {} < bound {}!!!\n", size_t(GRB_DoubleAttr_ObjVal), lowerBound);
+                    }
+                }
+            } else if (new_bound <= state.graph().numVertices()) { // only use valid bounds
                 lowerBound = new_bound;
             }
             if (lowerBound == upperBound) {
@@ -717,6 +720,7 @@ SolveResult solveBozeman(
             if(output) {
                 fmt::print("LB: {}, UB: {} (status {})\n", lowerBound, upperBound, status);
             }
+            if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
             if (status == GRB_USER_OBJ_LIMIT || status == GRB_INTERRUPTED) status = GRB_OPTIMAL;
             if (status != GRB_OPTIMAL || lastSolution.allObserved()) {
                 callback(callback::When::FINAL, state, forts, lowerBound, upperBound);
