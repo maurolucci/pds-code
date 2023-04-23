@@ -47,14 +47,14 @@ function(enable_warnings target)
             /W4>)
 endfunction()
 
-add_library(pdslib STATIC src/pds/pds.cpp src/pds/draw_grid.cpp src/pds/graphio.cpp src/pds/pdssolve.cpp src/pds/fort_solve.cpp)
+add_library(pdslib STATIC src/pds/pds.cpp src/pds/draw_grid.cpp src/pds/graphio.cpp src/pds/pdssolve.cpp)
 target_include_directories(pdslib PUBLIC include)
 target_link_libraries(pdslib PRIVATE tinyxml2::tinyxml2)
 target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC mpgraphs unordered_dense::unordered_dense PRIVATE OGDF)
 enable_warnings(pdslib)
 
-add_library(pdslib-gurobi src/pds/gurobi_solve.cpp)
+add_library(pdslib-gurobi src/pds/gurobi_solve.cpp src/pds/fort_solve.cpp)
 target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 enable_warnings(pdslib-gurobi)
 
