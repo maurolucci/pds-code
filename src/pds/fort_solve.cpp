@@ -582,6 +582,7 @@ SolveResult solveBozeman(
         model.set(GRB_IntParam_LogToConsole, false);
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
         model.set(GRB_IntParam_NumericFocus, 1);
+        model.set(GRB_DoubleParam_MIPGap, 1e-6);
         model.set(GRB_IntParam_Presolve, GRB_PRESOLVE_AGGRESSIVE);
         if (output) {
             model.set(GRB_StringParam_LogFile, "gurobi.log");
@@ -676,13 +677,13 @@ SolveResult solveBozeman(
             size_t new_bound = 0;
             switch (status) {
                 case GRB_INTERRUPTED:
-                    if (static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)) < upperBound) {
+                    if (static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)) < state.graph().numVertices()) {
                         new_bound = std::max(lowerBound, static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)));
                     }
                     break;
                 case GRB_USER_OBJ_LIMIT:
                 case GRB_OPTIMAL:
-                    new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal));
+                    new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal) + 0.05);
                     break;
                 case GRB_TIME_LIMIT:
                     new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound));
@@ -716,7 +717,7 @@ SolveResult solveBozeman(
                     fmt::print("greedy solution is optimal\n");
                 }
             }
-            model.set(GRB_DoubleParam_BestObjStop, lowerBound);
+            model.set(GRB_DoubleParam_BestObjStop, double(lowerBound));
             if(output) {
                 fmt::print("LB: {}, UB: {} (status {})\n", lowerBound, upperBound, status);
             }
