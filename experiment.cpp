@@ -441,7 +441,7 @@ int main(int argc, const char** argv) {
 
     for (auto out: outputs) {
         fmt::print(out, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
-        fmt::print(out, "{}\n","name,run,pmus,solved,result,t_total,t_reductions,t_solver,n,m,zi,n_reduced,m_reduced,zi_reduced,pmu_reduced,blank_reduced");
+        fmt::print(out, "{}\n","name,run,bound,pmus,solved,result,t_total,t_reductions,t_solver,n,m,zi,n_reduced,m_reduced,zi_reduced,pmu_reduced,blank_reduced");
     }
 
     for (const std::string& filename: inputs) {
