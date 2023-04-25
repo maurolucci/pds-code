@@ -471,6 +471,9 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     auto blank = state.graph().vertices()
                  | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
                  | ranges::to<std::vector>;
+    auto inactive = state.graph().vertices()
+                 | ranges::views::filter([&state](auto v) { return state.isInactive(v); })
+                 | ranges::to<std::vector>;
     for (auto v: blank) { state.setActive(v); }
     std::vector<VertexList> forts;
     ranges::shuffle(blank);
@@ -499,6 +502,7 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
         }
     }
     for (auto v: blank) { state.setBlank(v); }
+    for (auto v: inactive) { state.setInactive(v); }
     return forts;
 }
 
