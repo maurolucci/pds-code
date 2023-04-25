@@ -622,7 +622,11 @@ void PdsState::applySubsolution(const pds::PdsState &other) {
         else if (otherId < ownId) ++otherIt;
         else {
             if (other.isActive(*otherIt)) {
-                setActive(*ownIt);
+                if (!isInactive(*ownIt)) {
+                    setActive(*ownIt);
+                } else {
+                    fmt::print(stderr, "!!!inactive vertex set to active in subproblem!!!\n");
+                }
             }
             ++ownIt; ++otherIt;
         }

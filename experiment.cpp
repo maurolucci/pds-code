@@ -243,7 +243,6 @@ int main(int argc, const char** argv) {
     desc.add_options()
             ("help,h", "show this help")
             ("graph,f", po::value<std::vector<string>>()->required()->multitoken(), "input files")
-            ("ignore,i", po::value<string>(), "file that lists inputs to ignore")
             ("all-zi,z", "consider all nodes zero-innjection")
             ("outfile,o", po::value<string>(), "output file")
             ("reduce,r", po::value<string>()->implicit_value("all"s,"all")->default_value("none"s,"none"), "apply reduce. can be any of [none,all,simple,domination]")
@@ -256,7 +255,7 @@ int main(int argc, const char** argv) {
             ("stat-file", po::value<string>(), "write statistics about solutions")
             ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
             ("fort-stats", po::value<string>(), "file for fort statistics")
-            ("early-stop", "stop hitting set solver when violating hitting set is found")
+            ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(3), "fort initialization method")
             ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
             ("verbose,v", "print additional solver status info")
     ;
@@ -345,6 +344,7 @@ int main(int argc, const char** argv) {
         }
         ++solved;
     };
+    auto fortInit = vm["fort-init"].as<int>();
     if (solverName == "branching") {
         solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
     } else if (solverName == "greedy") {
@@ -357,23 +357,24 @@ int main(int argc, const char** argv) {
         solve = [](auto & state, double) { return SolveResult{ size_t{0}, state.numActive() + state.numBlank(), SolveState::Other }; };
     } else if (solverName == "smith") {
         solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 1, greedyBoundMode, earlyStop, fortCallback);
+            state.disableLowDegree();
+            return solveBozeman(state, verbose, timeLimit, 1, fortInit, greedyBoundMode, earlyStop, fortCallback);
         };
     } else if (solverName == "bozeman") {
         solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 0, greedyBoundMode, earlyStop, fortCallback);
+            return solveBozeman(state, verbose, timeLimit, 0, fortInit, greedyBoundMode, earlyStop, fortCallback);
         };
     } else if (solverName == "bozeman2") {
         solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 2, greedyBoundMode, earlyStop, fortCallback);
+            return solveBozeman(state, verbose, timeLimit, 2, fortInit, greedyBoundMode, earlyStop, fortCallback);
         };
     } else if (solverName == "bozeman3") {
         solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 3, greedyBoundMode, earlyStop, fortCallback);
+            return solveBozeman(state, verbose, timeLimit, 3, fortInit, greedyBoundMode, earlyStop, fortCallback);
         };
     } else if (solverName == "forts") {
         solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 4, greedyBoundMode, earlyStop, fortCallback);
+            return solveBozeman(state, verbose, timeLimit, 4, fortInit, greedyBoundMode, earlyStop, fortCallback);
         };
     } else {
         try {

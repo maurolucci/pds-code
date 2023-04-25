@@ -324,6 +324,114 @@ VertexList loganFortNeighborhood(const PdsState& state, bool output, double time
     }
 }
 
+namespace {
+struct MappedVertex { PdsState::Vertex original; bool isPath; };
+using JunctionGraph = mpgraphs::VecGraph<MappedVertex, mpgraphs::EdgeDirection::Undirected, true, Timestamp, std::uint32_t>;
+
+JunctionGraph buildJunctionGraph(const PdsState& state, VertexSet& seen, VertexMap<JunctionGraph::VertexDescriptor>& vertexMap) {
+    JunctionGraph result;
+    for (PdsState::Vertex v: state.graph().vertices()) {
+        if (state.graph().degree(v) + state.isZeroInjection(v) >= 3) {
+            vertexMap.emplace(v, result.addVertex(MappedVertex{v, false}));
+            seen.insert(v);
+        }
+    }
+    auto comp = components(state, seen);
+    for (auto v: result.vertices()) {
+        seen.erase(result.getVertex(v).original);
+    }
+    for (auto& path: comp) {
+        auto x = result.addVertex(MappedVertex{path[0], true});
+        for (auto u: path) {
+            vertexMap.emplace(u, x);
+        }
+    }
+    for (auto v: state.graph().vertices()) {
+        auto x = vertexMap.at(v);
+        for (auto w: state.graph().neighbors(v)) {
+            if (v < w) {
+                auto y = vertexMap.at(w);
+                if (!result.hasEdge(x, y)) {
+                    result.addEdge(x, y);
+                }
+            }
+        }
+    }
+    return result;
+}
+}
+
+std::vector<VertexList> initialFortsSmith(const PdsState& state, VertexSet& seen) {
+    VertexMap<JunctionGraph::VertexDescriptor> vertexMap;
+    JunctionGraph junctions = buildJunctionGraph(state, seen, vertexMap);
+    std::vector<VertexList> forts;
+    VertexList neighbors;
+    for (auto x: junctions.vertices()) {
+        auto v = junctions.getVertex(x).original;
+        for (auto w: state.graph().neighbors(v)) { // “type II”
+            auto y = vertexMap.at(w);
+            auto w2 = junctions.getVertex(y).original;
+            if (junctions.getVertex(y).isPath) {
+                if (!seen.contains(w2)) {
+                    neighbors.push_back(w2);
+                    seen.insert(w2);
+                } else {
+                    VertexList f;
+                    f.push_back(v);
+                    forts.push_back(f);
+                    break;
+                }
+            }
+        }
+        for (auto w: neighbors) {
+            seen.erase(w);
+        }
+        neighbors.clear();
+        if (!junctions.getVertex(x).isPath) {
+            size_t pathCount = 0;
+            // “type I”
+            for (auto y: junctions.neighbors(x)) {
+                if (junctions.getVertex(y).isPath) {
+                    pathCount += 1;
+                }
+                if (pathCount >= 2) break;
+            }
+            if (pathCount >= 2) {
+                VertexList fort; fort.push_back(v);
+                forts.emplace_back(std::move(fort));
+            }
+            // “type III”
+            bool fortFound = false;
+            for (auto y: junctions.neighbors(x)) {
+                if (junctions.getVertex(y).isPath) {
+                    for (auto z: junctions.neighbors(y)) {
+                        if (!junctions.getVertex(z).isPath) {
+                            if (!seen.contains(z)) {
+                                seen.insert(z);
+                                neighbors.push_back(z);
+                            } else {
+                                VertexList fort; fort.push_back(x); fort.push_back(z);
+                                forts.emplace_back(std::move(fort));
+                                fortFound = true; break;
+                            }
+                        }
+                    }
+                }
+                if (fortFound) break;
+            }
+            if (pathCount >= 2) {
+                VertexList fort; fort.push_back(v);
+                forts.emplace_back(std::move(fort));
+            }
+            for (auto w: neighbors) {
+                seen.erase(w);
+            }
+            neighbors.clear();
+        }
+    }
+    return forts;
+}
+
 std::vector<VertexList> initialForts(const PdsState& state, VertexSet& seen) {
     std::vector<VertexList> forts;
     assert(seen.empty());
@@ -560,16 +668,51 @@ struct Callback : public GRBCallback {
 };
 }
 
+namespace {
+std::vector<VertexList> initializeForts(PdsState& state, int variant, VertexSet& seen) {
+    switch (variant) {
+        case 1:
+            return initialForts(state, seen);
+        case 2:
+            return initialForts2(state, seen);
+        case 3:
+            return initialForts3(state, seen);
+        case 4:
+            return initialFortsSmith(state, seen);
+        case 0:
+        default:
+            return {};
+    }
+}
+auto violatedForts(PdsState& lastSolution, int variant, double remainingTimeout, VertexSet& seen, int output) -> std::vector<VertexList> {
+    switch(variant) {
+        case 1:
+            return {smithFortNeighborhood(lastSolution, false, remainingTimeout, seen)};
+        case 2:
+            return {bozemanFortNeighborhood2(lastSolution, false, remainingTimeout)};
+        case 3:
+            return {bozemanFortNeighborhood3(lastSolution, false, remainingTimeout)};
+        case 4: {
+            if (output) { fmt::print("finding forts in {} blank vertices\n", lastSolution.numBlank()); }
+            return initialForts3(lastSolution, seen);
+        }
+        case 0:
+        default:
+            return {bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen)};
+    }
+}
+}
+
 SolveResult solveBozeman(
         PdsState &state,
         int output,
         double timeLimit,
         int variant,
+        int fortInit,
         int greedyUpper,
         bool earlyStop,
         callback::FortCallback callback
 ) {
-    unused(state, output, timeLimit);
     auto lastSolution = state;
     //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
     auto blankVertices = state.graph().vertices()
@@ -581,7 +724,7 @@ SolveResult solveBozeman(
     size_t upperBound = state.numActive() + state.numBlank();
     try {
         VertexSet seen;
-        auto forts = initialForts2(state, seen);
+        auto forts = initializeForts(state, fortInit, seen);
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, false);
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -610,26 +753,9 @@ SolveResult solveBozeman(
         while (true) {
             auto currentTime = now();
             double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
-            switch(variant) {
-                case 1:
-                    forts.emplace_back(loganFortNeighborhood(lastSolution, false, remainingTimeout, seen));
-                    break;
-                case 2:
-                    forts.emplace_back(bozemanFortNeighborhood2(lastSolution, false, remainingTimeout));
-                    break;
-                case 3:
-                    forts.emplace_back(bozemanFortNeighborhood3(lastSolution, false, remainingTimeout));
-                    break;
-                case 4: {
-                    if (output) { fmt::print("finding forts in {} blank vertices\n", lastSolution.numBlank()); }
-                    auto more_forts = initialForts3(lastSolution, seen);
-                    for (auto f: more_forts) {
-                        forts.emplace_back(std::move(f));
-                    }
-                    break; }
-                case 0:
-                default:
-                    forts.emplace_back(bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen));
+            auto moreForts = violatedForts(lastSolution, variant, remainingTimeout, seen, output);
+            for (auto f: moreForts) {
+                forts.emplace_back(std::move(f));
             }
             if (forts.back().empty()) break;
             for (; processedForts < forts.size(); ++processedForts) {
@@ -720,31 +846,38 @@ SolveResult solveBozeman(
                 if (output) {
                     fmt::print("greedy solution is optimal\n");
                 }
+            } else if (lastSolution.allObserved()) {
+                upperBound = lastSolution.numActive();
             }
-            model.set(GRB_DoubleParam_BestObjStop, double(lowerBound));
+            if(earlyStop > 0) {
+                model.set(GRB_DoubleParam_BestObjStop, double(lowerBound));
+            }
             if(output) {
-                fmt::print("LB: {}, UB: {} (status {})\n", lowerBound, upperBound, status);
+                fmt::print("LB: {}, UB: {} (status {}) (local LB: {}, UP: {})\n", lowerBound, upperBound, status, model.get(GRB_DoubleAttr_ObjBound), model.get(GRB_DoubleAttr_ObjVal));
             }
             if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
-            if (status == GRB_USER_OBJ_LIMIT || status == GRB_INTERRUPTED) status = GRB_OPTIMAL;
-            if (status != GRB_OPTIMAL || lastSolution.allObserved()) {
+            if (lastSolution.allObserved()) {
+                feasibleSolution = lastSolution;
                 callback(callback::When::FINAL, state, forts, lowerBound, upperBound);
                 break;
             } else {
                 callback(callback::When::INTERMEDIATE_HS, state, forts, lowerBound, upperBound);
             }
+            for (auto v: feasibleSolution.graph().vertices()) {
+                if (feasibleSolution.isActive(v)) {
+                    pi.at(v).set(GRB_DoubleAttr_Start, 1.0);
+                } else {
+                    pi.at(v).set(GRB_DoubleAttr_Start, 0.0);
+                }
+            }
         }
-        std::swap(state, lastSolution);
-        if (greedyUpper) {
-            fastGreedy(state, (greedyUpper - 1) * 2);
-            upperBound = std::min(upperBound, state.numActive());
-        } else {
-            upperBound = state.numActive() + state.numBlank();
-        }
+        std::swap(state, feasibleSolution);
         if (upperBound == lowerBound) {
             status = GRB_OPTIMAL;
         }
-
+        if (upperBound < state.numActive()) {
+            fmt::print("!!!upper bound too low!!!\n");
+        }
         switch (status) {
             case GRB_OPTIMAL:
                 return {lowerBound, lowerBound, SolveState::Optimal};

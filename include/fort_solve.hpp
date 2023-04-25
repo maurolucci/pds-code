@@ -16,6 +16,7 @@ SolveResult solveBozeman(
         int output,
         double timeLimit,
         int fortGenerator,
+        int fortInit,
         int greedyUpper,
         bool earlyStop,
         callback::FortCallback callback = noop_v);
