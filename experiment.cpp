@@ -256,6 +256,7 @@ int main(int argc, const char** argv) {
             ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
             ("fort-stats", po::value<string>(), "file for fort statistics")
             ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(3), "fort initialization method")
+            ("early-stop", po::value<int>()->default_value(0)->implicit_value(2), "stop hitting set solver when violating hitting set is found [0: only optimal, 1: keep lower bound, 2: stop early]")
             ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
             ("verbose,v", "print additional solver status info")
     ;
@@ -296,7 +297,7 @@ int main(int argc, const char** argv) {
     string solverName = vm["solve"].as<string>();
     std::function<SolveResult(PdsState&, double)> solve;
     bool verbose = vm.count("verbose");
-    bool earlyStop = vm.count("early-stop");
+    int earlyStop = vm["early-stop"].as<int>();
     preloadMIPSolver();
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
     size_t subproblemNumber = 0;

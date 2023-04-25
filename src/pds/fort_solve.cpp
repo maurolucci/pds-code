@@ -205,7 +205,7 @@ auto now() {
 }
 }
 
-VertexList loganFortNeighborhood(const PdsState& state, bool output, double timeLimit, VertexSet& seen) {
+VertexList smithFortNeighborhood(const PdsState& state, bool output, double timeLimit, VertexSet& seen) {
     VertexSet junctions;
     std::vector<PowerGrid::VertexDescriptor> junctionVertices;
     for (auto v: state.graph().vertices()) {
@@ -623,10 +623,10 @@ struct Callback : public GRBCallback {
     PdsState* solution;
     PdsState* upperBound;
     std::span<PdsState::Vertex> blank;
-    bool earlyStop;
+    int earlyStop;
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& pi,
              const PdsState& base, PdsState& solution, PdsState & upperBound,
-             std::span<PdsState::Vertex> blank, bool earlyStop)
+             std::span<PdsState::Vertex> blank, int earlyStop)
             : lower(&lower), upper(&upper), pi(&pi), base(&base), solution(&solution),
               upperBound(&upperBound), blank(blank), earlyStop(earlyStop)
     { }
@@ -635,7 +635,7 @@ struct Callback : public GRBCallback {
             if (getIntInfo(GRB_CB_MIP_SOLCNT) > 0) {
                 auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBST) + 0.5);
                 auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBND));
-                if (objVal <= *upper && !solution->allObserved() && earlyStop && objBound > *lower) {
+                if (objVal <= *upper && !solution->allObserved() && earlyStop > 1 && objBound > *lower) {
                     abort();
                 }
             }
@@ -655,12 +655,12 @@ struct Callback : public GRBCallback {
                 }
                 //fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
                 if (!solution->allObserved()) {
-                    if (earlyStop && objBound > *lower) { abort(); }
+                    if (earlyStop > 1 && objBound > *lower) { abort(); }
                 } else if (objVal < *upper) {
                     fmt::print("gurobi H {}\n", objVal);
                     *upper = objVal;
                     *upperBound = *solution;
-                    if (*upper <= *lower) { abort(); }
+                    //if (*upper <= *lower && earlyStop) { abort(); }
                 }
             }
         }
@@ -710,7 +710,7 @@ SolveResult solveBozeman(
         int variant,
         int fortInit,
         int greedyUpper,
-        bool earlyStop,
+        int earlyStop,
         callback::FortCallback callback
 ) {
     auto lastSolution = state;

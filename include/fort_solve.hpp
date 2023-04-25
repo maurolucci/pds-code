@@ -18,7 +18,7 @@ SolveResult solveBozeman(
         int fortGenerator,
         int fortInit,
         int greedyUpper,
-        bool earlyStop,
+        int earlyStop,
         callback::FortCallback callback = noop_v);
 } // namespace pds
 #endif
