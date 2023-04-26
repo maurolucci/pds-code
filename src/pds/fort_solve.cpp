@@ -418,6 +418,8 @@ std::vector<VertexList> initialFortsSmith(const PdsState& state, VertexSet& seen
             }
         }
     }
+
+    fmt::print("found {} initial forts\n", forts.size());
     return forts;
 }
 
@@ -646,11 +648,16 @@ struct Callback : public GRBCallback {
     PdsState* upperBound;
     std::span<PdsState::Vertex> blank;
     int earlyStop;
+    int intermediateForts;
+    std::vector<VertexList>* forts;
+    VertexSet* seen;
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& pi,
              const PdsState& base, PdsState& solution, PdsState & upperBound,
-             std::span<PdsState::Vertex> blank, int earlyStop)
+             std::span<PdsState::Vertex> blank, int earlyStop,
+             int intermediateForts, std::vector<VertexList>& forts, VertexSet& seen)
             : lower(&lower), upper(&upper), pi(&pi), base(&base), solution(&solution),
-              upperBound(&upperBound), blank(blank), earlyStop(earlyStop)
+              upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
+              intermediateForts(intermediateForts), forts(&forts), seen(&seen)
     { }
     void callback() override {
         if (where == GRB_CB_MIP) {
@@ -677,6 +684,11 @@ struct Callback : public GRBCallback {
                 }
                 //fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
                 if (!solution->allObserved()) {
+                    if (intermediateForts >= 0) {
+                        for (auto& f: violatedForts(*solution, intermediateForts, 10, *seen, false)) {
+                            forts->push_back(std::move(f));
+                        }
+                    }
                     if (earlyStop > 1 && objBound > *lower) { abort(); }
                 } else if (objVal < *upper) {
                     fmt::print("gurobi H {}\n", objVal);
@@ -698,7 +710,8 @@ SolveResult solveBozeman(
         int fortInit,
         int greedyUpper,
         int earlyStop,
-        callback::FortCallback callback
+        callback::FortCallback callback,
+        int intermediateForts
 ) {
     auto lastSolution = state;
     //writePds(lastSolution.graph(), fmt::format("out/0_input.pds"));
@@ -731,7 +744,10 @@ SolveResult solveBozeman(
                 model.addConstr(pi.at(v) == 0);
             }
         }
-        Callback cb(lowerBound, upperBound, pi, state, lastSolution, feasibleSolution, blankVertices, earlyStop);
+        Callback cb(
+                lowerBound, upperBound,
+                pi, state, lastSolution, feasibleSolution,
+                blankVertices, earlyStop, intermediateForts, forts, seen);
         model.setCallback(&cb);
         auto startingTime = now();
         int status;
@@ -749,7 +765,10 @@ SolveResult solveBozeman(
                 GRBLinExpr fortSum;
                 size_t blank = 0;
                 for (auto& v: forts[processedForts]) {
-                    if (lastSolution.isActive(v)) {
+                    if (!state.graph().hasVertex(v)) {
+                        fmt::print("!!!invalid vertex {} in fort: {}!!!\n", v, forts[processedForts]);
+                    }
+                    if (state.isActive(v)) {
                         if (output) {
                             fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
                                        v,

@@ -11,15 +11,15 @@ enum class When {
 };
 using FortCallback = std::function<void(When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper)>;
 }
-SolveResult solveBozeman(
-        PdsState &state,
-        int output,
-        double timeLimit,
-        int fortGenerator,
-        int fortInit,
-        int greedyUpper,
-        int earlyStop,
-        callback::FortCallback callback = noop_v);
+SolveResult solveBozeman(PdsState &state,
+                         int output,
+                         double timeLimit,
+                         int fortGenerator,
+                         int fortInit,
+                         int greedyUpper,
+                         int earlyStop,
+                         callback::FortCallback callback,
+                         int intermediateForts);
 } // namespace pds
 #endif
 
