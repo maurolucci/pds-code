@@ -10,6 +10,8 @@
 #include <concepts>
 
 namespace pds {
+using BoundCallback = std::function<void(size_t lower, size_t upper, size_t extra)>;
+
 template<std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)>
 bool exhaustiveSimpleReductions(PdsState& state, F callback = pds::unused) {
     bool anyChanged = false;

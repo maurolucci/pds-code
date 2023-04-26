@@ -8,6 +8,7 @@
 #include <range/v3/all.hpp>
 
 #include "pds.hpp"
+#include "pdssolve.hpp"
 
 // Forward declaration to avoid full gurobi header inclusion
 struct GRBModel;
@@ -38,15 +39,15 @@ MIPModel modelBrimkov(PdsState& state);
 MIPModel modelBrimkovExpanded(PdsState& state);
 MIPModel modelAzamiBrimkov(PdsState& state);
 
-SolveResult solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT);
+SolveResult solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT, pds::BoundCallback = noop_v);
 
 void applySolution(PdsState&, MIPModel& model);
 
 template<class F = decltype(modelJovanovicExpanded)>
 //requires std::is_invocable_v<PdsState&>
-inline SolveResult solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, F model = modelJovanovicExpanded) {
+inline SolveResult solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, pds::BoundCallback boundCallback = noop_v, F model = modelJovanovicExpanded) {
     auto mip = model(state);
-    auto result = solveMIP(mip, output, timeLimit);
+    auto result = solveMIP(mip, output, timeLimit, boundCallback);
     if (result.state != SolveState::Infeasible) {
         applySolution(state, mip);
     }

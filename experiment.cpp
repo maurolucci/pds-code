@@ -232,83 +232,19 @@ auto getModel(const std::string& name) {
         throw std::invalid_argument("unknown model " + name);
     }
 }
+using Solver = std::function<SolveResult(PdsState&, double)>;
+namespace po = boost::program_options;
+namespace fs = std::filesystem;
 
-int main(int argc, const char** argv) {
-    namespace po = boost::program_options;
-    namespace fs = std::filesystem;
-    using namespace std::string_literals;
+auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& currentName, size_t run, size_t subproblemNumber, BoundCallback boundCB) {
     using std::string;
-
-    po::options_description desc(argv[0]);
-    desc.add_options()
-            ("help,h", "show this help")
-            ("graph,f", po::value<std::vector<string>>()->required()->multitoken(), "input files")
-            ("all-zi,z", "consider all nodes zero-innjection")
-            ("outfile,o", po::value<string>(), "output file")
-            ("reduce,r", po::value<string>()->implicit_value("all"s,"all")->default_value("none"s,"none"), "apply reduce. can be any of [none,all,simple,domination]")
-            ("repeat,n", po::value<size_t>()->default_value(1)->implicit_value(5), "number of experiment repetitions")
-            ("solve,s", po::value<string>()->default_value("none")->implicit_value("gurobi"), "solve method. can be any of [none,gurobi,greedy]")
-            ("subproblems,u", "split into subproblems before calling solve")
-            ("timeout,t", po::value<double>()->default_value(600.), "gurobi time limit (seconds)")
-            ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
-            ("write,w", po::value<string>()->implicit_value("solutions"s), "write solutions to the specified directory")
-            ("stat-file", po::value<string>(), "write statistics about solutions")
-            ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
-            ("fort-stats", po::value<string>(), "file for fort statistics")
-            ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(3), "fort initialization method")
-            ("intermediate", "find violated forts in every new feasbile solution")
-            ("early-stop", po::value<int>()->default_value(0)->implicit_value(2), "stop hitting set solver when violating hitting set is found [0: only optimal, 1: keep lower bound, 2: stop early]")
-            ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
-            ("verbose,v", "print additional solver status info")
-    ;
-    po::positional_options_description pos;
-    pos.add("graph", -1);
-    po::variables_map vm;
-    po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(),vm);
-
-    if (vm.count("help")) {
-        desc.print(std::cout);
-        return 1;
-    }
-
-    bool allZeroInjection = vm.count("all-zi");
-    double timeout = vm["timeout"].as<double>();
-
-    size_t repetitions = vm["repeat"].as<size_t>();
-
-    string reductionName = vm["reduce"].as<string>();
-    std::function<bool(PdsState&)> reduce;
-    if (reductionName == "none") {
-        reduce = [](auto&) { return false; };
-    } else if (reductionName == "all") {
-        reduce = applyReductions;
-    } else if (reductionName == "simple") {
-        reduce = simpleReductions;
-    } else if (reductionName == "domination") {
-        reduce = applyDominationReductions;
-    } else if (reductionName == "no-necessary") {
-        reduce = applyReductionsNotNecessary;
-    } else if (reductionName == "no-domination") {
-        reduce = applyReductionsNotDomination;
-    } else {
-        fmt::print(stderr, "invalid reduction mode: {}. modes: {}", reductionName, fmt::join({"all", "simple", "domination", "no-necessary", "no-domination"}, ", "));
-        return 2;
-    }
-
     string solverName = vm["solve"].as<string>();
-    std::function<SolveResult(PdsState&, double)> solve;
     bool verbose = vm.count("verbose");
     int earlyStop = vm["early-stop"].as<int>();
-    preloadMIPSolver();
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
-    size_t subproblemNumber = 0;
-    string currentName;
-    if (vm.count("write-forts")) {
-        std::string fortsDirName = vm["write-forts"].as<string>();
-        fs::create_directories(fs::absolute(fs::path(fortsDirName)));
-    }
-    FortStats fortStats;
-    callback::FortCallback fortCallback = [&,solved=size_t{0}] (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
+    int fortInit = vm["fort-init"].as<int>();
+    bool intermediateForts = vm.count("intermediate");
+    callback::FortCallback fortCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
         if (vm.count("fort-stats") && when == pds::callback::When::FINAL) {
             size_t totalFortSize = 0;
             for (auto& fort: forts) {
@@ -346,50 +282,126 @@ int main(int argc, const char** argv) {
         }
         ++solved;
     };
-    int fortInit = vm["fort-init"].as<int>();
-    bool intermediateForts = vm.count("intermediate");
     if (solverName == "branching") {
-        solve = [](auto& state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); };
+        return Solver{[](auto &state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); }};
     } else if (solverName == "greedy") {
-        solve = [](auto& state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); };
+        return  Solver{[](auto &state, double) { return solveGreedy(state, true, greedy_strategies::largestDegree); }};
     } else if (solverName == "fast") {
-        solve = [](auto& state, double) { return fastGreedy(state, true); };
+        return Solver{[](auto &state, double) { return fastGreedy(state, true); }};
     } else if (solverName == "topdown") {
-        solve = [](auto& state, double) { return topDownGreedy(state); };
+        return Solver{[](auto &state, double) { return topDownGreedy(state); }};
     } else if (solverName == "none") {
-        solve = [](auto & state, double) { return SolveResult{ size_t{0}, state.numActive() + state.numBlank(), SolveState::Other }; };
+        return Solver{[](auto &state, double) {
+            return SolveResult{size_t{0}, state.numActive() + state.numBlank(), SolveState::Other};
+        }};
     } else if (solverName == "smith") {
-        solve = [=](auto& state, double timeLimit) {
+        return Solver{[=](auto &state, double timeLimit) {
             state.disableLowDegree();
-            return solveBozeman(state, verbose, timeLimit, 1, fortInit, greedyBoundMode, earlyStop, fortCallback, -1);
-        };
+            return solveBozeman(state, verbose, timeLimit, 1, fortInit,
+                                greedyBoundMode, earlyStop, fortCallback, boundCB, -1);
+        }};
     } else if (solverName == "bozeman") {
-        solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 0, fortInit, greedyBoundMode, earlyStop, fortCallback, intermediateForts ? 0 : -1);
-        };
+        return Solver{[=](auto &state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 0, fortInit,
+                                greedyBoundMode, earlyStop, fortCallback, boundCB, intermediateForts ? 0 : -1);
+        }};
     } else if (solverName == "bozeman2") {
-        solve = [=](auto& state, double timeLimit) {
+        return Solver{[=](auto &state, double timeLimit) {
             state.disableLowDegree();
-            return solveBozeman(state, verbose, timeLimit, 2, fortInit, greedyBoundMode, earlyStop, fortCallback, intermediateForts ? 2 : -1);
-        };
+            return solveBozeman(state, verbose, timeLimit, 2, fortInit,
+                                greedyBoundMode, earlyStop, fortCallback, boundCB, intermediateForts ? 2 : -1);
+        }};
     } else if (solverName == "bozeman3") {
-        solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 3, fortInit, greedyBoundMode, earlyStop, fortCallback, intermediateForts ? 3 : -1);
-        };
+        return Solver{[=](auto &state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 3, fortInit,
+                                greedyBoundMode, earlyStop, fortCallback, boundCB, intermediateForts ? 3 : -1);
+        }};
     } else if (solverName == "forts") {
-        solve = [=](auto& state, double timeLimit) {
-            return solveBozeman(state, verbose, timeLimit, 4, fortInit, greedyBoundMode, earlyStop, fortCallback, intermediateForts ? 4 : -1);
-        };
+        return Solver{[=](auto &state, double timeLimit) {
+            return solveBozeman(state, verbose, timeLimit, 4, fortInit,
+                                greedyBoundMode, earlyStop, fortCallback, boundCB, intermediateForts ? 4 : -1);
+        }};
     } else {
         try {
-            solve = [model=getModel(solverName),verbose](auto &state, double timeout) {
-                return solvePowerDominatingSet(state, verbose, timeout, model);
-            };
-        } catch(std::invalid_argument& ex) {
+            return Solver{[model = getModel(solverName), verbose,boundCB](auto &state, double timeout) {
+                return solvePowerDominatingSet(state, verbose, timeout, boundCB, model);
+            }};
+        } catch (std::invalid_argument &ex) {
             fmt::print(stderr, "{}", ex.what());
-            return 2;
+            throw ex;
         }
     }
+}
+
+int main(int argc, const char** argv) {
+    namespace po = boost::program_options;
+    namespace fs = std::filesystem;
+    using std::string;
+    using namespace std::string_literals;
+
+    po::options_description desc(argv[0]);
+    desc.add_options()
+            ("help,h", "show this help")
+            ("graph,f", po::value<std::vector<string>>()->required()->multitoken(), "input files")
+            ("all-zi,z", "consider all nodes zero-innjection")
+            ("outfile,o", po::value<string>(), "output file")
+            ("reduce,r", po::value<string>()->implicit_value("all"s,"all")->default_value("none"s,"none"), "apply reduce. can be any of [none,all,simple,domination]")
+            ("repeat,n", po::value<size_t>()->default_value(1)->implicit_value(5), "number of experiment repetitions")
+            ("solve,s", po::value<string>()->default_value("none")->implicit_value("gurobi"), "solve method. can be any of [none,gurobi,greedy]")
+            ("subproblems,u", "split into subproblems before calling solve")
+            ("timeout,t", po::value<double>()->default_value(600.), "gurobi time limit (seconds)")
+            ("draw,d", po::value<string>()->implicit_value("out"s), "draw states")
+            ("write,w", po::value<string>()->implicit_value("solutions"s), "write solutions to the specified directory")
+            ("stat-file", po::value<string>(), "write statistics about solutions")
+            ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
+            ("fort-stats", po::value<string>(), "file for fort statistics")
+            ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(3), "fort initialization method")
+            ("intermediate", "find violated forts in every new feasbile solution")
+            ("early-stop", po::value<int>()->default_value(0)->implicit_value(2), "stop hitting set solver when violating hitting set is found [0: only optimal, 1: keep lower bound, 2: stop early]")
+            ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
+            ("write-bounds", po::value<string>(), "write bound time series")
+            ("verbose,v", "print additional solver status info")
+    ;
+    po::positional_options_description pos;
+    pos.add("graph", -1);
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).options(desc).positional(pos).run(),vm);
+
+    if (vm.count("help")) {
+        desc.print(std::cout);
+        return 1;
+    }
+
+    bool allZeroInjection = vm.count("all-zi");
+    double timeout = vm["timeout"].as<double>();
+
+    size_t repetitions = vm["repeat"].as<size_t>();
+
+    string reductionName = vm["reduce"].as<string>();
+    std::function<bool(PdsState&)> reduce;
+    if (reductionName == "none") {
+        reduce = [](auto&) { return false; };
+    } else if (reductionName == "all") {
+        reduce = applyReductions;
+    } else if (reductionName == "simple") {
+        reduce = simpleReductions;
+    } else if (reductionName == "domination") {
+        reduce = applyDominationReductions;
+    } else if (reductionName == "no-necessary") {
+        reduce = applyReductionsNotNecessary;
+    } else if (reductionName == "no-domination") {
+        reduce = applyReductionsNotDomination;
+    } else {
+        fmt::print(stderr, "invalid reduction mode: {}. modes: {}", reductionName, fmt::join({"all", "simple", "domination", "no-necessary", "no-domination"}, ", "));
+        return 2;
+    }
+
+    preloadMIPSolver();
+    if (vm.count("write-forts")) {
+        std::string fortsDirName = vm["write-forts"].as<string>();
+        fs::create_directories(fs::absolute(fs::path(fortsDirName)));
+    }
+    FortStats fortStats;
 
     std::optional<fs::path> drawdir;
 
@@ -450,10 +462,16 @@ int main(int argc, const char** argv) {
     }
 
     for (const std::string& filename: inputs) {
-        currentName = fs::path(filename).filename().string();
+        string currentName = fs::path(filename).filename().string();
         currentName = currentName.substr(0, currentName.rfind('.'));
         PdsState inputState(readAutoGraph(filename, allZeroInjection));
         for (size_t run = 0; run < repetitions; ++run) {
+            struct BoundInfo {
+                size_t lower, upper;
+                size_t extraInfo;
+                long time;
+            };
+            std::vector<BoundInfo> bounds;
             auto state = inputState;
             size_t n = state.graph().numVertices();
             size_t m = state.graph().numEdges();
@@ -470,26 +488,61 @@ int main(int argc, const char** argv) {
             size_t pmusReduced = state.numActive();
             size_t blankReduced = nReduced - state.numActive() - state.numInactive();
             auto t1 = now();
-            SolveResult result = {state.numActive(), state.numActive(), SolveState::Optimal };
+            SolveResult result = {state.numActive(), state.numActive() + state.numBlank(), SolveState::Optimal };
             auto reduced = state;
+            FILE* boundsFile = nullptr;
+            if (vm.count("write-bounds")) {
+                std::string boundsDir = vm["write-bounds"].as<string>();
+                fs::create_directories(fs::absolute(fs::path(boundsDir)));
+                auto boundsFileName = fmt::format("{}/{}-{}-bounds.csv", boundsDir, currentName, run);
+                boundsFile = fopen(boundsFileName.c_str(), "w+");
+                fmt::print(boundsFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
+                fmt::print(boundsFile, "name,run,t,lower,upper,extra\n");
+            }
             if (subproblems) {
                 auto checkpoint = t1;
                 auto subproblems = state.subproblems();
                 ranges::sort(subproblems, [](const auto& left, const auto& right) { return left.graph().numVertices() < right.graph().numVertices(); });
+                size_t subproblemNumber = 0;
                 for (auto& substate: subproblems) {
                     if (!substate.allObserved()) {
+                        size_t initialActive = substate.numActive();
+                        size_t initialBlank = substate.numBlank();
+                        result.lower -= initialActive;
+                        result.upper -= initialBlank + initialActive;
+                        auto boundCB = [&bounds, t0, result, boundsFile, &currentName, run](size_t lower, size_t upper, size_t extra) {
+                            auto time = now();
+                            bounds.emplace_back(BoundInfo{result.lower + lower, result.upper + upper, extra, µs(time - t0)});
+                            if (boundsFile) {
+                                const auto& b = bounds.back();
+                                fmt::print(boundsFile, "{},{},{},{},{},{}\n", currentName, run, b.time, b.lower, b.upper, b.extraInfo);
+                                fflush(boundsFile);
+                            }
+                        };
+                        Solver solve = getSolver(vm, fortStats, currentName, run, subproblemNumber, boundCB);
                         auto tSubproblem = now();
                         double remainingTimeout = std::max(1.0, timeout - std::chrono::duration_cast<std::chrono::seconds>(tSubproblem - checkpoint).count());
-                        size_t initialActive = substate.numActive();
                         auto subresult = solve(substate, remainingTimeout);
                         result.state = combineSolveState(result.state, subresult.state);
                         state.applySubsolution(substate);
-                        result.lower += std::max(subresult.lower, initialActive) - initialActive;
-                        result.upper += std::max(subresult.upper, initialActive) - initialActive;
+                        result.lower += std::max(subresult.lower, initialActive);
+                        result.upper += std::max(subresult.upper, initialActive);
+                        boundCB(subresult.lower, subresult.upper, 0);
                     }
+                    ++subproblemNumber;
                 }
             } else {
+                auto boundCB = [&bounds, t0, boundsFile, &currentName, run](size_t lower, size_t upper, size_t extra) {
+                    auto time = now();
+                    bounds.emplace_back(BoundInfo{lower, upper, extra, µs(time - t0)});
+                    if (boundsFile) {
+                        fmt::print(boundsFile, "{},{},{},{},{}\n", currentName, run, bounds.back().time, bounds.back().lower, bounds.back().upper);
+                        fflush(boundsFile);
+                    }
+                };
+                Solver solve = getSolver(vm, fortStats, currentName, run, 0, boundCB);
                 result = solve(state, timeout);
+                boundCB(result.lower, result.upper, 0);
             }
             auto t2 = now();
             if (drawdir) {

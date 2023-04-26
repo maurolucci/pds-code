@@ -64,7 +64,30 @@ SolveState solveModel(PdsState& state, map<PowerGrid::VertexDescriptor, GRBVar>&
     }
 }
 
-SolveResult solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
+namespace {
+struct SolveCallback : public GRBCallback {
+    size_t lower = 0;
+    size_t upper = -1;
+    BoundCallback cb;
+    SolveCallback(size_t lower, size_t upper, BoundCallback cb) : lower(lower), upper(upper), cb(cb) { }
+    void callback() override {
+        if (where == GRB_CB_MIP) {
+            double objBound = getDoubleInfo(GRB_CB_MIP_OBJBND);
+            if (objBound >= GRB_INFINITY) {
+                objBound = 0;
+            }
+            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBST));
+            if (objBound > lower || objVal < upper) {
+                lower = objBound;
+                upper = objVal;
+                cb(lower, upper, getDoubleInfo(GRB_CB_MIP_NODCNT));
+            }
+        }
+    }
+};
+}
+
+SolveResult solveMIP(MIPModel & mipmodel, bool output, double timeLimit, BoundCallback callback) {
     auto& model = *mipmodel.model;
     auto oldstdout = dup(STDOUT_FILENO);
     FILE *result = freopen("/dev/null", "a", stdout);
@@ -73,14 +96,18 @@ SolveResult solveMIP(MIPModel & mipmodel, bool output, double timeLimit) {
     dup2(oldstdout, STDOUT_FILENO);
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+    SolveCallback cb(0, -1, callback);
+    model.setCallback(&cb);
 
     model.optimize();
     switch (model.get(GRB_IntAttr_Status)) {
         case GRB_INFEASIBLE:
             return { size_t{1}, size_t{0}, SolveState::Infeasible };
         case GRB_OPTIMAL:
+            callback(model.get(GRB_DoubleAttr_ObjBound), model.get(GRB_DoubleAttr_ObjVal), model.get(GRB_DoubleAttr_NodeCount));
             return { size_t(model.get(GRB_DoubleAttr_ObjBound)), size_t(model.get(GRB_DoubleAttr_ObjVal)), SolveState::Optimal };
         case GRB_TIME_LIMIT:
+            callback(model.get(GRB_DoubleAttr_ObjBound), model.get(GRB_DoubleAttr_ObjVal), model.get(GRB_DoubleAttr_NodeCount));
             return { size_t(model.get(GRB_DoubleAttr_ObjBound)), size_t(model.get(GRB_DoubleAttr_ObjVal)), SolveState::Timeout };
         default:
             return { size_t{1}, size_t{0}, SolveState::Other };

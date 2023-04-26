@@ -202,6 +202,7 @@ int run(int argc, const char** argv) {
                 return solvePowerDominatingSet(state,
                                                vm.count("print-solve"),
                                                timeout,
+                                               noop_v,
                                                model);
             };
         } catch(std::invalid_argument& ex) {

@@ -8,7 +8,7 @@
 
 namespace pds {
 
-
+namespace {
 VertexList bozemanFortNeighborhood(const PdsState &state, bool output, double timeLimit, VertexSet& seen) {
     GRBModel model(getEnv());
     model.set(GRB_IntParam_LogToConsole, int{output});
@@ -168,7 +168,7 @@ VertexList bozemanFortNeighborhood3(const PdsState &state, bool output, double t
     }
 }
 
-namespace { struct Unimplemented {}; }
+struct Unimplemented {};
 std::vector<VertexList> components(const PdsState& state, VertexSet& seen) {
     const auto& graph = state.graph();
     std::vector<VertexList> components;
@@ -199,10 +199,8 @@ std::vector<VertexList> components(const PdsState& state, VertexSet& seen) {
     return components;
 }
 
-namespace {
 auto now() {
     return std::chrono::high_resolution_clock::now();
-}
 }
 
 VertexList smithFortNeighborhood(const PdsState& state, bool output, double timeLimit, VertexSet& seen) {
@@ -605,7 +603,6 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
     return forts;
 }
 
-namespace {
 
 std::vector<VertexList> initializeForts(PdsState& state, int variant, VertexSet& seen) {
     switch (variant) {
@@ -710,7 +707,8 @@ SolveResult solveBozeman(
         int fortInit,
         int greedyUpper,
         int earlyStop,
-        callback::FortCallback callback,
+        callback::FortCallback fortCallback,
+        BoundCallback boundCallback,
         int intermediateForts
 ) {
     auto lastSolution = state;
@@ -857,6 +855,7 @@ SolveResult solveBozeman(
             } else if (lastSolution.allObserved()) {
                 upperBound = lastSolution.numActive();
             }
+            boundCallback(lowerBound, upperBound, forts.size());
             if(earlyStop > 0) {
                 model.set(GRB_DoubleParam_BestObjStop, double(lowerBound));
             }
@@ -866,10 +865,10 @@ SolveResult solveBozeman(
             if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
             if (lastSolution.allObserved()) {
                 feasibleSolution = lastSolution;
-                callback(callback::When::FINAL, state, forts, lowerBound, upperBound);
+                fortCallback(callback::When::FINAL, state, forts, lowerBound, upperBound);
                 break;
             } else {
-                callback(callback::When::INTERMEDIATE_HS, state, forts, lowerBound, upperBound);
+                fortCallback(callback::When::INTERMEDIATE_HS, state, forts, lowerBound, upperBound);
             }
             for (auto v: feasibleSolution.graph().vertices()) {
                 if (feasibleSolution.isActive(v)) {

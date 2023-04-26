@@ -2,6 +2,7 @@
 #define PDS_FORT_SOLVE
 
 #include "pds.hpp"
+#include "pdssolve.hpp"
 
 namespace pds {
 namespace callback {
@@ -18,7 +19,8 @@ SolveResult solveBozeman(PdsState &state,
                          int fortInit,
                          int greedyUpper,
                          int earlyStop,
-                         callback::FortCallback callback,
+                         callback::FortCallback fortCallback,
+                         BoundCallback boundCallback,
                          int intermediateForts);
 } // namespace pds
 #endif
