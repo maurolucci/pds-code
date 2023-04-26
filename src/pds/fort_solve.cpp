@@ -324,109 +324,98 @@ VertexList smithFortNeighborhood(const PdsState& state, bool output, double time
     }
 }
 
-namespace {
-struct MappedVertex { PdsState::Vertex original; bool isPath; };
-using JunctionGraph = mpgraphs::VecGraph<MappedVertex, mpgraphs::EdgeDirection::Undirected, true, Timestamp, std::uint32_t>;
-
-JunctionGraph buildJunctionGraph(const PdsState& state, VertexSet& seen, VertexMap<JunctionGraph::VertexDescriptor>& vertexMap) {
-    JunctionGraph result;
-    for (PdsState::Vertex v: state.graph().vertices()) {
-        if (state.graph().degree(v) + state.isZeroInjection(v) >= 3) {
-            vertexMap.emplace(v, result.addVertex(MappedVertex{v, false}));
-            seen.insert(v);
-        }
-    }
-    auto comp = components(state, seen);
-    for (auto v: result.vertices()) {
-        seen.erase(result.getVertex(v).original);
-    }
-    for (auto& path: comp) {
-        auto x = result.addVertex(MappedVertex{path[0], true});
-        for (auto u: path) {
-            vertexMap.emplace(u, x);
-        }
-    }
-    for (auto v: state.graph().vertices()) {
-        auto x = vertexMap.at(v);
-        for (auto w: state.graph().neighbors(v)) {
-            if (v < w) {
-                auto y = vertexMap.at(w);
-                if (!result.hasEdge(x, y)) {
-                    result.addEdge(x, y);
-                }
-            }
-        }
-    }
-    return result;
-}
-}
-
 std::vector<VertexList> initialFortsSmith(const PdsState& state, VertexSet& seen) {
-    VertexMap<JunctionGraph::VertexDescriptor> vertexMap;
-    JunctionGraph junctions = buildJunctionGraph(state, seen, vertexMap);
+    VertexSet junctions;
+    std::vector<PowerGrid::VertexDescriptor> junctionVertices;
+    for (auto v: state.graph().vertices()) {
+        if (state.graph().degree(v) + state.isZeroInjection(v) >= 3) {
+            junctions.insert(v);
+            seen.insert(v);
+            junctionVertices.push_back(v);
+        }
+    }
+    auto paths = components(state, seen);
+    for (auto v: junctionVertices) {
+        seen.erase(v);
+    }
+    VertexMap<size_t> pathIndex;
+    for (size_t i = 0 ; i < paths.size(); ++i) {
+        for (auto v: paths[i]) {
+            pathIndex.emplace(v, i);
+        }
+    }
     std::vector<VertexList> forts;
-    VertexList neighbors;
-    for (auto x: junctions.vertices()) {
-        auto v = junctions.getVertex(x).original;
-        for (auto w: state.graph().neighbors(v)) { // “type II”
-            auto y = vertexMap.at(w);
-            auto w2 = junctions.getVertex(y).original;
-            if (junctions.getVertex(y).isPath) {
-                if (!seen.contains(w2)) {
-                    neighbors.push_back(w2);
-                    seen.insert(w2);
-                } else {
-                    VertexList f;
-                    f.push_back(v);
-                    forts.push_back(f);
-                    break;
-                }
-            }
-        }
-        for (auto w: neighbors) {
-            seen.erase(w);
-        }
-        neighbors.clear();
-        if (!junctions.getVertex(x).isPath) {
-            size_t pathCount = 0;
-            // “type I”
-            for (auto y: junctions.neighbors(x)) {
-                if (junctions.getVertex(y).isPath) {
-                    pathCount += 1;
-                }
-                if (pathCount >= 2) break;
-            }
-            if (pathCount >= 2) {
-                VertexList fort; fort.push_back(v);
-                forts.emplace_back(std::move(fort));
-            }
-            // “type III”
-            bool fortFound = false;
-            for (auto y: junctions.neighbors(x)) {
-                if (junctions.getVertex(y).isPath) {
-                    for (auto z: junctions.neighbors(y)) {
-                        if (!junctions.getVertex(z).isPath) {
-                            if (!seen.contains(z)) {
-                                seen.insert(z);
-                                neighbors.push_back(z);
-                            } else {
-                                VertexList fort; fort.push_back(x); fort.push_back(z);
-                                forts.emplace_back(std::move(fort));
-                                fortFound = true; break;
-                            }
-                        }
+    for (auto v: state.graph().vertices()) {
+        if (!pathIndex.contains(v)) {
+            VertexList pathNeighbors;
+            size_t type2path = -1;
+            for (auto w: state.graph().neighbors(v)) {
+                if (pathIndex.contains(w)) {
+                    auto pathRep = paths[pathIndex[w]][0];
+                    pathNeighbors.push_back(pathRep);
+                    if (!seen.contains(pathRep)) {
+                        seen.insert(pathRep);
+                    } else {
+                        type2path = pathRep;
                     }
                 }
-                if (fortFound) break;
             }
-            if (pathCount >= 2) {
-                VertexList fort; fort.push_back(v);
+            if (type2path < paths.size()) {
+                VertexList fort;
+                for (auto w: paths[type2path]) {
+                    fort.push_back(w);
+                }
+                fort.push_back(v);
                 forts.emplace_back(std::move(fort));
             }
-            for (auto w: neighbors) {
+            bool fortFound = false;
+            std::vector<size_t> degreeOnePaths;
+            for (auto rep: pathNeighbors) {
+                for (auto u: paths[pathIndex[rep]]) {
+                    bool hasOtherNeighbor = false;
+                    for (auto w: state.graph().neighbors(u)) {
+                        if (w != v && !pathIndex.contains(w)) {
+                            hasOtherNeighbor = true;
+                            if (!fortFound) {
+                                for (auto z: state.graph().neighbors(w)) {
+                                    if (pathIndex.contains(z)) {
+                                        auto otherRep = paths[pathIndex[z]][0];
+                                        if (otherRep != rep && seen.contains(otherRep)) {
+                                            VertexList fort;
+                                            for (auto t: paths[pathIndex[z]]) {
+                                                fort.push_back(t);
+                                            }
+                                            for (auto t: paths[pathIndex[rep]]) {
+                                                fort.push_back(t);
+                                            }
+                                            fort.push_back(v);
+                                            forts.emplace_back(std::move(fort));
+                                            fortFound = true;
+                                        }
+                                    }
+                                }
+                            } if (fortFound) break;
+                        }
+                    }
+                    if (!hasOtherNeighbor) {
+                        degreeOnePaths.push_back(pathIndex[rep]);
+                    }
+                    if (fortFound && degreeOnePaths.size() > 1) break;
+                } if (fortFound && degreeOnePaths.size() > 1) break;
+            }
+            if (degreeOnePaths.size() > 1) {
+                VertexList fort;
+                for (auto p: degreeOnePaths) {
+                    for (auto w: paths[p]) {
+                        fort.push_back(w);
+                    }
+                }
+                fort.push_back(v);
+                forts.emplace_back(std::move(fort));
+            }
+            for (auto w: pathNeighbors) {
                 seen.erase(w);
             }
-            neighbors.clear();
         }
     }
     return forts;
@@ -615,6 +604,39 @@ std::vector<VertexList> initialForts3(PdsState& state, VertexSet& seen) {
 }
 
 namespace {
+
+std::vector<VertexList> initializeForts(PdsState& state, int variant, VertexSet& seen) {
+    switch (variant) {
+        case 1:
+            return initialForts(state, seen);
+        case 2:
+            return initialForts2(state, seen);
+        case 3:
+            return initialForts3(state, seen);
+        case 4:
+            return initialFortsSmith(state, seen);
+        case 0:
+        default:
+            return {};
+    }
+}
+auto violatedForts(PdsState& lastSolution, int variant, double remainingTimeout, VertexSet& seen, int output) -> std::vector<VertexList> {
+    switch(variant) {
+        case 1:
+            return {smithFortNeighborhood(lastSolution, false, remainingTimeout, seen)};
+        case 2:
+            return {bozemanFortNeighborhood2(lastSolution, false, remainingTimeout)};
+        case 3:
+            return {bozemanFortNeighborhood3(lastSolution, false, remainingTimeout)};
+        case 4: {
+            if (output) { fmt::print("finding forts in {} blank vertices\n", lastSolution.numBlank()); }
+            return initialForts3(lastSolution, seen);
+        }
+        case 0:
+        default:
+            return {bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen)};
+    }
+}
 struct Callback : public GRBCallback {
     size_t* lower;
     size_t* upper;
@@ -666,41 +688,6 @@ struct Callback : public GRBCallback {
         }
     }
 };
-}
-
-namespace {
-std::vector<VertexList> initializeForts(PdsState& state, int variant, VertexSet& seen) {
-    switch (variant) {
-        case 1:
-            return initialForts(state, seen);
-        case 2:
-            return initialForts2(state, seen);
-        case 3:
-            return initialForts3(state, seen);
-        case 4:
-            return initialFortsSmith(state, seen);
-        case 0:
-        default:
-            return {};
-    }
-}
-auto violatedForts(PdsState& lastSolution, int variant, double remainingTimeout, VertexSet& seen, int output) -> std::vector<VertexList> {
-    switch(variant) {
-        case 1:
-            return {smithFortNeighborhood(lastSolution, false, remainingTimeout, seen)};
-        case 2:
-            return {bozemanFortNeighborhood2(lastSolution, false, remainingTimeout)};
-        case 3:
-            return {bozemanFortNeighborhood3(lastSolution, false, remainingTimeout)};
-        case 4: {
-            if (output) { fmt::print("finding forts in {} blank vertices\n", lastSolution.numBlank()); }
-            return initialForts3(lastSolution, seen);
-        }
-        case 0:
-        default:
-            return {bozemanFortNeighborhood(lastSolution, output, remainingTimeout, seen)};
-    }
-}
 }
 
 SolveResult solveBozeman(
@@ -773,10 +760,10 @@ SolveResult solveBozeman(
                     if (state.isBlank(v)) {
                         fortSum += pi.at(v);
                         ++blank;
-                    } else if (state.isInactive(v)) {
-                        // might have been changed by initialFortNeighborhood
-                        lastSolution.setInactive(v);
                     }
+                }
+                if (blank == 0) {
+                    fmt::print("??? infeasible fort: {} has no blank vertices\n", forts[processedForts]);
                 }
                 model.addConstr(fortSum >= 1);
                 totalFortSize += forts[processedForts].size();
@@ -806,6 +793,8 @@ SolveResult solveBozeman(
             status = model.get(GRB_IntAttr_Status);
             size_t new_bound = 0;
             switch (status) {
+                case GRB_INFEASIBLE:
+                    return {1, 0, SolveState::Infeasible};
                 case GRB_INTERRUPTED:
                     if (static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)) < state.graph().numVertices()) {
                         new_bound = std::max(lowerBound, static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)));
