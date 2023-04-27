@@ -497,7 +497,7 @@ int main(int argc, const char** argv) {
                 auto boundsFileName = fmt::format("{}/{}-{}-bounds.csv", boundsDir, currentName, run);
                 boundsFile = fopen(boundsFileName.c_str(), "w+");
                 fmt::print(boundsFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
-                fmt::print(boundsFile, "name,run,t,lower,upper,extra\n");
+                fmt::print(boundsFile, "name,run,subinstance,t,lower,upper,gap,extra\n");
             }
             if (subproblems) {
                 auto checkpoint = t1;
@@ -510,12 +510,17 @@ int main(int argc, const char** argv) {
                         size_t initialBlank = substate.numBlank();
                         result.lower -= initialActive;
                         result.upper -= initialBlank + initialActive;
-                        auto boundCB = [&bounds, t0, result, boundsFile, &currentName, run](size_t lower, size_t upper, size_t extra) {
+                        auto boundCB = [&bounds, t0, result, boundsFile, &currentName, &subproblemNumber, run, initialBlank, initialActive](size_t lower, size_t upper, size_t extra) {
                             auto time = now();
-                            bounds.emplace_back(BoundInfo{result.lower + lower, result.upper + upper, extra, µs(time - t0)});
+                            bounds.emplace_back(BoundInfo{
+                                result.lower + std::max(lower, initialActive),
+                                result.upper + std::min(upper, initialBlank + initialActive),
+                                extra, µs(time - t0)
+                            });
                             if (boundsFile) {
                                 const auto& b = bounds.back();
-                                fmt::print(boundsFile, "{},{},{},{},{},{}\n", currentName, run, b.time, b.lower, b.upper, b.extraInfo);
+                                double gap = (double(b.upper) - double(b.lower)) / double(b.upper);
+                                fmt::print(boundsFile, "{},{},{},{},{},{},{},{}\n", currentName, run, subproblemNumber, b.time, b.lower, b.upper, gap, b.extraInfo);
                                 fflush(boundsFile);
                             }
                         };
@@ -536,13 +541,15 @@ int main(int argc, const char** argv) {
                     auto time = now();
                     bounds.emplace_back(BoundInfo{lower, upper, extra, µs(time - t0)});
                     if (boundsFile) {
-                        fmt::print(boundsFile, "{},{},{},{},{}\n", currentName, run, bounds.back().time, bounds.back().lower, bounds.back().upper);
+                        const auto& b = bounds.back();
+                        double gap = (double(b.upper) - double(b.lower)) / double(b.upper);
+                        fmt::print(boundsFile, "{},{},{},{},{},{},{},{}\n", currentName, run, subproblemNumber, b.time, b.lower, b.upper, gap, b.extraInfo);
                         fflush(boundsFile);
                     }
                 };
                 Solver solve = getSolver(vm, fortStats, currentName, run, 0, boundCB);
                 result = solve(state, timeout);
-                boundCB(result.lower, result.upper, 0);
+                boundCB(result.lower, result.upper, -1);
             }
             auto t2 = now();
             if (drawdir) {
