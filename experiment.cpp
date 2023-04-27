@@ -543,7 +543,7 @@ int main(int argc, const char** argv) {
                     if (boundsFile) {
                         const auto& b = bounds.back();
                         double gap = (double(b.upper) - double(b.lower)) / double(b.upper);
-                        fmt::print(boundsFile, "{},{},{},{},{},{},{},{}\n", currentName, run, subproblemNumber, b.time, b.lower, b.upper, gap, b.extraInfo);
+                        fmt::print(boundsFile, "{},{},{},{},{},{},{},{}\n", currentName, run, 0, b.time, b.lower, b.upper, gap, b.extraInfo);
                         fflush(boundsFile);
                     }
                 };
