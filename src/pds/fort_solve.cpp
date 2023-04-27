@@ -753,7 +753,7 @@ SolveResult solveBozeman(
         size_t totalFortSize = 0;
         while (true) {
             auto currentTime = now();
-            double remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
+            double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             auto moreForts = violatedForts(lastSolution, variant, remainingTimeout, seen, output);
             for (auto f: moreForts) {
                 forts.emplace_back(std::move(f));
@@ -768,7 +768,7 @@ SolveResult solveBozeman(
                     }
                     if (state.isActive(v)) {
                         if (output) {
-                            fmt::print("!!!active vertex in neighborhood!!! {} {} {}\n",
+                            fmt::print("???active vertex in neighborhood??? {} {} {}\n",
                                        v,
                                        lastSolution.numObserved(),
                                        lastSolution.graph().numVertices());
@@ -792,7 +792,7 @@ SolveResult solveBozeman(
                 fmt::print("#forts: {}, avg size: {:.2f}\n", forts.size(), double(totalFortSize) / double(forts.size()));
             }
             currentTime = now();
-            remainingTimeout = std::max(1.0, timeLimit - std::chrono::duration_cast<std::chrono::seconds>(currentTime - startingTime).count());
+            remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             if (greedyUpper) {
                 fastGreedy(lastSolution, (greedyUpper - 1) * 2);
                 size_t initial = lastSolution.numActive();
@@ -828,13 +828,15 @@ SolveResult solveBozeman(
                     fmt::print(stderr, "unexpected status: {}\n", status);
                     break;
             }
-            for (auto v: state.graph().vertices()) {
-                if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
-                    lastSolution.setActive(v);
-                } else if (state.isBlank(v)) {
-                    lastSolution.setBlank(v);
-                } else {
-                    lastSolution.setInactive(v);
+            if (model.get(GRB_IntAttr_SolCount) > 0) {
+                for (auto v: state.graph().vertices()) {
+                    if (pi.at(v).get(GRB_DoubleAttr_X) > 0.5) {
+                        lastSolution.setActive(v);
+                    } else if (state.isBlank(v)) {
+                        lastSolution.setBlank(v);
+                    } else {
+                        lastSolution.setInactive(v);
+                    }
                 }
             }
             if (lowerBound > new_bound) {
