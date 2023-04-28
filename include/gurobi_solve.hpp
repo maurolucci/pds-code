@@ -39,15 +39,15 @@ MIPModel modelBrimkov(PdsState& state);
 MIPModel modelBrimkovExpanded(PdsState& state);
 MIPModel modelAzamiBrimkov(PdsState& state);
 
-SolveResult solveMIP(MIPModel&, bool output = false, double timeLimit = TIME_LIMIT, pds::BoundCallback = noop_v);
+SolveResult solveMIP(const PdsState& state, MIPModel&, bool output = false, double timeLimit = TIME_LIMIT, pds::BoundCallback = noop_v, bool validate = false);
 
 void applySolution(PdsState&, MIPModel& model);
 
 template<class F = decltype(modelJovanovicExpanded)>
 //requires std::is_invocable_v<PdsState&>
-inline SolveResult solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, pds::BoundCallback boundCallback = noop_v, F model = modelJovanovicExpanded) {
+inline SolveResult solvePowerDominatingSet(PdsState& state, bool output, double timeLimit, pds::BoundCallback boundCallback = noop_v, F model = modelJovanovicExpanded, bool validate = false) {
     auto mip = model(state);
-    auto result = solveMIP(mip, output, timeLimit, boundCallback);
+    auto result = solveMIP(state, mip, output, timeLimit, boundCallback, validate);
     if (result.state != SolveState::Infeasible) {
         applySolution(state, mip);
     }

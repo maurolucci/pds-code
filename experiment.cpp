@@ -324,7 +324,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     } else {
         try {
             return Solver{[model = getModel(solverName), verbose,boundCB](auto &state, double timeout) {
-                return solvePowerDominatingSet(state, verbose, timeout, boundCB, model);
+                return solvePowerDominatingSet(state, verbose, timeout, boundCB, model, true);
             }};
         } catch (std::invalid_argument &ex) {
             fmt::print(stderr, "{}", ex.what());

@@ -69,7 +69,11 @@ struct SolveCallback : public GRBCallback {
     size_t lower = 0;
     size_t upper = -1;
     BoundCallback cb;
-    SolveCallback(size_t lower, size_t upper, BoundCallback cb) : lower(lower), upper(upper), cb(cb) { }
+    bool validate;
+    PdsState validator;
+    const MIPModel& model;
+    SolveCallback(size_t lower, size_t upper, BoundCallback cb, bool validate, const PdsState& validator, const MIPModel& model)
+    : lower(lower), upper(upper), cb(cb), validate(validate), validator(validator), model(model) { }
     void callback() override {
         if (where == GRB_CB_MIP) {
             double objBound = getDoubleInfo(GRB_CB_MIP_OBJBND);
@@ -82,12 +86,32 @@ struct SolveCallback : public GRBCallback {
                 upper = objVal;
                 cb(lower, upper, getDoubleInfo(GRB_CB_MIP_NODCNT));
             }
+        } else if (where == GRB_CB_MIPSOL) {
+            if (validate) {
+                for (auto v: validator.graph().vertices()) {
+                    auto x = model.xi.at(v);
+                    if (getSolution(x) > 0.5) {
+                        if (validator.isInactive(v)) {
+                            fmt::print("!!! setting inactive vertex !!!\n");
+                            abort();
+                        } else if (validator.isBlank(v)) {
+                            validator.setActive(v);
+                        }
+                    } else {
+                        validator.setBlank(v);
+                    }
+                }
+                if (!validator.allObserved()) {
+                    fmt::print("!!!gurobi solution is not power dominating set!!!\n");
+                    abort();
+                }
+            }
         }
     }
 };
 }
 
-SolveResult solveMIP(MIPModel & mipmodel, bool output, double timeLimit, BoundCallback callback) {
+SolveResult solveMIP(const PdsState& state, MIPModel & mipmodel, bool output, double timeLimit, BoundCallback callback, bool validate) {
     auto& model = *mipmodel.model;
     auto oldstdout = dup(STDOUT_FILENO);
     FILE *result = freopen("/dev/null", "a", stdout);
@@ -96,7 +120,7 @@ SolveResult solveMIP(MIPModel & mipmodel, bool output, double timeLimit, BoundCa
     dup2(oldstdout, STDOUT_FILENO);
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
-    SolveCallback cb(0, -1, callback);
+    SolveCallback cb(0, state.graph().numVertices(), callback, validate, validate ? PdsState{} : state, mipmodel);
     model.setCallback(&cb);
 
     model.optimize();
