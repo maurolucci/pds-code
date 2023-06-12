@@ -724,6 +724,13 @@ SolveResult solveBozeman(
     try {
         VertexSet seen;
         auto forts = initializeForts(state, fortInit, seen);
+        if (forts.empty()) {
+            if (state.allObserved()) {
+                return {state.numActive(), state.numActive(), SolveState::Optimal};
+            } else {
+                return {state.graph().numVertices(), 0, SolveState::Infeasible};
+            }
+        }
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, false);
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
