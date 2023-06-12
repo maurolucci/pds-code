@@ -2,9 +2,10 @@
 
 #include <gurobi_c++.h>
 #include <range/v3/all.hpp>
+#include <utility>
 
 #include "pdssolve.hpp"
-#include "gurobi_solve.hpp"
+#include "gurobi_common.hpp"
 
 namespace pds {
 
@@ -661,7 +662,7 @@ struct Callback : public GRBCallback {
             if (getIntInfo(GRB_CB_MIP_SOLCNT) > 0) {
                 auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBST) + 0.5);
                 auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBND));
-                if (objVal <= *upper && !solution->allObserved() && earlyStop > 1 && objBound > *lower) {
+                if (objVal <= *upper && !solution->allObserved() && earlyStop > 1 && (objBound > *lower || earlyStop > 2)) {
                     abort();
                 }
             }
@@ -899,5 +900,167 @@ SolveResult solveBozeman(
         fmt::print(stderr, "Gurobi Error [{}]: {}\n", ex.getErrorCode(), ex.getMessage());
         throw ex;
     }
+}
+
+void addFortConstraints(MIPModel &mipmodel, PdsState &state, int fortInit) {
+    auto& model = *mipmodel.model;
+    const auto& xi = mipmodel.xi;
+    VertexSet seen;
+    auto forts = initializeForts(state, fortInit, seen);
+    for (auto & fort: forts) {
+        GRBLinExpr fortSum;
+        for (auto v: fort) {
+            if (xi.contains(v)) {
+                fortSum += xi.at(v);
+            } else {
+                fmt::print("!!! vertex not in mip model: {}!!!\n", v);
+            }
+        }
+        model.addConstr(fortSum >= 1);
+    }
+}
+namespace {
+struct LazyFortCB : public GRBCallback {
+    PdsState* solution;
+    PdsState bestSolution;
+    int output;
+    callback::FortCallback fortCB;
+    BoundCallback boundCB;
+    VertexList blank;
+    VertexSet initialBlank;
+    std::vector<VertexList> forts;
+    VertexMap<GRBVar> xi;
+    VertexSet seen;
+    GRBModel model;
+    size_t lower;
+    LazyFortCB(PdsState& input, int output, double timeLimit, callback::FortCallback fortCB, BoundCallback boundCB) :
+            solution(&input), bestSolution(input), output(output), fortCB(std::move(fortCB)), boundCB(std::move(boundCB)),
+            seen{}, model(getEnv()), lower(0)
+    {
+        model.set(GRB_IntParam_LogToConsole, output >= 2);
+        model.set(GRB_DoubleParam_TimeLimit, timeLimit);
+        model.set(GRB_IntParam_LazyConstraints, 1);
+        //model.set(GRB_IntParam_NumericFocus, 1);
+        //model.set(GRB_DoubleParam_MIPGap, 1e-6);
+        model.set(GRB_IntParam_Presolve, GRB_PRESOLVE_AGGRESSIVE);
+        model.setCallback(this);
+        fastGreedy(bestSolution, false);
+        for (auto v: input.graph().vertices()) {
+            xi.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("x_{}", v)));
+            if (input.isBlank(v)) {
+                blank.push_back(v);
+                initialBlank.insert(v);
+            } else if (input.isInactive(v)) {
+                model.addConstr(xi.at(v) == 0);
+            } else if (input.isActive(v)) {
+                model.addConstr(xi.at(v) == 1);
+            }
+        }
+        auto newForts = initialForts3(*solution, seen);
+        for (auto &f: newForts) {
+            GRBLinExpr fortSum;
+            for (auto v: f) {
+                fortSum += xi.at(v);
+            }
+            model.addConstr(fortSum >= 1);
+            forts.emplace_back(std::move(f));
+        }
+        //newForts = initialForts3(*solution, seen);
+        //for (auto &f: newForts) {
+        //    GRBLinExpr fortSum;
+        //    for (auto v: f) {
+        //        fortSum += xi.at(v);
+        //    }
+        //    model.addConstr(fortSum >= 1);
+        //    forts.emplace_back(std::move(f));
+        //}
+        lower = 0;
+        this->boundCB(lower, bestSolution.numActive(), 0);
+    }
+    SolveResult solve() {
+        model.optimize();
+        std::swap(*solution, bestSolution);
+        switch (model.get(GRB_IntAttr_Status)) {
+            case GRB_OPTIMAL:
+                return SolveResult{solution->numActive(), solution->numActive(), SolveState::Optimal};
+            case GRB_TIME_LIMIT:
+                return SolveResult{static_cast<size_t>(model.get(GRB_DoubleAttr_ObjBound)), solution->numActive(), SolveState::Timeout};
+            case GRB_INFEASIBLE:
+                return SolveResult{solution->graph().numVertices(), 0, SolveState::Infeasible};
+            default:
+                return SolveResult{0, solution->graph().numVertices(), SolveState::Other};
+        }
+    }
+
+    void callback() override {
+        switch (where) {
+            case GRB_CB_MIPSOL: {
+                for (auto v: blank) {
+                    if (getSolution(xi.at(v)) > 0.5) {
+                        solution->setActive(v);
+                    } else if (initialBlank.contains(v)) {
+                        solution->setBlank(v);
+                    } else {
+                        fmt::print("!!!changed inactive vertex {}!!!\n", v);
+                        solution->setInactive(v);
+                    }
+                }
+                if (!solution->allObserved()) {
+                    addLazyForts();
+                    addLazyForts();
+                    addLazyForts();
+                    lower = std::max(lower, getLower(getDoubleInfo(GRB_CB_MIPSOL_OBJBND)));
+                    // compute new upper actual bound
+                    fastGreedy(*solution, false);
+                    topDownGreedy(*solution, false, blank);
+                    fortCB(callback::When::INTERMEDIATE_HS, *solution, forts, lower, bestSolution.numActive());
+                }
+                if (solution->numActive() < bestSolution.numActive()) {
+                    bestSolution = *solution;
+                    boundCB(lower, bestSolution.numActive(), forts.size());
+                }
+                if (output > 0) {
+                    fmt::print("LB: {}\tUB: {}\t#F: {}\n", lower, bestSolution.numActive(), forts.size());
+                }
+                break;
+            }
+            case GRB_CB_MIP: {
+                size_t newLower = getLower(getDoubleInfo(GRB_CB_MIP_OBJBND));
+                if (newLower > lower) {
+                    lower = newLower;
+                    boundCB(lower, bestSolution.numActive(), forts.size());
+                    if (output > 0) {
+                        fmt::print("LB: {}\tUB: {}\t#F: {}\n", lower, bestSolution.numActive(), forts.size());
+                    }
+                }
+                break;
+            }
+        }
+    }
+private:
+    size_t getLower(double grbLower) {
+        if (grbLower >= GRB_INFINITY) {
+            return 0;
+        } else {
+            return static_cast<size_t>(std::max(0.0, grbLower));
+        }
+    }
+    void addLazyForts() {
+        auto newForts = initialForts3(*solution, seen);
+        for (auto &f: newForts) {
+            GRBLinExpr fortSum;
+            for (auto v: f) {
+                fortSum += xi.at(v);
+            }
+            addLazy(fortSum >= 1);
+            forts.emplace_back(std::move(f));
+        }
+    }
+};
+}
+
+SolveResult solveLazyForts(PdsState &state, int output, double timeLimit, callback::FortCallback fortCB, BoundCallback boundsCB) {
+    LazyFortCB lazyForts(state, output, timeLimit, std::move(fortCB), std::move(boundsCB));
+    return lazyForts.solve();
 }
 } //namespace pds

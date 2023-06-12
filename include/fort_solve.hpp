@@ -3,6 +3,7 @@
 
 #include "pds.hpp"
 #include "pdssolve.hpp"
+#include "gurobi_common.hpp"
 
 namespace pds {
 namespace callback {
@@ -22,6 +23,8 @@ SolveResult solveBozeman(PdsState &state,
                          callback::FortCallback fortCallback,
                          BoundCallback boundCallback,
                          int intermediateForts);
+SolveResult solveLazyForts(PdsState& state, int output, double timeLimit, callback::FortCallback fortCB, BoundCallback boundsCB);
+void addFortConstraints(MIPModel& model, PdsState& state, int fortInit);
 } // namespace pds
 #endif
 

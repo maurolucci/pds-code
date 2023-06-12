@@ -239,7 +239,7 @@ namespace fs = std::filesystem;
 auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& currentName, size_t run, size_t subproblemNumber, BoundCallback boundCB) {
     using std::string;
     string solverName = vm["solve"].as<string>();
-    bool verbose = vm.count("verbose");
+    int verbose = vm.count("verbose") ? vm["verbose"].as<int>() : 0;
     int earlyStop = vm["early-stop"].as<int>();
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
     int fortInit = vm["fort-init"].as<int>();
@@ -321,10 +321,22 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             return solveBozeman(state, verbose, timeLimit, 4, fortInit,
                                 greedyBoundMode, earlyStop, fortCallback, boundCB, intermediateForts ? 4 : -1);
         }};
+    } else if (solverName == "lazy-forts") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solveLazyForts(state, verbose, timeLimit, fortCallback, boundCB);
+        }};
     } else {
         try {
-            return Solver{[model = getModel(solverName), verbose,boundCB](auto &state, double timeout) {
-                return solvePowerDominatingSet(state, verbose, timeout, boundCB, model, true);
+            return Solver{[model = getModel(solverName), verbose,boundCB,fortInit](auto &state, double timeout) {
+                auto mip = model(state);
+                if (fortInit) {
+                    addFortConstraints(mip, state, fortInit);
+                }
+                auto result = solveMIP(state, mip, verbose, timeout, boundCB, true);
+                if (result.state != SolveState::Infeasible) {
+                    applySolution(state, mip);
+                }
+                return result;
             }};
         } catch (std::invalid_argument &ex) {
             fmt::print(stderr, "{}", ex.what());
@@ -355,12 +367,12 @@ int main(int argc, const char** argv) {
             ("stat-file", po::value<string>(), "write statistics about solutions")
             ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
             ("fort-stats", po::value<string>(), "file for fort statistics")
-            ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(3), "fort initialization method")
+            ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(0), "fort initialization method")
             ("intermediate", "find violated forts in every new feasbile solution")
             ("early-stop", po::value<int>()->default_value(0)->implicit_value(2), "stop hitting set solver when violating hitting set is found [0: only optimal, 1: keep lower bound, 2: stop early]")
             ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
             ("write-bounds", po::value<string>(), "write bound time series")
-            ("verbose,v", "print additional solver status info")
+            ("verbose,v", po::value<int>()->implicit_value(1), "print additional solver status info")
     ;
     po::positional_options_description pos;
     pos.add("graph", -1);

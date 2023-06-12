@@ -9,28 +9,12 @@
 
 #include "pds.hpp"
 #include "pdssolve.hpp"
+#include "gurobi_common.hpp"
 
 // Forward declaration to avoid full gurobi header inclusion
-struct GRBModel;
-struct GRBVar;
-struct GRBEnv;
-
 namespace pds {
 
 inline const double TIME_LIMIT = 10 * 60;
-
-struct MIPModel {
-    std::unique_ptr<GRBModel> model;
-    map<PowerGrid::VertexDescriptor, GRBVar> xi;
-    MIPModel();
-    MIPModel(MIPModel&& other) = default;
-    virtual ~MIPModel();
-};
-
-void preloadMIPSolver();
-GRBEnv& getEnv();
-
-void relaxMIPModel(MIPModel&);
 
 MIPModel modelJovanovic(PdsState& state);
 MIPModel modelJovanovicExpanded(PdsState& state);
