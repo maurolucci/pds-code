@@ -257,6 +257,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             {
                 auto hs_file = fmt::format("hs/{}-{}-hs-{:04}.hs", currentName, subproblemNumber, solved);
                 FILE* file = fopen(hs_file.c_str(), "w");
+                if (!file) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
                 fmt::print(file, "{} {}\n", state.graph().numVertices(), forts.size() + state.numActive());
                 // ensure that active vertices are selected to get the correct bound
                 for (auto v: state.graph().vertices()) {
@@ -448,6 +449,7 @@ int main(int argc, const char** argv) {
         auto outfileName = vm["outfile"].as<string>();
         fs::create_directories(fs::absolute(fs::path(outfileName)).parent_path());
         outfile = fopen(vm["outfile"].as<string>().c_str(), "w");
+        if (!outfile) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
         outputs.push_back(outfile);
     }
     FILE* statFile = nullptr;
@@ -455,6 +457,7 @@ int main(int argc, const char** argv) {
         auto statFileName = vm["stat-file"].as<string>();
         fs::create_directories(fs::absolute(fs::path(statFileName)).parent_path());
         statFile = fopen(statFileName.c_str(), "w");
+        if (!statFile) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
         fmt::print(statFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
         fmt::print(statFile, "# degrees format: <#zi+inactive>:<#zi+blank>:<#zi+active>:<#nonzi+inactive>:<#nonzi+blank>:<#nonzi.active>;...\n");
         fmt::print(statFile, "{}", "name,n,m,n_zero_injection,n_pmu,n_inactive,n_blank,n_observed,propagation_distance,tree_width,degrees\n");
@@ -464,6 +467,7 @@ int main(int argc, const char** argv) {
         auto fortStatFileName = vm["fort-stats"].as<string>();
         fs::create_directories(fs::absolute(fs::path(fortStatFileName)).parent_path());
         fortStatFile = fopen(fortStatFileName.c_str(), "w");
+        if (!fortStatFile) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
         fmt::print(fortStatFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
         fmt::print(fortStatFile, "{}", "name,run,forts,avg_size,num_hitting_sets\n");
     }
@@ -499,7 +503,6 @@ int main(int argc, const char** argv) {
             size_t ziReduced = state.numZeroInjection();
             size_t pmusReduced = state.numActive();
             size_t blankReduced = nReduced - state.numActive() - state.numInactive();
-            auto t1 = now();
             SolveResult result = {state.numActive(), state.numActive() + state.numBlank(), SolveState::Optimal };
             auto reduced = state;
             FILE* boundsFile = nullptr;
@@ -508,9 +511,11 @@ int main(int argc, const char** argv) {
                 fs::create_directories(fs::absolute(fs::path(boundsDir)));
                 auto boundsFileName = fmt::format("{}/{}-{}-bounds.csv", boundsDir, currentName, run);
                 boundsFile = fopen(boundsFileName.c_str(), "w+");
+                if (!boundsFile) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
                 fmt::print(boundsFile, "#{}\n", fmt::join(std::span(argv, argc + argv), " "));
                 fmt::print(boundsFile, "name,run,subinstance,t,lower,upper,gap,extra\n");
             }
+            auto t1 = now();
             if (subproblems) {
                 auto checkpoint = t1;
                 auto subproblems = state.subproblems();
