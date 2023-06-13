@@ -112,12 +112,13 @@ struct SolveCallback : public GRBCallback {
 }
 
 SolveResult solveMIP(const PdsState& state, MIPModel & mipmodel, bool output, double timeLimit, BoundCallback callback, bool validate) {
+    if (state.allObserved()) { // already solved
+        return {state.numActive(), state.numActive(), SolveState::Optimal};
+    } else if (state.numBlank() == 0) { // infeasible
+        return {state.graph().numVertices(), 0, SolveState::Infeasible};
+    }
     auto& model = *mipmodel.model;
-    auto oldstdout = dup(STDOUT_FILENO);
-    FILE *result = freopen("/dev/null", "a", stdout);
-    if (!result) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
     model.set(GRB_StringParam_LogFile, "gurobi.log");
-    dup2(oldstdout, STDOUT_FILENO);
     model.set(GRB_IntParam_LogToConsole, int{output});
     model.set(GRB_DoubleParam_TimeLimit, timeLimit);
     SolveCallback cb(0, state.graph().numVertices(), callback, validate, validate ? PdsState{} : state, mipmodel);

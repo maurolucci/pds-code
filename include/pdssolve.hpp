@@ -78,6 +78,7 @@ template<
         std::invocable<const PdsState&, const std::string&> F = void(const PdsState&, const std::string&)
 >
 SolveResult solveGreedy(PdsState& state, bool applyReductions = true, Strategy strategy = greedy_strategies::largestObservationNeighborhood, F callback = unused) {
+    size_t lower = state.numActive();
     while (!state.allObserved()) {
         if (applyReductions) {
             exhaustiveReductions(state, true, callback);
@@ -87,7 +88,7 @@ SolveResult solveGreedy(PdsState& state, bool applyReductions = true, Strategy s
         if (!best) break;
         state.setActive(*best);
     }
-    return {size_t{0}, state.numActive(), SolveState::Heuristic};
+    return {lower, state.numActive(), SolveState::Heuristic};
 }
 
 SolveResult fastGreedy(PdsState &state, int useReductions = true);
@@ -108,7 +109,7 @@ SolveResult solveBranching(PdsState &state,
     fastGreedy(heuristic, true);
     auto upper = sensorBounds(heuristic).second;
     fmt::print("heuristic result: {}\n", upper);
-    size_t lower = 0;
+    size_t lower = state.numActive();
     auto compare = [](const auto& first, const auto& second) { return first.first.first > second.first.first; };
     using Element = std::pair<Bounds, PowerGrid>;
     std::priority_queue<Element, std::vector<Element>, decltype(compare)> queue(compare);

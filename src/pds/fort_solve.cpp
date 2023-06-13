@@ -721,15 +721,16 @@ SolveResult solveBozeman(
 
     size_t lowerBound = 0;
     size_t upperBound = state.numActive() + state.numBlank();
+    if (state.allObserved()) {
+        return {state.numActive(), state.numActive(), SolveState::Optimal};
+    } else if (state.numBlank() == 0) {
+        return {state.graph().numVertices(), 0, SolveState::Infeasible};
+    }
     try {
         VertexSet seen;
         auto forts = initializeForts(state, fortInit, seen);
         if (forts.empty()) {
-            if (state.allObserved()) {
-                return {state.numActive(), state.numActive(), SolveState::Optimal};
-            } else {
-                return {state.graph().numVertices(), 0, SolveState::Infeasible};
-            }
+            return {state.graph().numVertices(), 0, SolveState::Infeasible};
         }
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, false);

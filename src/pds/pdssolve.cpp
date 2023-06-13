@@ -26,6 +26,10 @@ Bounds sensorBounds(const PdsState &state) {
 SolveResult fastGreedy(PdsState &state, int useReductions) {
     if (state.allObserved()) { return {size_t{0}, state.numObserved(), SolveState::Heuristic}; }
     //auto comp = [&state] (auto v, auto w) { return state.graph().degree(v) < state.graph().degree(w); };
+    if (state.allObserved()) {
+        return {state.numActive(), state.numActive(), SolveState::Optimal};
+    }
+    size_t lower = state.numActive();
     auto blank = state.graph().vertices()
                     | ranges::views::filter([&state](auto v) { return state.isBlank(v); })
                     | ranges::views::transform([&state](auto v) { return std::pair(state.unobservedDegree(v), v); })
@@ -58,11 +62,15 @@ SolveResult fastGreedy(PdsState &state, int useReductions) {
     }
     //fmt::print("greedy: {} → {}\n", initial, state.numActive());
     if (!state.allObserved()) return { state.graph().numVertices(), size_t{0}, SolveState::Infeasible };
-    return {size_t{0}, state.numObserved(), SolveState::Heuristic};
+    return {lower, state.numActive(), SolveState::Heuristic};
 }
 
 SolveResult topDownGreedy(PdsState &state, bool activateAll, std::span<PdsState::Vertex> vertices) {
     std::vector<PdsState::Vertex> blank;
+    if (state.allObserved()) {
+        return {state.numActive(), state.numActive(), SolveState::Optimal};
+    }
+    size_t lower = state.numActive() + 1;
     if (vertices.empty() && state.numBlank() > 0) {
         blank = state.graph().vertices()
                 | ranges::views::filter([&state] (auto v) { return state.isBlank(v); })
@@ -88,7 +96,7 @@ SolveResult topDownGreedy(PdsState &state, bool activateAll, std::span<PdsState:
             }
         }
     }
-    return {size_t{0}, state.numObserved(), SolveState::Heuristic};
+    return {lower, state.numActive(), SolveState::Heuristic};
 }
 
 namespace greedy_strategies {

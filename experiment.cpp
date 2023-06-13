@@ -516,7 +516,15 @@ int main(int argc, const char** argv) {
                 fmt::print(boundsFile, "name,run,subinstance,t,lower,upper,gap,extra\n");
             }
             auto t1 = now();
-            if (subproblems) {
+            if (state.allObserved()) {
+                if (boundsFile) {
+                    const auto &b = BoundInfo{state.numActive(), state.numActive(), 0, µs(now() - t0)};
+                    double gap = (double(b.upper) - double(b.lower)) / double(b.upper);
+                    fmt::print(boundsFile, "{},{},0,{},{},{},{},0\n", currentName, run, b.time, b.lower, b.upper, gap);
+                    fflush(boundsFile);
+                }
+                result = SolveResult { state.numActive(), state.numActive(), SolveState::Optimal};
+            } else if (subproblems) {
                 auto checkpoint = t1;
                 auto subproblems = state.subproblems();
                 ranges::sort(subproblems, [](const auto& left, const auto& right) { return left.graph().numVertices() < right.graph().numVertices(); });
