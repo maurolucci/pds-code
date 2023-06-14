@@ -729,9 +729,6 @@ SolveResult solveBozeman(
     try {
         VertexSet seen;
         auto forts = initializeForts(state, fortInit, seen);
-        if (forts.empty()) {
-            return {state.graph().numVertices(), 0, SolveState::Infeasible};
-        }
         GRBModel model(getEnv());
         model.set(GRB_IntParam_LogToConsole, false);
         model.set(GRB_DoubleParam_TimeLimit, timeLimit);
@@ -766,6 +763,9 @@ SolveResult solveBozeman(
             auto moreForts = violatedForts(lastSolution, variant, remainingTimeout, seen, output);
             for (auto f: moreForts) {
                 forts.emplace_back(std::move(f));
+            }
+            if (forts.empty()) {
+                return {state.graph().numVertices(), 0, SolveState::Infeasible};
             }
             if (forts.back().empty()) break;
             for (; processedForts < forts.size(); ++processedForts) {
