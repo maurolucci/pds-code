@@ -6,7 +6,7 @@ This library requires the following dependencies to be installed before compilin
 * boost
 * gurobi and valid `GUROBI_HOME`
 * range-v3
-* tinyxml2
+* vcpkg (con la libreria tinyxml2)
 
 ## Building
 This project is built using cmake.
@@ -14,8 +14,8 @@ For a building execute the following commands:
 ```
 git clone $GIT/pds-code.git
 cd pds-code
-cmake -B build -S .
-cmake --build -- -j $(nproc)
+cmake -B build -S . --preset=default (o bien, sudo -E cmake -B build -S . --preset=default)
+cmake --build build (o bien, sudo cmake --build build)
 ```
 
 ## Running
