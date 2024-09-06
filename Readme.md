@@ -6,7 +6,8 @@ This library requires the following dependencies to be installed before compilin
 * boost
 * gurobi and valid `GUROBI_HOME`
 * range-v3
-* vcpkg (with library tinyxml2)
+* vcpkg (with library tinyxml2) and valid `VCPKG_ROOT`
+* mpgraph [2] cloned in folder pds-code/contrib
 
 ## Building
 This project is built using cmake.
@@ -36,3 +37,4 @@ ln -s ../inputs
 The original data and evaluation scripts for the arXiv version can be found in `evaluation.tar.xz`
 
 [1]: https://arxiv.org/abs/2306.09870
+[2]: https://gitlab.com/Aldorn/mpgraphs 
