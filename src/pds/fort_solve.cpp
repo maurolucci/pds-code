@@ -754,7 +754,7 @@ SolveResult solveBozeman(
                 blankVertices, earlyStop, intermediateForts, forts, seen);
         model.setCallback(&cb);
         auto startingTime = now();
-        int status;
+        int status = 0;
         size_t processedForts = 0;
         size_t totalFortSize = 0;
         while (true) {
