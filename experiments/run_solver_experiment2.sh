@@ -5,10 +5,10 @@ mkdir -p results/solver/{blasius,bozeman-smith,jovanovic,brimkov,brimkov-geq,bri
 for OTHER_ARGS in '' '-z'; do
     echo $OTHER_ARGS
     if [ "$OTHER_ARGS" = "-z" ]; then   
-        CASES="cases.txt" 
+        CASES="cases2000.txt" 
     fi
     if [ "$OTHER_ARGS" = "" ]; then   
-        CASES="cases2000.txt" 
+        CASES="cases.txt" 
     fi
     time ./experiment -s forts -n $NRUN $OTHER_ARGS --timeout=$TIMEOUT -o "results/solver/blasius$OTHER_ARGS.csv" --fort-stats results/solver/blasius$OTHER_ARGS-fort.csv -w results/solver/blasius$OTHER_ARGS/sol $(cat $CASES)
     date
