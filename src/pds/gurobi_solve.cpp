@@ -424,8 +424,6 @@ MIPModel modelBrimkov(PdsState& state) {
         GRBLinExpr observers = 0;
         observers += xi.at(u);
         for (auto e: state.graph().inEdges(u)) {
-            auto v = state.graph().source(e);
-            assert(v != u);
             observers += ye.at(e);
         }
         model.addConstr(observers == 1);
@@ -474,8 +472,6 @@ MIPModel modelBrimkovGeq(PdsState& state) {
         GRBLinExpr observers = 0;
         observers += xi.at(u);
         for (auto e: state.graph().inEdges(u)) {
-            auto v = state.graph().source(e);
-            assert(v != u);
             observers += ye.at(e);
         }
         model.addConstr(observers >= 1);
@@ -533,12 +529,12 @@ MIPModel modelBrimkovAlt(PdsState& state) {
         for (auto e: state.graph().outEdges(u)) {
             auto v = state.graph().target(e);
             // s_u - s_v + (T + 1) y_e <= T, e@(u,v) \in E'
-            model.addConstr(si.at(u) - si.at(v) + (T + 1) * ye.at(e) <= T;
+            model.addConstr(si.at(u) - si.at(v) + (T + 1) * ye.at(e) <= T);
             for (auto w: state.graph().neighbors(u)) {
                 if (v != w) {
                     unused(u, w, v, e);
                     // s_w - s_v + (T + 1) y_e <= T, e@(u,v) \in E', w \in N(u) - v
-                    model.addConstr(si.at(w) - si.at(v) + (T + 1) * ye.at(e) <= T;
+                    model.addConstr(si.at(w) - si.at(v) + (T + 1) * ye.at(e) <= T);
                 }
             }
         }
