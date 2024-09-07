@@ -20,6 +20,8 @@ MIPModel modelJovanovic(PdsState& state);
 MIPModel modelJovanovicExpanded(PdsState& state);
 MIPModel modelDomination(PdsState& state);
 MIPModel modelBrimkov(PdsState& state);
+MIPModel modelBrimkovGeq(PdsState& state);
+MIPModel modelBrimkovAlt(PdsState& state);
 MIPModel modelBrimkovExpanded(PdsState& state);
 MIPModel modelAzamiBrimkov(PdsState& state);
 

@@ -222,6 +222,10 @@ auto getModel(const std::string& name) {
         return pds::modelJovanovic;
     } else if (name == "brimkov") {
         return pds::modelBrimkov;
+    } else if (name == "brimkov-geq") {
+        return pds::modelBrimkovGeq;
+    } else if (name == "brimkov-alt") {
+        return pds::modelBrimkovAlt;
     } else if (name == "brimkov2") {
         return pds::modelBrimkovExpanded;
     } else if (name == "azami" || name == "azami-brimkov") {
