@@ -20,3 +20,4 @@ inputs/case_south_carolina500.graphml
 inputs/case1354pegase.graphml
 inputs/case1888rte.graphml
 inputs/case1951rte.graphml
+inputs/case2383wp.graphml
