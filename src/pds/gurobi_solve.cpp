@@ -409,7 +409,7 @@ MIPModel modelBrimkov(PdsState& state) {
             assert(!ye.contains(e));
             ye.try_emplace(e, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
             if (!state.isZeroInjection(v)) {
-                model.addConstr(ye.at(e) == 0.0);
+                model.addConstr(ye.at(e) <= xi.at(v));
             }
         }
         if (state.isActive(v)) {
@@ -457,7 +457,7 @@ MIPModel modelBrimkovGeq(PdsState& state) {
             assert(!ye.contains(e));
             ye.try_emplace(e, model.addVar(0.0, 1.0, 0.0, GRB_BINARY));
             if (!state.isZeroInjection(v)) {
-                model.addConstr(ye.at(e) == 0.0);
+                model.addConstr(ye.at(e) <= xi.at(v));
             }
         }
         if (state.isActive(v)) {
