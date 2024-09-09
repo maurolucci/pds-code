@@ -1,16 +1,17 @@
 #!/usr/bin/zsh
 TIMEOUT=3600
 NRUN=5
-mkdir -p results/solver/{blasius,bozeman-smith,jovanovic,brimkov,brimkov-geq,brimkov-alt}{,-z}/sol
 for OTHER_ARGS in '' '-z'; do
     echo $OTHER_ARGS
     if [ "$OTHER_ARGS" = "-z" ]; then   
-        CASES="cases2000.txt" 
+        CASES="cases2500.txt" 
     fi
     if [ "$OTHER_ARGS" = "" ]; then   
         CASES="cases.txt" 
     fi
     time ./experiment -s forts -n $NRUN $OTHER_ARGS --timeout=$TIMEOUT -o "results/solver/blasius$OTHER_ARGS.csv" --fort-stats results/solver/blasius$OTHER_ARGS-fort.csv -w results/solver/blasius$OTHER_ARGS/sol $(cat $CASES)
+    date
+    time ./experiment -s lazy-forts -n $NRUN $OTHER_ARGS --timeout=$TIMEOUT -o "results/solver/blasius-lazy$OTHER_ARGS.csv" --fort-stats results/solver/blasius-lazy$OTHER_ARGS-fort.csv -w results/solver/blasius-lazy$OTHER_ARGS/sol $(cat $CASES)
     date
     time ./experiment -s bozeman2 --fort-init=3 -u -n $NRUN $OTHER_ARGS --timeout=$TIMEOUT -o "results/solver/bozeman-smith$OTHER_ARGS.csv" --fort-stats results/solver/bozeman-smith$OTHER_ARGS-fort.csv -w results/solver/bozeman-smith$OTHER_ARGS/sol $(cat $CASES)
     date
