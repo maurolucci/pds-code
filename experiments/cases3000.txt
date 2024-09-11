@@ -32,13 +32,3 @@ inputs/case2746wp.graphml
 inputs/case2848rte.graphml
 inputs/case2868rte.graphml
 inputs/case2869pegase.graphml
-inputs/case3012wp.graphml
-inputs/case3120sp.graphml
-inputs/case3375wp.graphml
-inputs/case6468rte.graphml
-inputs/case6470rte.graphml
-inputs/case6495rte.graphml
-inputs/case6515rte.graphml
-inputs/case9241pegase.graphml
-inputs/case_Western.graphml
-inputs/case13659pegase.graphml

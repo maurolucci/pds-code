@@ -4,7 +4,7 @@ NRUN=5
 for OTHER_ARGS in '' '-z'; do
     echo $OTHER_ARGS
     if [ "$OTHER_ARGS" = "-z" ]; then   
-        CASES="cases2500.txt" 
+        CASES="cases3000.txt" 
     fi
     if [ "$OTHER_ARGS" = "" ]; then   
         CASES="cases.txt" 
