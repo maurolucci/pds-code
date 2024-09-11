@@ -34,7 +34,7 @@ def generar_redes() -> list[str]:
     """
 
     return [
-        ("case73rts", "case_RTS_GMLC"),
+        ("case96rts", "case_RTS_GMLC"),
         ("case13659pegase", "case13659pegase"),
         ("case1951rte", "case1951rte"),
         ("case2868rte", "case2868rte"),
@@ -47,11 +47,6 @@ def generar_redes() -> list[str]:
         ("case3012wp", "case3012wp"),
         ("case3375wp", "case3375wp"),
         ("case_south_carolina500", "case_ACTIVSg500"),
-        # ("texas_2000", "case_ACTIVSg2000"),
-        # ("western_10k", "case_ACTIVSg10k"),
-        # ("northeast_25k", "case_ACTIVSg25k"),
-        # ("eastern_70k", "case_ACTIVSg70k"),
-        # ("usa_82k", "case_SyntheticUSA"),
     ]
 
 def generar_gml(dir_instancias: str):
@@ -71,7 +66,11 @@ def generar_gml(dir_instancias: str):
         mpc = m.loadcase(red)
         m.savecase(nombre + ".m", mpc)
         n = pc.from_mpc(nombre + ".m")
-        graph = top.create_nxgraph(n, multi=False, respect_switches=False)
+        graph = nx.convert_node_labels_to_integers(
+            top.create_nxgraph(n, multi=False, respect_switches=False),
+            first_label=0,
+            ordering='default',
+            label_attribute='real-name')
 
         loads = set(n.load['bus'])
         generators = set(n.gen['bus'])
@@ -84,8 +83,8 @@ def generar_gml(dir_instancias: str):
         outgraph.add_edges_from(graph.edges)
 
         # mark excluded, pre-selected, zero injection (propagating)
-        for n in outgraph:
-            outgraph.nodes[n]['propagating'] = 1 * (n not in load_gen)
+        for n in graph:
+            outgraph.nodes[n]['zero_injection'] = 1 * (graph.nodes[n]['real-name'] not in load_gen)
 
         print(
             "Instancia "
@@ -100,4 +99,8 @@ def generar_gml(dir_instancias: str):
         nx.write_graphml(outgraph, dir_instancias + nombre + ".graphml")
         os.remove(nombre + ".m")
 
+# try:
+#     os.mkdir("../instancias/pds-extension")
+# except OSError:
+#     pass
 generar_gml("")
