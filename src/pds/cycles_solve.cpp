@@ -284,19 +284,19 @@ SolveResult solveCycles(
                 model.addConstr(observers >= 1); 
             }
         
-            // // Restricciones (2)
-            // // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
-            // for (auto e: state.graph().outEdges(v)) {
-            //     auto u = state.graph().target(e);
-            //     if (!state.isZeroInjection(v)) {continue;}
-            //     GRBLinExpr observers = 0;
-            //     for (auto f: state.graph().inEdges(v)) {
-            //         auto w = state.graph().source(f);
-            //         if (w == u) {continue;}
-            //         observers += ze.at(w).at(u);
-            //     }
-            //     model.addConstr(state.graph().degree(v)*ye.at(u).at(v) <= observers);
-            // }
+            // Restricciones (2)
+            // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
+            for (auto e: state.graph().outEdges(v)) {
+                auto u = state.graph().target(e);
+                if (!state.isZeroInjection(v)) {continue;}
+                GRBLinExpr observers = ze.at(v).at(u);
+                for (auto f: state.graph().inEdges(v)) {
+                    auto w = state.graph().source(f);
+                    if (w == u) {continue;}
+                    observers += ze.at(w).at(u);
+                }
+                model.addConstr(state.graph().degree(v)*ye.at(v).at(u) <= observers);
+            }
         }
 
         // Add callback
