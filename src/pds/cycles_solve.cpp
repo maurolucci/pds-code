@@ -113,15 +113,18 @@ struct Callback : public GRBCallback {
                 for (auto v: blank) {
 
                     if (getSolution(sv->at(v)) > 0.5) {
-                        // If v is selected, then mark v as active 
+                        // If v is selected, then mark v as active
+                        fmt::print("{}: Caso 1", v); 
                         solution->setActive(v);
                     } else if (base->isBlank(v)) {
                         // if v is not selected and v is undecided in the base solution,
                         // then mark v as undecided
+                        fmt::print("{}: Caso 2", v);
                         solution->setBlank(v);
                     } else {
                         // If is not selected and v is active in the base solution,
                         // then mark v as inactive
+                        fmt::print("{}: Caso 3", v);
                         solution->setInactive(v);
                     }
                 }
@@ -256,6 +259,7 @@ SolveResult solveCycles(
                 auto u = state.graph().target(e);
                 ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
             
+                // Variable: z_e
                 for (auto f: state.graph().inEdges(v)) {
                     auto w = state.graph().source(f);
                     if (w == u) {continue;}
