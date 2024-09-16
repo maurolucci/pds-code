@@ -102,7 +102,7 @@ struct Callback : public GRBCallback {
 
             // MIP upper bound (+0.5 to avoid numerical issues)
             // TODO: está ok sumarle 0.5? No será mucho?
-            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBST));
+            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJ) + 0.5);
             // MIP lower bound
             auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBND));
 
