@@ -131,13 +131,13 @@ struct Callback : public GRBCallback {
                 if (!solution->allObserved()) {
                     // The solution is not a power dominating set
 
-                    if (intermediateCycles >= 0) {
-                        // Cycles must be added for intermediate solutions
-                        // TODO: parametros de violatedCycles ???
-                        for (auto& f: violatedCycles(*solution, intermediateCycles, 10, *seen, false)) {
-                            cycles->push_back(std::move(f));
-                        }
-                    }
+                    // // TODO: parametros de violatedCycles ???
+                    // if (intermediateCycles >= 0) {
+                    //     // Cycles must be added for intermediate solutions
+                    //     for (auto& f: violatedCycles(*solution, intermediateCycles, 10, *seen, false)) {
+                    //         cycles->push_back(std::move(f));
+                    //     }
+                    // }
 
                     // If earlyStop = 2, this stops the reoptimization as soon as an invalid solution is found,
                     // i.e. a non-power dominaintg set, whose objective value is lower or equal to the upper bound
@@ -215,7 +215,9 @@ SolveResult solveCycles(
 
         // Initialize cycles
         // auto cycles = initializeCycles(state, cycleInit, seen);
-        auto cyles;
+        std::vector<VertexList> cycles();
+        cycleInit = 0;
+        variant = 0;
 
         // Intitialize model
         GRBModel model(getEnv());
@@ -288,7 +290,7 @@ SolveResult solveCycles(
             // Find cycles
             // TODO :completar
             // auto moreCycles = violatedCycles(lastSolution, variant, remainingTimeout, seen, output);
-            auto moreCycles;
+            std::vector<VertexList> moreCycles();
 
             // Add the cycles to the set of cycles
             // Recall that the callback may have encountered some cycles in intermediate solutions
