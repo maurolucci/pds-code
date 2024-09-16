@@ -9,19 +9,19 @@
 
 namespace pds {
 
-std::vector<VertexList> initializeCycles(PdsState& state, int variant, VertexSet& seen) {
-    switch (variant) {
-        default:
-            return {};
-    }
-}
+// std::vector<VertexList> initializeCycles(PdsState& state, int variant, VertexSet& seen) {
+//     switch (variant) {
+//         default:
+//             return {};
+//     }
+// }
 
-auto violatedCycles(PdsState& lastSolution, int variant, double remainingTimeout, VertexSet& seen, int output) -> std::vector<VertexList> {
-    switch(variant) {
-        default:
-            return {};
-    }
-}
+// auto violatedCycles(PdsState& lastSolution, int variant, double remainingTimeout, VertexSet& seen, int output) -> std::vector<VertexList> {
+//     switch(variant) {
+//         default:
+//             return {};
+//     }
+// }
 
 struct Callback : public GRBCallback {
 
@@ -159,6 +159,10 @@ struct Callback : public GRBCallback {
     }
 };
 
+auto now() {
+    return std::chrono::high_resolution_clock::now();
+}
+
 SolveResult solveCycles(
         PdsState &state,                    // Solution of the last reoptimization
         int output,                         // Wheter to log 
@@ -210,7 +214,8 @@ SolveResult solveCycles(
         VertexSet seen;
 
         // Initialize cycles
-        auto cycles = initializeCycles(state, cycleInit, seen);
+        // auto cycles = initializeCycles(state, cycleInit, seen);
+        auto cyles;
 
         // Intitialize model
         GRBModel model(getEnv());
@@ -244,8 +249,8 @@ SolveResult solveCycles(
             // Variable: y_e
             if (state.isZeroInjection(v)) {
                 for (auto e: state.graph().outEdges(v)) {
-                    assert(!ye.contains(e));
-                    ye.emplace(e, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}", e));
+                    auto u = state.graph().target(e);
+                    ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
                 }
             }
 
@@ -268,7 +273,7 @@ SolveResult solveCycles(
         int status = 0;
 
         // Initialize statics for cycles
-        size_t processedCycles = 0;
+        // size_t processedCycles = 0;
         size_t totalCycleSize = 0;
 
         while (true) {
@@ -281,8 +286,10 @@ SolveResult solveCycles(
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             
             // Find cycles
-            auto moreCycles = violatedCycles(lastSolution, variant, remainingTimeout, seen, output);
-            
+            // TODO :completar
+            // auto moreCycles = violatedCycles(lastSolution, variant, remainingTimeout, seen, output);
+            auto moreCycles;
+
             // Add the cycles to the set of cycles
             // Recall that the callback may have encountered some cycles in intermediate solutions
             for (auto f: moreCycles) {
@@ -476,9 +483,9 @@ SolveResult solveCycles(
             // TODO: gurobi infiere valores para las demas variables?
             for (auto v: feasibleSolution.graph().vertices()) {
                 if (feasibleSolution.isActive(v)) {
-                    pi.at(v).set(GRB_DoubleAttr_Start, 1.0);
+                    sv.at(v).set(GRB_DoubleAttr_Start, 1.0);
                 } else {
-                    pi.at(v).set(GRB_DoubleAttr_Start, 0.0);
+                    sv.at(v).set(GRB_DoubleAttr_Start, 0.0);
                 }
             }
         }
