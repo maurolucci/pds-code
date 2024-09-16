@@ -20,10 +20,9 @@ SolveResult solveCycles(PdsState &state,
                          int cycleInit,
                          int greedyUpper,
                          int earlyStop,
-                         callback::CycleCallback cycleCallback,
+                         cyclecallback::CycleCallback cycleCallback,
                          BoundCallback boundCallback,
                          int intermediateCycles);
-SolveResult solveLazyForts(PdsState& state, int output, double timeLimit, callback::CycleCallback CycleCB, BoundCallback boundsCB);
 } // namespace pds
 #endif
 
