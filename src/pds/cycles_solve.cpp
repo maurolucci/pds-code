@@ -216,8 +216,12 @@ SolveResult solveCycles(
         // Initialize cycles
         // auto cycles = initializeCycles(state, cycleInit, seen);
         std::vector<VertexList> cycles;
+
+
+        // TODO: remover estas lineas
         cycleInit = 0;
         variant = 0;
+        fmt::print("Ignorar {} {}\n", cycleInit, variant);
 
         // Intitialize model
         GRBModel model(getEnv());
