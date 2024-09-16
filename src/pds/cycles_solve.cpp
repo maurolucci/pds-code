@@ -100,7 +100,7 @@ struct Callback : public GRBCallback {
         // An integer solution was found (it does not necessarily improve the incumbent)
         if (where == GRB_CB_MIPSOL) {
 
-            // MIP upper bound (+0.5 to avoid numerical issues)
+            // Objective value of the new solution
             // TODO: está ok sumarle 0.5? No será mucho?
             auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJ) + 0.5);
             // MIP lower bound
@@ -284,19 +284,19 @@ SolveResult solveCycles(
                 model.addConstr(observers >= 1); 
             }
         
-            // Restricciones (2)
-            // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
-            for (auto e: state.graph().outEdges(v)) {
-                auto u = state.graph().target(e);
-                if (!state.isZeroInjection(v)) {continue;}
-                GRBLinExpr observers = 0;
-                for (auto f: state.graph().inEdges(v)) {
-                    auto w = state.graph().source(f);
-                    if (w == u) {continue;}
-                    observers += ze.at(w).at(u);
-                }
-                model.addConstr(state.graph().degree(v)*ye.at(u).at(v) <= observers);
-            }
+            // // Restricciones (2)
+            // // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
+            // for (auto e: state.graph().outEdges(v)) {
+            //     auto u = state.graph().target(e);
+            //     if (!state.isZeroInjection(v)) {continue;}
+            //     GRBLinExpr observers = 0;
+            //     for (auto f: state.graph().inEdges(v)) {
+            //         auto w = state.graph().source(f);
+            //         if (w == u) {continue;}
+            //         observers += ze.at(w).at(u);
+            //     }
+            //     model.addConstr(state.graph().degree(v)*ye.at(u).at(v) <= observers);
+            // }
         }
 
         // Add callback
