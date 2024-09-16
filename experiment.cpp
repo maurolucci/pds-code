@@ -292,7 +292,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     };
     callback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
         // TODO: completar
-        return
+        return;
     };
     if (solverName == "branching") {
         return Solver{[](auto &state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); }};
