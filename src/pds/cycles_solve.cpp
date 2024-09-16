@@ -241,27 +241,61 @@ SolveResult solveCycles(
         // Add variables
         VertexMap<GRBVar> sv;
         EdgeMap<GRBVar> ye;
+        EdgeMap<GRBVar> ze;
         for (auto v: state.graph().vertices()) {
 
             // Variable: s_v
-            sv.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("s_{}", v)));
-            if (state.isActive(v)) {
-                model.addConstr(sv.at(v) == 1);
-            }
-            if (state.isInactive(v)) {
-                model.addConstr(sv.at(v) == 0);
+            if (state.isActive(v) || state.isBlank(v)) {
+                sv.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("s_{}", v)));
             }
 
             // Variable: y_e
-            if (state.isZeroInjection(v)) {
-                for (auto e: state.graph().outEdges(v)) {
-                    auto u = state.graph().target(e);
-                    ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
-                }
-            }
+            if (!state.isZeroInjection(v)) {continue;}
 
-            // Variable: z_e
-            // TODO
+            for (auto e: state.graph().outEdges(v)) {
+                auto u = state.graph().target(e);
+                ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
+            
+                for (auto f: state.graph().inEdges(v)) {
+                    auto w = state.graph().source(f);
+                    if (w == u) {continue;}
+                    ze[w].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("z_{}{}", w, u)));
+                }
+            
+            }
+        }
+
+        // Add constraints
+
+        // Restricciones (1)
+        // s_v + sum_{u in N(v)} (s_u + y_uv) >= 1, for all v in V
+        for (auto v: state.graph().vertices()) {
+            if (state.isActive(v)) {
+                model.addConstr(sv.at(v) == 1.0);
+            }
+            else {
+                GRBLinExpr observers = 0;
+                if (state.isBlank(v)) {observers += sv.at(v);}
+                for (auto e: state.graph().inEdges(v)) {
+                    auto u = state.graph().source(e);
+                    if (!state.isInactive(u)) observers += sv.at(u);
+                    if (state.isZeroInjection(u)) observers += ye.at(u).at(v);
+                }
+                model.addConstr(observers >= 1); 
+            }
+        
+            // Restricciones (2)
+            // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
+            for (auto e: state.graph().outEdges(v)) {
+                auto u = state.graph().target(e);
+                if (!state.isZeroInjection(v)) {continue;}
+                GRBLinExpr observers = 0;
+                for (auto f: state.graph().inEdges(v)) {
+                    auto w = state.graph().source(f);
+                    observers += ze.at(w).at(u);
+                }
+                model.addConstr(state.graph().degree(v)*ye.at(u).at(v) <= observers);
+            }
         }
 
         // Add callback
