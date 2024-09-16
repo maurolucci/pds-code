@@ -680,7 +680,9 @@ struct Callback : public GRBCallback {
                         solution->setInactive(v);
                     }
                 }
-                //fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
+                
+                fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
+                
                 if (!solution->allObserved()) {
                     if (intermediateForts >= 0) {
                         for (auto& f: violatedForts(*solution, intermediateForts, 10, *seen, false)) {

@@ -63,11 +63,11 @@ struct Callback : public GRBCallback {
     // ???
     VertexSet* seen;
 
-    Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& si,
+    Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv,
              const PdsState& base, PdsState& solution, PdsState & upperBound,
              std::span<PdsState::Vertex> blank, int earlyStop,
              int intermediateCycles, std::vector<VertexList>& cycles, VertexSet& seen)
-            : lower(&lower), upper(&upper), si(&si), base(&base), solution(&solution),
+            : lower(&lower), upper(&upper), sv(&sv), base(&base), solution(&solution),
               upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
               intermediateCycles(intermediateCycles), cycles(&cycles), seen(&seen)
     { }
@@ -112,7 +112,7 @@ struct Callback : public GRBCallback {
                 // Process the solution
                 for (auto v: blank) {
 
-                    if (getSolution(si->at(v)) > 0.5) {
+                    if (getSolution(sv->at(v)) > 0.5) {
                         // If v is selected, then mark v as active 
                         solution->setActive(v);
                     } else if (base->isBlank(v)) {
@@ -171,7 +171,7 @@ SolveResult solveCycles(
         int cycleInit,                          // Wheter to initialize cycles 
         int greedyUpper,                        // Whether to apply a greedy heuristic to find a pds
         int earlyStop,                          // Whether to stop early
-        cyclecallback::CycleCallback cycleCB,  // Callback 
+        cyclecallback::CycleCallback cycleCB,   // Callback 
         BoundCallback boundCallback,            // TODO: ??
         int intermediateCycles                  // Whether to add cycles for intermediate solutions
 ) {
