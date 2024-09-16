@@ -34,7 +34,7 @@ struct Callback : public GRBCallback {
     size_t* upper;
 
     // Map: Vertex -> GRBVar
-    VertexMap<GRBVar>* si;
+    VertexMap<GRBVar>* sv;
     // TODO: Resto de las variables de arcos dirigidos?
 
     // Base integer solution (before re-optimization) 
