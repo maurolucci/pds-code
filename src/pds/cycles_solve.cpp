@@ -254,6 +254,7 @@ SolveResult solveCycles(
             for (auto e: state.graph().outEdges(v)) {
                 auto u = state.graph().target(e);
                 ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
+                ze[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("z_{}{}", v, u)));
             
                 // Variable: z_e
                 for (auto f: state.graph().inEdges(v)) {
