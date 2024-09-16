@@ -6,7 +6,11 @@
 #include "gurobi_common.hpp"
 
 namespace pds {
-namespace callback {
+namespace cyclecallback {
+enum class When {
+    INTERMEDIATE_HS,
+    FINAL
+};
 using CycleCallback = std::function<void(When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper)>;
 }
 SolveResult solveCycles(PdsState &state,

@@ -164,16 +164,16 @@ auto now() {
 }
 
 SolveResult solveCycles(
-        PdsState &state,                    // Solution of the last reoptimization
-        int output,                         // Wheter to log 
-        double timeLimit,                   // Time limit
-        int variant,                        // TODO: ??
-        int cycleInit,                     // Wheter to initialize cycles 
-        int greedyUpper,                    // Whether to apply a greedy heuristic to find a pds
-        int earlyStop,                      // Whether to stop early
-        callback::CycleCallback cycleCB,  // Callback 
-        BoundCallback boundCallback,        // TODO: ??
-        int intermediateCycles              // Whether to add cycles for intermediate solutions
+        PdsState &state,                        // Solution of the last reoptimization
+        int output,                             // Wheter to log 
+        double timeLimit,                       // Time limit
+        int variant,                            // TODO: ??
+        int cycleInit,                          // Wheter to initialize cycles 
+        int greedyUpper,                        // Whether to apply a greedy heuristic to find a pds
+        int earlyStop,                          // Whether to stop early
+        cyclecallback::CycleCallback cycleCB,  // Callback 
+        BoundCallback boundCallback,            // TODO: ??
+        int intermediateCycles                  // Whether to add cycles for intermediate solutions
 ) {
 
     // Initialize lastSolution to be empty
@@ -478,10 +478,10 @@ SolveResult solveCycles(
                 // The new solution is an optimal power dominating set
                 // Update feasible solution with the new solution
                 feasibleSolution = lastSolution;
-                cycleCB(callback::When::FINAL, state, cycles, lowerBound, upperBound);
+                cycleCB(cyclecallback::When::FINAL, state, cycles, lowerBound, upperBound);
                 break; // Finish loop
             } else {
-                cycleCB(callback::When::INTERMEDIATE_HS, state, cycles, lowerBound, upperBound);
+                cycleCB(cyclecallback::When::INTERMEDIATE_HS, state, cycles, lowerBound, upperBound);
             }
             
             // For the next reoptimization, give gurobi the best power dominating set 

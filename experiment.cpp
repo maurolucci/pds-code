@@ -290,7 +290,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
         }
         ++solved;
     };
-    callback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
+    cyclecallback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (cyclecallback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
         // TODO: completar
         return;
     };
