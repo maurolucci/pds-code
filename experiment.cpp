@@ -14,6 +14,7 @@
 #include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
 #include "fort_solve.hpp"
+#include "cycles_solve.hpp"
 
 using namespace pds;
 
@@ -247,7 +248,9 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     int earlyStop = vm["early-stop"].as<int>();
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
     int fortInit = vm["fort-init"].as<int>();
+    int cycleInit = vm["cycle-init"].as<int>();
     bool intermediateForts = vm.count("intermediate");
+    bool intermediateCycles = vm.count("intermediate-cycles");
     callback::FortCallback fortCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
         if (vm.count("fort-stats") && when == pds::callback::When::FINAL) {
             size_t totalFortSize = 0;
@@ -286,6 +289,10 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             }
         }
         ++solved;
+    };
+    callback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
+        // TODO: completar
+        return
     };
     if (solverName == "branching") {
         return Solver{[](auto &state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); }};
@@ -330,6 +337,11 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
         return Solver{[=](auto &state, double timeLimit) {
             return solveLazyForts(state, verbose, timeLimit, fortCallback, boundCB);
         }};
+    } else if (solverName == "cycles") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solveCycles(state, verbose, timeLimit, 0, cycleInit,
+                                greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 0 : -1);
+        }};
     } else {
         try {
             return Solver{[model = getModel(solverName), verbose,boundCB,fortInit](auto &state, double timeout) {
@@ -373,7 +385,9 @@ int main(int argc, const char** argv) {
             ("greedy-bounds,b", po::value<int>()->default_value(0)->implicit_value(1), "if possible, use a greedy algorithm to compute an upper bound (0: never, 1: without reductions (faster), 2: with reductions (more precise))")
             ("fort-stats", po::value<string>(), "file for fort statistics")
             ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(0), "fort initialization method")
+            ("cycle-init", po::value<int>()->implicit_value(0)->default_value(0), "cycle initialization method")
             ("intermediate", "find violated forts in every new feasbile solution")
+            ("intermediate-cycles", "find violated cycles in every new feasbile solution")
             ("early-stop", po::value<int>()->default_value(0)->implicit_value(2), "stop hitting set solver when violating hitting set is found [0: only optimal, 1: keep lower bound, 2: stop early]")
             ("write-forts", po::value<string>()->implicit_value("hs"), "directory to which to write hitting set instance")
             ("write-bounds", po::value<string>(), "write bound time series")

@@ -1,5 +1,5 @@
-#ifndef PDS_FORT_SOLVE
-#define PDS_FORT_SOLVE
+#ifndef PDS_CYCLE_SOLVE
+#define PDS_CYCLE_SOLVE
 
 #include "pds.hpp"
 #include "pdssolve.hpp"
