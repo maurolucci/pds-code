@@ -102,7 +102,7 @@ struct Callback : public GRBCallback {
 
             // MIP upper bound (+0.5 to avoid numerical issues)
             // TODO: está ok sumarle 0.5? No será mucho?
-            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBST) + 0.5);
+            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBST));
             // MIP lower bound
             auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBND));
 
@@ -111,20 +111,16 @@ struct Callback : public GRBCallback {
 
                 // Process the solution
                 for (auto v: blank) {
-
                     if (getSolution(sv->at(v)) > 0.5) {
-                        // If v is selected, then mark v as active
-                        fmt::print("{}: Caso 1", v); 
+                        // If v is selected, then mark v as active 
                         solution->setActive(v);
                     } else if (base->isBlank(v)) {
                         // if v is not selected and v is undecided in the base solution,
                         // then mark v as undecided
-                        fmt::print("{}: Caso 2", v);
                         solution->setBlank(v);
                     } else {
                         // If is not selected and v is active in the base solution,
                         // then mark v as inactive
-                        fmt::print("{}: Caso 3", v);
                         solution->setInactive(v);
                     }
                 }
