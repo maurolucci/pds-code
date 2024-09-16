@@ -215,7 +215,7 @@ SolveResult solveCycles(
 
         // Initialize cycles
         // auto cycles = initializeCycles(state, cycleInit, seen);
-        std::vector<VertexList> cycles();
+        std::vector<VertexList> cycles;
         cycleInit = 0;
         variant = 0;
 
@@ -290,7 +290,7 @@ SolveResult solveCycles(
             // Find cycles
             // TODO :completar
             // auto moreCycles = violatedCycles(lastSolution, variant, remainingTimeout, seen, output);
-            std::vector<VertexList> moreCycles();
+            std::vector<VertexList> moreCycles;
 
             // Add the cycles to the set of cycles
             // Recall that the callback may have encountered some cycles in intermediate solutions
