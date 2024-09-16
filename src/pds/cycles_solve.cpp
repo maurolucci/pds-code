@@ -292,6 +292,7 @@ SolveResult solveCycles(
                 GRBLinExpr observers = 0;
                 for (auto f: state.graph().inEdges(v)) {
                     auto w = state.graph().source(f);
+                    if (w == u) {continue;}
                     observers += ze.at(w).at(u);
                 }
                 model.addConstr(state.graph().degree(v)*ye.at(u).at(v) <= observers);
