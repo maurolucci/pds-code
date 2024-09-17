@@ -3,9 +3,15 @@
 #include <gurobi_c++.h>
 #include <range/v3/all.hpp>
 #include <utility>
+#include <cstdlib> 
+#include <ctime> 
 
 #include "pdssolve.hpp"
 #include "gurobi_common.hpp"
+
+std::random_device dev;
+std::mt19937 rng(dev());
+std::uniform_int_distribution<std::mt19937::result_type> dist6(1,6);
 
 namespace pds {
 
@@ -16,12 +22,37 @@ namespace pds {
 //     }
 // }
 
-// auto violatedCycles(PdsState& lastSolution, int variant, double remainingTimeout, VertexSet& seen, int output) -> std::vector<VertexList> {
-//     switch(variant) {
-//         default:
-//             return {};
-//     }
-// }
+VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor v) {
+    VertexList cycle;
+    VertexMap<ObservationGraph::VertexDescriptor> precededBy;
+    ObservationGraph::VertexDescriptor lastVertex = v;
+    while (!precededBy.contains(lastVertex)) {
+        assert(graph.inDegree(lastVertex) > 0);
+        auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
+        precededBy.emplace(v, u);
+        lastVertex = u;
+    }
+    auto u = lastVertex;
+    do {
+        cycle.push_back(u);
+        u = precededBy.at(u);
+    } while (u != lastVertex);
+    return cycle;
+}
+
+std::vector<VertexList> violatedCycles(ObservationGraph& graph) {
+
+    for (auto v: graph.vertices()) {
+        VertexList cycle = findCycle(graph, v);
+        for (char i: cycle)
+            std::cout << i << ' ';
+        std::cout << std::endl;
+    }
+
+    // TODO: arreglar el retorno
+    return {};
+
+}
 
 struct Callback : public GRBCallback {
 
@@ -33,9 +64,10 @@ struct Callback : public GRBCallback {
     // Number of active vertices + undecided vertices
     size_t* upper;
 
-    // Map: Vertex -> GRBVar
+    // Map to GRBVar
     VertexMap<GRBVar>* sv;
-    // TODO: Resto de las variables de arcos dirigidos?
+    EdgeMap<GRBVar>* ye;
+    EdgeMap<GRBVar>* ze;
 
     // Base integer solution (before re-optimization) 
     // It is not a power dominating set
@@ -63,12 +95,12 @@ struct Callback : public GRBCallback {
     // ???
     VertexSet* seen;
 
-    Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv,
-             const PdsState& base, PdsState& solution, PdsState & upperBound,
-             std::span<PdsState::Vertex> blank, int earlyStop,
-             int intermediateCycles, std::vector<VertexList>& cycles, VertexSet& seen)
-            : lower(&lower), upper(&upper), sv(&sv), base(&base), solution(&solution),
-              upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
+    Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv, 
+             EdgeMap<GRBVar>& ye, EdgeMap<GRBVar>& ze, const PdsState& base, 
+             PdsState& solution, PdsState & upperBound, std::span<PdsState::Vertex> blank, 
+             int earlyStop, int intermediateCycles, std::vector<VertexList>& cycles, VertexSet& seen)
+            : lower(&lower), upper(&upper), sv(&sv), ye(&ye), ze(&ze), base(&base), 
+              solution(&solution), upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
               intermediateCycles(intermediateCycles), cycles(&cycles), seen(&seen)
     { }
 
@@ -81,7 +113,8 @@ struct Callback : public GRBCallback {
             if (getIntInfo(GRB_CB_MIP_SOLCNT) > 0) {
                 // At least one integer solution was found
     
-                // MIP upper bound (+0.5 to avoid numerical issues)
+                // MIP upper bound
+                // TODO: GRB_CB_MIP_OBJBST or GRB_CB_MIPSOL_OBJ
                 auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBST) + 0.5);
                 // MIP lower bound
                 auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBND));
@@ -100,8 +133,8 @@ struct Callback : public GRBCallback {
         // An integer solution was found (it does not necessarily improve the incumbent)
         if (where == GRB_CB_MIPSOL) {
 
-            // Objective value of the new solution
-            // TODO: está ok sumarle 0.5? No será mucho?
+            // Objective value of the new solution (rounded to the nearest integer)
+            // static_cast truncates the number, so +0.5 is needed to round the number
             auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJ) + 0.5);
             // MIP lower bound
             auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBND));
@@ -207,6 +240,9 @@ SolveResult solveCycles(
         return {state.graph().numVertices(), 0, SolveState::Infeasible};
     }
 
+    // Set a random seed for the random generator
+    srand((unsigned)time(0));
+
     try {
 
         // TODO: ??
@@ -301,11 +337,8 @@ SolveResult solveCycles(
         }
 
         // Add callback
-        // TODO: add variables ye and ze
-        Callback cb(
-                lowerBound, upperBound,
-                sv, state, lastSolution, feasibleSolution,
-                blankVertices, earlyStop, intermediateCycles, cycles, seen);
+        Callback cb(lowerBound, upperBound, sv, ye, ze, state, lastSolution, 
+                    feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen);
         model.setCallback(&cb);
 
         // Start the clock
@@ -327,10 +360,27 @@ SolveResult solveCycles(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             
+            // Build precedence digraph (among unobserved vertices)
+            ObservationGraph precedences;
+            for (auto v: state.graph().vertices()) {
+                if (state.isObserved(v)) { continue; }
+                precedences.getOrAddVertex(v);
+                for (auto u: state.graph().neighbors(v)) {
+                    if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
+                    if (state.isObserved(u)) { 
+                        precedences.getOrAddVertex(u);
+                        precedences.addEdge(u,v); 
+                    }
+                    for (auto w: state.graph().neighbors(u)) {
+                        if (w == v || state.isObserved(w)) { continue; }
+                        precedences.getOrAddVertex(w);
+                        precedences.addEdge(w,v);
+                    }
+                }
+            }
+
             // Find cycles
-            // TODO :completar
-            // auto moreCycles = violatedCycles(lastSolution, variant, remainingTimeout, seen, output);
-            std::vector<VertexList> moreCycles;
+            auto moreCycles = violatedCycles(precedences);
 
             // Add the cycles to the set of cycles
             // Recall that the callback may have encountered some cycles in intermediate solutions
@@ -434,6 +484,7 @@ SolveResult solveCycles(
 
                 case GRB_OPTIMAL: // Optimal
                     // The new bound is the objetive value of the new (optimal) solution
+                    // TODO: +0.05 what¿?
                     new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal) + 0.05);
                     break;
 
