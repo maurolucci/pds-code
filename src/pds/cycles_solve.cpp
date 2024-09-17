@@ -360,78 +360,81 @@ SolveResult solveCycles(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             
-            // Build precedence digraph (among unobserved vertices)
-            ObservationGraph precedences;
-            for (auto v: state.graph().vertices()) {
-                if (state.isObserved(v)) { continue; }
-                precedences.getOrAddVertex(v);
-                for (auto u: state.graph().neighbors(v)) {
-                    if (!state.isZeroInjection(u)) { continue; }
-                    if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
-                    if (state.isObserved(u)) { 
-                        precedences.getOrAddVertex(u);
-                        precedences.addEdge(u,v); 
-                    }
-                    for (auto w: state.graph().neighbors(u)) {
-                        if (w == v || state.isObserved(w)) { continue; }
-                        precedences.getOrAddVertex(w);
-                        precedences.addEdge(w,v);
+            if (model.get(GRB_IntAttr_SolCount) > 0) {             
+
+                // Build precedence digraph (among unobserved vertices)
+                ObservationGraph precedences;
+                for (auto v: state.graph().vertices()) {
+                    if (state.isObserved(v)) { continue; }
+                    precedences.getOrAddVertex(v);
+                    for (auto u: state.graph().neighbors(v)) {
+                        if (!state.isZeroInjection(u)) { continue; }
+                        if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
+                        if (state.isObserved(u)) { 
+                            precedences.getOrAddVertex(u);
+                            precedences.addEdge(u,v); 
+                        }
+                        for (auto w: state.graph().neighbors(u)) {
+                            if (w == v || state.isObserved(w)) { continue; }
+                            precedences.getOrAddVertex(w);
+                            precedences.addEdge(w,v);
+                        }
                     }
                 }
-            }
 
-            // Find cycles
-            auto moreCycles = violatedCycles(precedences);
+                // Find cycles
+                auto moreCycles = violatedCycles(precedences);
 
-            // Add the cycles to the set of cycles
-            // Recall that the callback may have encountered some cycles in intermediate solutions
-            for (auto f: moreCycles) {
-                cycles.emplace_back(std::move(f));
-            }
+                // Add the cycles to the set of cycles
+                // Recall that the callback may have encountered some cycles in intermediate solutions
+                for (auto f: moreCycles) {
+                    cycles.emplace_back(std::move(f));
+                }
 
-            // TODO: creo que nunca se entra a este caso
-            // if (forts.empty()) {
-            //     // If there is no 
-            //     return {state.graph().numVertices(), 0, SolveState::Infeasible};
-            // }
+                // TODO: creo que nunca se entra a este caso
+                // if (forts.empty()) {
+                //     // If there is no 
+                //     return {state.graph().numVertices(), 0, SolveState::Infeasible};
+                // }
 
-            // if (forts.back().empty()) break;
-            
-            // Add violated lazy contraints
-            // TODO: unimplemented
-            // for (; processedForts < forts.size(); ++processedForts) {
-            //     GRBLinExpr fortSum;
-            //     size_t blank = 0;
-            //     for (auto& v: forts[processedForts]) {
-            //         if (!state.graph().hasVertex(v)) {
-            //             fmt::print("!!!invalid vertex {} in fort: {}!!!\n", v, forts[processedForts]);
-            //         }
-            //         if (state.isActive(v)) {
-            //             if (output) {
-            //                 fmt::print("???active vertex in neighborhood??? {} {} {}\n",
-            //                            v,
-            //                            lastSolution.numObserved(),
-            //                            lastSolution.graph().numVertices());
-            //             }
-            //         }
-            //         if (state.isBlank(v)) {
-            //             fortSum += pi.at(v);
-            //             ++blank;
-            //         }
-            //     }
-            //     if (blank == 0) {
-            //         fmt::print("??? infeasible fort: {} has no blank vertices\n", forts[processedForts]);
-            //     }
-            //     model.addConstr(fortSum >= 1);
-            //     totalFortSize += forts[processedForts].size();
-            //     if (output > 1) {
-            //         fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
-            //     }
-            // }
+                // if (forts.back().empty()) break;
+                
+                // Add violated lazy contraints
+                // TODO: unimplemented
+                // for (; processedForts < forts.size(); ++processedForts) {
+                //     GRBLinExpr fortSum;
+                //     size_t blank = 0;
+                //     for (auto& v: forts[processedForts]) {
+                //         if (!state.graph().hasVertex(v)) {
+                //             fmt::print("!!!invalid vertex {} in fort: {}!!!\n", v, forts[processedForts]);
+                //         }
+                //         if (state.isActive(v)) {
+                //             if (output) {
+                //                 fmt::print("???active vertex in neighborhood??? {} {} {}\n",
+                //                            v,
+                //                            lastSolution.numObserved(),
+                //                            lastSolution.graph().numVertices());
+                //             }
+                //         }
+                //         if (state.isBlank(v)) {
+                //             fortSum += pi.at(v);
+                //             ++blank;
+                //         }
+                //     }
+                //     if (blank == 0) {
+                //         fmt::print("??? infeasible fort: {} has no blank vertices\n", forts[processedForts]);
+                //     }
+                //     model.addConstr(fortSum >= 1);
+                //     totalFortSize += forts[processedForts].size();
+                //     if (output > 1) {
+                //         fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
+                //     }
+                // }
 
-            // Log cycle statics
-            if (output) {
-                fmt::print("#cycles: {}, avg size: {:.2f}\n", cycles.size(), double(totalCycleSize) / double(cycles.size()));
+                // Log cycle statics
+                if (output) {
+                    fmt::print("#cycles: {}, avg size: {:.2f}\n", cycles.size(), double(totalCycleSize) / double(cycles.size()));
+                }
             }
 
             // Current time
