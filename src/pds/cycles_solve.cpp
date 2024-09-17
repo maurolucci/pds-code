@@ -29,7 +29,7 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
     while (!precededBy.contains(lastVertex)) {
         assert(graph.inDegree(lastVertex) > 0);
         auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
-        precededBy.emplace(v, u);
+	precededBy.emplace(lastVertex, u);
         lastVertex = u;
     }
     auto u = lastVertex;
@@ -42,11 +42,8 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
 
 std::vector<VertexList> violatedCycles(ObservationGraph& graph) {
 
-    for (auto v: graph.vertices()) {
+    for (auto v: graph.vertices()) { 
         VertexList cycle = findCycle(graph, v);
-        for (char i: cycle)
-            std::cout << i << ' ';
-        std::cout << std::endl;
     }
 
     // TODO: arreglar el retorno
