@@ -366,6 +366,7 @@ SolveResult solveCycles(
                 if (state.isObserved(v)) { continue; }
                 precedences.getOrAddVertex(v);
                 for (auto u: state.graph().neighbors(v)) {
+                    if (!state.isZeroInjection(u)) { continue; }
                     if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
                     if (state.isObserved(u)) { 
                         precedences.getOrAddVertex(u);
