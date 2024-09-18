@@ -649,13 +649,15 @@ struct Callback : public GRBCallback {
     int intermediateForts;
     std::vector<VertexList>* forts;
     VertexSet* seen;
+    int output;
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& pi,
              const PdsState& base, PdsState& solution, PdsState & upperBound,
              std::span<PdsState::Vertex> blank, int earlyStop,
-             int intermediateForts, std::vector<VertexList>& forts, VertexSet& seen)
+             int intermediateForts, std::vector<VertexList>& forts, VertexSet& seen,
+             int output)
             : lower(&lower), upper(&upper), pi(&pi), base(&base), solution(&solution),
               upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
-              intermediateForts(intermediateForts), forts(&forts), seen(&seen)
+              intermediateForts(intermediateForts), forts(&forts), seen(&seen), output(output)
     { }
     void callback() override {
         if (where == GRB_CB_MIP) {
@@ -757,7 +759,7 @@ SolveResult solveBozeman(
         Callback cb(
                 lowerBound, upperBound,
                 pi, state, lastSolution, feasibleSolution,
-                blankVertices, earlyStop, intermediateForts, forts, seen);
+                blankVertices, earlyStop, intermediateForts, forts, seen, output);
         model.setCallback(&cb);
         auto startingTime = now();
         int status = 0;
