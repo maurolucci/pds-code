@@ -5,6 +5,7 @@
 #include <utility>
 #include <cstdlib> 
 #include <ctime> 
+#include <set>
 
 #include "pdssolve.hpp"
 #include "gurobi_common.hpp"
@@ -27,33 +28,31 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
     VertexMap<ObservationGraph::VertexDescriptor> precededBy;
     ObservationGraph::VertexDescriptor lastVertex = v;
     while (!precededBy.contains(lastVertex)) {
-        assert(graph.inDegree(lastVertex) > 0);
+        if (graph.inDegree(lastVertex) == 0) { return cycle; }
+        // Choose a random in-neighbor
         auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
 	    precededBy.emplace(lastVertex, u);
         lastVertex = u;
     }
+    // Traverse de cycle
     auto u = lastVertex;
     do {
         cycle.push_back(u);
         u = precededBy.at(u);
     } while (u != lastVertex);
-    assert(!cycle.empty());
+    // Rotate the cycle so the minium element is in the front
     ranges::rotate(cycle, ranges::min_element(cycle));
     return cycle;
 }
 
-std::vector<VertexList> violatedCycles(ObservationGraph& graph) {
-
+std::set<VertexList> violatedCycles(ObservationGraph& graph) {
+    std::set<VertexList> cycles; 
     for (auto v: graph.vertices()) { 
         VertexList cycle = findCycle(graph, v);
-        for (auto v: cycle)
-            std::cout << v << " ";
-        std::cout << std::endl;
+        if (cycle.empty()) { continue; }
+        cycles.insert(cycle);
     }
-
-    // TODO: arreglar el retorno
-    return {};
-
+    return cycles;
 }
 
 struct Callback : public GRBCallback {
@@ -251,6 +250,7 @@ SolveResult solveCycles(
         VertexSet seen;
 
         // Initialize cycles
+        // TODO: ???
         // auto cycles = initializeCycles(state, cycleInit, seen);
         std::vector<VertexList> cycles;
 
@@ -306,7 +306,7 @@ SolveResult solveCycles(
 
         // Add constraints
 
-        // Restricciones (1)
+        // Constraints (1)
         // s_v + sum_{u in N(v)} (s_u + y_uv) >= 1, for all v in V
         for (auto v: state.graph().vertices()) {
             if (state.isActive(v)) {
@@ -323,7 +323,7 @@ SolveResult solveCycles(
                 model.addConstr(observers >= 1); 
             }
         
-            // Restricciones (2)
+            // Constraints (2)
             // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
             for (auto e: state.graph().outEdges(v)) {
                 auto u = state.graph().target(e);
@@ -350,11 +350,10 @@ SolveResult solveCycles(
         int status = 0;
 
         // Initialize statics for cycles
-        // size_t processedCycles = 0;
+        size_t processedCycles = 0;
         size_t totalCycleSize = 0;
 
         while (true) {
-            // Add violated lazy contraints before reoptimization
 
             // Current time
             auto currentTime = now();
@@ -362,7 +361,8 @@ SolveResult solveCycles(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             
-            if (model.get(GRB_IntAttr_SolCount) > 0) {             
+            if (model.get(GRB_IntAttr_SolCount) > 0) {     
+                // Add violated lazy contraints before reoptimization    
 
                 // Build precedence digraph (among unobserved vertices)
                 ObservationGraph precedences;
@@ -393,45 +393,35 @@ SolveResult solveCycles(
                     cycles.emplace_back(std::move(f));
                 }
 
-                // TODO: creo que nunca se entra a este caso
-                // if (forts.empty()) {
-                //     // If there is no 
-                //     return {state.graph().numVertices(), 0, SolveState::Infeasible};
-                // }
-
-                // if (forts.back().empty()) break;
+                // If there is no cycle, the instance is infeasible
+                if (cycles.empty()) { 
+                    return {state.graph().numVertices(), 0, SolveState::Infeasible};
+                }
                 
                 // Add violated lazy contraints
-                // TODO: unimplemented
-                // for (; processedForts < forts.size(); ++processedForts) {
-                //     GRBLinExpr fortSum;
-                //     size_t blank = 0;
-                //     for (auto& v: forts[processedForts]) {
-                //         if (!state.graph().hasVertex(v)) {
-                //             fmt::print("!!!invalid vertex {} in fort: {}!!!\n", v, forts[processedForts]);
-                //         }
-                //         if (state.isActive(v)) {
-                //             if (output) {
-                //                 fmt::print("???active vertex in neighborhood??? {} {} {}\n",
-                //                            v,
-                //                            lastSolution.numObserved(),
-                //                            lastSolution.graph().numVertices());
-                //             }
-                //         }
-                //         if (state.isBlank(v)) {
-                //             fortSum += pi.at(v);
-                //             ++blank;
-                //         }
-                //     }
-                //     if (blank == 0) {
-                //         fmt::print("??? infeasible fort: {} has no blank vertices\n", forts[processedForts]);
-                //     }
-                //     model.addConstr(fortSum >= 1);
-                //     totalFortSize += forts[processedForts].size();
-                //     if (output > 1) {
-                //         fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
-                //     }
-                // }
+                for (auto& cycle: cycles) {
+                    GRBLinExpr cycleSum;
+                    for (auto it = cycle.rbegin(); it != cycle.rend(); ) {
+                        auto v = *it;
+                        if (!state.graph().hasVertex(v)) {
+                            fmt::print("!!!invalid vertex {} in cycle: {}!!!\n", v, cycle);
+                        }
+                        if (state.isObserved(v)) {
+                            if (output) {
+                                fmt::print("???observed vertex in cycle??? {} {} {}\n",
+                                            v, state.numObserved(), state.graph().numVertices());
+                            }
+                        }
+                        --it;
+                        int u = it != cycle.rend() ? *it : cycle.front();
+                        cycleSum += ze.at(v).at(u);
+                    }
+                    model.addConstr(cycleSum <= cycle.size() - 1);
+                    totalCycleSize += cycles.size();
+                    if (output > 1) {
+                        fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
+                    }
+                }
 
                 // Log cycle statics
                 if (output) {
