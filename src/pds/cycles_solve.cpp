@@ -375,18 +375,18 @@ SolveResult solveCycles(
 
                 // Build precedence digraph (among unobserved vertices)
                 ObservationGraph precedences;
-                for (auto v: state.graph().vertices()) {
-                    if (state.isObserved(v)) { continue; }
+                for (auto v: lastSolution.graph().vertices()) {
+                    if (lastSolution.isObserved(v)) { continue; }
                     precedences.getOrAddVertex(v);
-                    for (auto u: state.graph().neighbors(v)) {
-                        if (!state.isZeroInjection(u)) { continue; }
+                    for (auto u: lastSolution.graph().neighbors(v)) {
+                        if (!lastSolution.isZeroInjection(u)) { continue; }
                         if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
-                        if (state.isObserved(u)) { 
+                        if (lastSolution.isObserved(u)) { 
                             precedences.getOrAddVertex(u);
                             precedences.addEdge(u,v); 
                         }
-                        for (auto w: state.graph().neighbors(u)) {
-                            if (w == v || state.isObserved(w)) { continue; }
+                        for (auto w: lastSolution.graph().neighbors(u)) {
+                            if (w == v || lastSolution.isObserved(w)) { continue; }
                             precedences.getOrAddVertex(w);
                             precedences.addEdge(w,v);
                         }
@@ -408,14 +408,15 @@ SolveResult solveCycles(
                 }
                 
                 // Add violated lazy contraints
-                for (auto& cycle: cycles) {
+                for (; processedCycles < cycles.size(); ++processedCycles) {
                     GRBLinExpr cycleSum;
+                    auto& cycle = cycles[processedCycles];
                     for (auto it = cycle.rbegin(); it != cycle.rend(); ) {
                         auto v = *it;
                         if (!state.graph().hasVertex(v)) {
                             fmt::print("!!!invalid vertex {} in cycle: {}!!!\n", v, cycle);
                         }
-                        if (state.isObserved(v)) {
+                        if (lastSolution.isObserved(v)) {
                             if (output) {
                                 fmt::print("???observed vertex in cycle??? {} {} {}\n",
                                             v, state.numObserved(), state.graph().numVertices());
@@ -427,7 +428,6 @@ SolveResult solveCycles(
                     }
                     model.addConstr(cycleSum <= cycle.size() - 1);
                     totalCycleSize += cycles.size();
-                    processedCycles++;
                     if (output > 1) {
                         fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
                     }
