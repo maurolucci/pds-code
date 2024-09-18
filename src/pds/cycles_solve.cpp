@@ -384,11 +384,13 @@ SolveResult solveCycles(
                         if (lastSolution.isObserved(u)) { 
                             precedences.getOrAddVertex(u);
                             precedences.addEdge(u,v); 
+                            fmt::print("agregando arista ({}, {})", u, v);
                         }
                         for (auto w: lastSolution.graph().neighbors(u)) {
                             if (w == v || lastSolution.isObserved(w)) { continue; }
                             precedences.getOrAddVertex(w);
                             precedences.addEdge(w,v);
+                            fmt::print("agregando arista ({}, {})", w, v);
                         }
                     }
                 }
