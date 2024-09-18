@@ -670,8 +670,8 @@ struct Callback : public GRBCallback {
             }
         }
         if (where == GRB_CB_MIPSOL) {
-            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBST) + 0.5);
-            auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBND));
+            auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJ) + 0.5);
+            auto objBound = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
             if (objVal <= *upper) {
                 for (auto v: blank) {
                     if (getSolution(pi->at(v)) > 0.5) {
@@ -696,7 +696,6 @@ struct Callback : public GRBCallback {
 
                     if (earlyStop > 1 && objBound > *lower) { abort(); }
                 } else if (objVal < *upper) {
-                    fmt::print("gurobi H {}\n", objVal);
                     *upper = objVal;
                     *upperBound = *solution;
                     fmt::print("new power dominating set {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper, objVal);
