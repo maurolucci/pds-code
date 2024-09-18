@@ -159,6 +159,7 @@ struct Callback : public GRBCallback {
                     }
                 }
 
+                fmt::print("feasible solution {} <= {}\n", getDoubleInfo(GRB_CB_MIPSOL_OBJBND), getDoubleInfo(GRB_CB_MIPSOL_OBJ));
                 fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
                 
                 if (!solution->allObserved()) {
