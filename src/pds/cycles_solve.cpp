@@ -176,7 +176,7 @@ struct Callback : public GRBCallback {
                     // }
 
                     if (output > 1) {
-                        fmt::print("new solution {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                        fmt::print("new solution {} <= {}; {} <= {}; unobserved #{}\n", *lower, objBound, objVal, *upper, solution->numUnobserved());
                     }
 
                     // If earlyStop = 2, this stops the reoptimization as soon as an invalid solution is found,
