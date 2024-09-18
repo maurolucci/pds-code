@@ -412,12 +412,13 @@ SolveResult solveCycles(
                                             v, state.numObserved(), state.graph().numVertices());
                             }
                         }
-                        --it;
-                        int u = it != cycle.rend() ? *it : cycle.front();
+                        ++it;
+                        int u = it != cycle.rend() ? *it : cycle.back();
                         cycleSum += ze.at(v).at(u);
                     }
                     model.addConstr(cycleSum <= cycle.size() - 1);
                     totalCycleSize += cycles.size();
+                    processedCycles++;
                     if (output > 1) {
                         fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
                     }
