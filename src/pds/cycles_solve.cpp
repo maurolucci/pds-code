@@ -427,7 +427,7 @@ SolveResult solveCycles(
                         cycleSum += ze.at(v).at(u);
                     }
                     model.addConstr(cycleSum <= cycle.size() - 1);
-                    totalCycleSize += cycles.size();
+                    totalCycleSize += cycle.size();
                     if (output > 1) {
                         fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
                     }
