@@ -102,10 +102,11 @@ struct Callback : public GRBCallback {
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv, 
              EdgeMap<GRBVar>& ye, EdgeMap<GRBVar>& ze, const PdsState& base, 
              PdsState& solution, PdsState & upperBound, std::span<PdsState::Vertex> blank, 
-             int earlyStop, int intermediateCycles, std::vector<VertexList>& cycles, VertexSet& seen)
+             int earlyStop, int intermediateCycles, std::vector<VertexList>& cycles, VertexSet& seen,
+             int output)
             : lower(&lower), upper(&upper), sv(&sv), ye(&ye), ze(&ze), base(&base), 
               solution(&solution), upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
-              intermediateCycles(intermediateCycles), cycles(&cycles), seen(&seen)
+              intermediateCycles(intermediateCycles), cycles(&cycles), seen(&seen), output(output)
     { }
 
     void callback() override {
@@ -128,7 +129,7 @@ struct Callback : public GRBCallback {
                 // (without finishing proving optimality).
                 // TODO: no entiendo: (objBound > *lower || earlyStop > 2)
                 if (objVal <= *upper && !solution->allObserved() && earlyStop > 1 && (objBound > *lower || earlyStop > 2)) {
-                    fmt::print("early stop (status 1) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                    fmt::print("early stop (exit 1) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
                     abort();
                 }
             }
@@ -163,10 +164,6 @@ struct Callback : public GRBCallback {
                     }
                 }
 
-                if (output > 1) {
-                    fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
-                }
-
                 if (!solution->allObserved()) {
                     // The solution is not a power dominating set
 
@@ -178,12 +175,16 @@ struct Callback : public GRBCallback {
                     //     }
                     // }
 
+                    if (output > 1) {
+                        fmt::print("new solution {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                    }
+
                     // If earlyStop = 2, this stops the reoptimization as soon as an invalid solution is found,
                     // i.e. a non-power dominaintg set, whose objective value is lower or equal to the upper bound
                     // (without finishing proving optimality).
                     // TODO: por que se pide objBound > *lower
                     if (earlyStop > 1 && objBound > *lower) { 
-                        fmt::print("early stop (status 2) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                        fmt::print("early stop (exit 2) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
                         abort(); 
                     }
     
@@ -191,10 +192,9 @@ struct Callback : public GRBCallback {
                     // The solution is a power dominating set, 
                     // whose objetive value is better than the upper bound for the power dominating number
                     // i.e. Gurobi improved the upper bound for the power dominating number
-
-                    fmt::print("gurobi H {}\n", objVal);
                     *upper = objVal;
                     *upperBound = *solution;
+                    fmt::print("new power dominating set {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper, objVal);
                 }
             }
         }
@@ -349,7 +349,7 @@ SolveResult solveCycles(
 
         // Add callback
         Callback cb(lowerBound, upperBound, sv, ye, ze, state, lastSolution, 
-                    feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen);
+                    feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
         model.setCallback(&cb);
 
         // Start the clock
@@ -490,8 +490,7 @@ SolveResult solveCycles(
 
                 case GRB_OPTIMAL: // Optimal
                     // The new bound is the objetive value of the new (optimal) solution
-                    // TODO: +0.05 what¿?
-                    new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal) + 0.05);
+                    new_bound = static_cast<size_t>(model.get(GRB_DoubleAttr_ObjVal) + 0.5);
                     break;
 
                 case GRB_TIME_LIMIT: // Time limit
@@ -542,7 +541,7 @@ SolveResult solveCycles(
                 // Update feasible solution with the new solution
                 std::swap(lastSolution, feasibleSolution);
                 if (output) {
-                    fmt::print("greedy solution is optimal\n");
+                    fmt::print("power dominating set is optimal\n");
                 }
             } else if (lastSolution.allObserved()) {
                 // The new solution is a feasible power dominating set
