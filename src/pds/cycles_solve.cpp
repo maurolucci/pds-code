@@ -96,6 +96,9 @@ struct Callback : public GRBCallback {
     // ???
     VertexSet* seen;
 
+    // Verbosity
+    int output;
+
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv, 
              EdgeMap<GRBVar>& ye, EdgeMap<GRBVar>& ze, const PdsState& base, 
              PdsState& solution, PdsState & upperBound, std::span<PdsState::Vertex> blank, 
@@ -118,13 +121,14 @@ struct Callback : public GRBCallback {
                 // TODO: GRB_CB_MIP_OBJBST or GRB_CB_MIPSOL_OBJ
                 auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBST) + 0.5);
                 // MIP lower bound
-                auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIP_OBJBND));
+                auto objBound = getDoubleInfo(GRB_CB_MIP_OBJBND);
 
                 // If earlyStop = 2, this stops the reoptimization as soon as an invalid solution is found,
                 // i.e. a non-power dominaintg set, whose objective value is lower or equal to the upper bound
                 // (without finishing proving optimality).
                 // TODO: no entiendo: (objBound > *lower || earlyStop > 2)
                 if (objVal <= *upper && !solution->allObserved() && earlyStop > 1 && (objBound > *lower || earlyStop > 2)) {
+                    fmt::print("early stop (status 1) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
                     abort();
                 }
             }
@@ -138,7 +142,7 @@ struct Callback : public GRBCallback {
             // static_cast truncates the number, so +0.5 is needed to round the number
             auto objVal = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJ) + 0.5);
             // MIP lower bound
-            auto objBound = static_cast<size_t>(getDoubleInfo(GRB_CB_MIPSOL_OBJBND));
+            auto objBound = getDoubleInfo(GRB_CB_MIPSOL_OBJBND);
 
             if (objVal <= *upper) {
                 // The objective value of the solution is as good as the upper bound for the power dominating number
@@ -159,9 +163,10 @@ struct Callback : public GRBCallback {
                     }
                 }
 
-                fmt::print("feasible solution {} <= {}\n", getDoubleInfo(GRB_CB_MIPSOL_OBJBND), getDoubleInfo(GRB_CB_MIPSOL_OBJ));
-                fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
-                
+                if (output > 1) {
+                    fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
+                }
+
                 if (!solution->allObserved()) {
                     // The solution is not a power dominating set
 
@@ -177,7 +182,10 @@ struct Callback : public GRBCallback {
                     // i.e. a non-power dominaintg set, whose objective value is lower or equal to the upper bound
                     // (without finishing proving optimality).
                     // TODO: por que se pide objBound > *lower
-                    if (earlyStop > 1 && objBound > *lower) { abort(); }
+                    if (earlyStop > 1 && objBound > *lower) { 
+                        fmt::print("early stop (status 2) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                        abort(); 
+                    }
     
                 } else if (objVal < *upper) {
                     // The solution is a power dominating set, 
