@@ -680,20 +680,24 @@ struct Callback : public GRBCallback {
                         solution->setInactive(v);
                     }
                 }
-                
-                fmt::print("feasible solution {} <= {}; {} <= {}; {}\n", *lower, objBound, objVal, *upper, solution->allObserved());
-                
+
                 if (!solution->allObserved()) {
                     if (intermediateForts >= 0) {
                         for (auto& f: violatedForts(*solution, intermediateForts, 10, *seen, false)) {
                             forts->push_back(std::move(f));
                         }
                     }
+
+                    if (output > 1) {
+                        fmt::print("new solution {} <= {}; {} <= {}; unobserved #{}\n", *lower, objBound, objVal, *upper, solution->numUnobserved());
+                    }
+
                     if (earlyStop > 1 && objBound > *lower) { abort(); }
                 } else if (objVal < *upper) {
                     fmt::print("gurobi H {}\n", objVal);
                     *upper = objVal;
                     *upperBound = *solution;
+                    fmt::print("new power dominating set {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper, objVal);
                     //if (*upper <= *lower && earlyStop) { abort(); }
                 }
             }
