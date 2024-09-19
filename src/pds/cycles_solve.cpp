@@ -345,15 +345,6 @@ SolveResult solveCycles(
                     }
                     model.addConstr(observers <= 1);     
                 }
-
-
-                // Constraints (4)
-                for (auto e: state.graph().edges()) {
-                    int u = state.graph().source(e);
-                    int v = state.graph().target(e);
-                    if (!state.isZeroInjection(u) || !state.isZeroInjection(v)) { continue; }
-                    model.addConstr(ye.at(v).at(u) + ye.at(u).at(v) <= 1);
-                }
             }
 
         } else if (variant == 0) {
@@ -416,15 +407,6 @@ SolveResult solveCycles(
                     model.addConstr(state.graph().degree(v)*ye.at(v).at(u) <= observers);
                 }
             }
-
-            // Constraints (3)
-            for (auto e: state.graph().edges()) {
-                int u = state.graph().source(e);
-                int v = state.graph().target(e);
-                if (!state.isZeroInjection(u) || !state.isZeroInjection(v)) { continue; }
-                model.addConstr(ye.at(v).at(u) + ye.at(u).at(v) <= 1);
-            }
-
         }
 
         // Add callback
