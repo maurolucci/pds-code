@@ -68,7 +68,6 @@ struct Callback : public GRBCallback {
     // Map to GRBVar
     VertexMap<GRBVar>* sv;
     EdgeMap<GRBVar>* ye;
-    EdgeMap<GRBVar>* ze;
 
     // Base integer solution (before re-optimization) 
     // It is not a power dominating set
@@ -100,11 +99,11 @@ struct Callback : public GRBCallback {
     int output;
 
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv, 
-             EdgeMap<GRBVar>& ye, EdgeMap<GRBVar>& ze, const PdsState& base, 
+             EdgeMap<GRBVar>& ye, const PdsState& base, 
              PdsState& solution, PdsState & upperBound, std::span<PdsState::Vertex> blank, 
              int earlyStop, int intermediateCycles, std::vector<VertexList>& cycles, VertexSet& seen,
              int output)
-            : lower(&lower), upper(&upper), sv(&sv), ye(&ye), ze(&ze), base(&base), 
+            : lower(&lower), upper(&upper), sv(&sv), ye(&ye), base(&base), 
               solution(&solution), upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
               intermediateCycles(intermediateCycles), cycles(&cycles), seen(&seen), output(output)
     { }
@@ -292,69 +291,136 @@ SolveResult solveCycles(
         VertexMap<GRBVar> sv;
         EdgeMap<GRBVar> ye;
         EdgeMap<GRBVar> ze;
-        for (auto v: state.graph().vertices()) {
+        if (variant == 1) {
 
-            // Variable: s_v
-            if (state.isActive(v) || state.isBlank(v)) {
-                sv.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("s_{}", v)));
-            }
+            for (auto v: state.graph().vertices()) {
 
-            // Variable: y_e
-            if (!state.isZeroInjection(v)) {continue;}
-
-            for (auto e: state.graph().outEdges(v)) {
-                auto u = state.graph().target(e);
-                ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
-                ze[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("z_{}{}", v, u)));
-            
-                // Variable: z_e
-                for (auto f: state.graph().inEdges(v)) {
-                    auto w = state.graph().source(f);
-                    if (w == u) {continue;}
-                    ze[w].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("z_{}{}", w, u)));
+                // Variable: s_v
+                if (state.isActive(v) || state.isBlank(v)) {
+                    sv.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("s_{}", v)));
                 }
-            
-            }
-        }
 
-        // Add constraints
-
-        // Constraints (1)
-        // s_v + sum_{u in N(v)} (s_u + y_uv) >= 1, for all v in V
-        for (auto v: state.graph().vertices()) {
-            if (state.isActive(v)) {
-                model.addConstr(sv.at(v) == 1.0);
-            }
-            else {
-                GRBLinExpr observers = 0;
-                if (state.isBlank(v)) {observers += sv.at(v);}
-                for (auto e: state.graph().inEdges(v)) {
-                    auto u = state.graph().source(e);
-                    if (!state.isInactive(u)) observers += sv.at(u);
-                    if (state.isZeroInjection(u)) observers += ye.at(u).at(v);
-                }
-                model.addConstr(observers >= 1); 
-            }
-        
-            // Constraints (2)
-            // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
-            for (auto e: state.graph().outEdges(v)) {
-                auto u = state.graph().target(e);
+                // Variable: y_e
                 if (!state.isZeroInjection(v)) {continue;}
-                GRBLinExpr observers = ze.at(v).at(u);
-                for (auto f: state.graph().inEdges(v)) {
-                    auto w = state.graph().source(f);
-                    if (w == u) {continue;}
-                    observers += ze.at(w).at(u);
-                }
-                model.addConstr(state.graph().degree(v)*ye.at(v).at(u) <= observers);
-            }
-        }
 
-        // Add callback
-        Callback cb(lowerBound, upperBound, sv, ye, ze, state, lastSolution, 
-                    feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
-        model.setCallback(&cb);
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u))); 
+                }
+            }
+
+            // Add constraints
+
+            // Constraints (1)
+            // s_v + sum_{u in N(v)} (s_u + y_uv) >= 1, for all v in V
+            for (auto v: state.graph().vertices()) {
+                if (state.isActive(v)) {
+                    model.addConstr(sv.at(v) == 1.0);
+                }
+                else {
+                    GRBLinExpr observers = 0;
+                    if (state.isBlank(v)) {observers += sv.at(v);}
+                    for (auto e: state.graph().inEdges(v)) {
+                        auto u = state.graph().source(e);
+                        if (!state.isInactive(u)) observers += sv.at(u);
+                        if (state.isZeroInjection(u)) observers += ye.at(u).at(v);
+                    }
+                    model.addConstr(observers >= 1); 
+                }
+
+                // Constraints (2)
+                if (state.isZeroInjection(v)) {
+                    GRBLinExpr observers = 0;
+                    for (auto e: state.graph().outEdges(v)) {
+                        auto u = state.graph().target(e);
+                        observers += ye.at(v).at(u);
+                    }
+                    model.addConstr(observers <= 1 - sv.at(v));            
+                }
+
+                // Contraints (3)
+                if (!state.isActive(v)) {
+                    GRBLinExpr observers = 0;
+                    for (auto e: state.graph().inEdges(v)) {
+                        auto u = state.graph().source(e);
+                        if (state.isZeroInjection(u)) observers += ye.at(u).at(v);
+                    }
+                    model.addConstr(observers <= 1);     
+                }
+            }
+
+            // Add callback
+            Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
+                        feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
+            model.setCallback(&cb);
+
+        } else if (variant == 0) {
+
+            for (auto v: state.graph().vertices()) {
+
+                // Variable: s_v
+                if (state.isActive(v) || state.isBlank(v)) {
+                    sv.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("s_{}", v)));
+                }
+
+                // Variable: y_e
+                if (!state.isZeroInjection(v)) {continue;}
+
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    ye[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("y_{}{}", v, u)));
+                    ze[v].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("z_{}{}", v, u)));
+                
+                    // Variable: z_e
+                    for (auto f: state.graph().inEdges(v)) {
+                        auto w = state.graph().source(f);
+                        if (w == u) {continue;}
+                        ze[w].emplace(u, model.addVar(0.0, 1.0, 0.0, GRB_BINARY, fmt::format("z_{}{}", w, u)));
+                    }
+                
+                }
+            }
+
+            // Add constraints
+
+            // Constraints (1)
+            // s_v + sum_{u in N(v)} (s_u + y_uv) >= 1, for all v in V
+            for (auto v: state.graph().vertices()) {
+                if (state.isActive(v)) {
+                    model.addConstr(sv.at(v) == 1.0);
+                }
+                else {
+                    GRBLinExpr observers = 0;
+                    if (state.isBlank(v)) {observers += sv.at(v);}
+                    for (auto e: state.graph().inEdges(v)) {
+                        auto u = state.graph().source(e);
+                        if (!state.isInactive(u)) observers += sv.at(u);
+                        if (state.isZeroInjection(u)) observers += ye.at(u).at(v);
+                    }
+                    model.addConstr(observers >= 1); 
+                }
+            
+                // Constraints (2)
+                // degree(v)*y_vu <= sum_{w in N[v]\{u}} z_wu, for all vu in E
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    if (!state.isZeroInjection(v)) {continue;}
+                    GRBLinExpr observers = ze.at(v).at(u);
+                    for (auto f: state.graph().inEdges(v)) {
+                        auto w = state.graph().source(f);
+                        if (w == u) {continue;}
+                        observers += ze.at(w).at(u);
+                    }
+                    model.addConstr(state.graph().degree(v)*ye.at(v).at(u) <= observers);
+                }
+            }
+
+            // Add callback
+            Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
+                        feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
+            model.setCallback(&cb);
+
+        }
 
         // Start the clock
         auto startingTime = now();
@@ -377,70 +443,142 @@ SolveResult solveCycles(
             if (model.get(GRB_IntAttr_SolCount) > 0) {
                 // Add violated lazy contraints before reoptimization    
 
-                // Build precedence digraph (among unobserved vertices)
-                ObservationGraph precedences;
-                for (auto v: lastSolution.graph().vertices()) {
-                    if (lastSolution.isObserved(v)) { continue; }
-                    precedences.getOrAddVertex(v);
-                    for (auto u: lastSolution.graph().neighbors(v)) {
-                        if (!lastSolution.isZeroInjection(u)) { continue; }
-                        if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
-                        if (!lastSolution.isObserved(u)) { 
-                            precedences.getOrAddVertex(u);
-                            precedences.addEdge(u,v); 
-                        }
-                        for (auto w: lastSolution.graph().neighbors(u)) {
-                            if (w == v || lastSolution.isObserved(w)) { continue; }
-                            precedences.getOrAddVertex(w);
-                            precedences.addEdge(w,v);
-                        }
-                    }
-                }
-
-                // Find cycles
-                auto moreCycles = violatedCycles(precedences);
-
-                // Add the cycles to the set of cycles
-                // Recall that the callback may have encountered some cycles in intermediate solutions
-                for (auto f: moreCycles) {
-                    cycles.emplace_back(std::move(f));
-                }
-
-                // If there is no cycle, the instance is infeasible
-                if (cycles.empty()) { 
-                    return {state.graph().numVertices(), 0, SolveState::Infeasible};
-                }
-                
-                // Add violated lazy contraints
-                for (; processedCycles < cycles.size(); ++processedCycles) {
-                    GRBLinExpr cycleSum;
-                    auto& cycle = cycles[processedCycles];
-                    for (auto it = cycle.rbegin(); it != cycle.rend(); ) {
-                        auto v = *it;
-                        if (!state.graph().hasVertex(v)) {
-                            fmt::print("!!!invalid vertex {} in cycle: {}!!!\n", v, cycle);
-                        }
-                        if (lastSolution.isObserved(v)) {
-                            if (output) {
-                                fmt::print("???observed vertex in cycle??? {} {} {}\n",
-                                            v, state.numObserved(), state.graph().numVertices());
+                if (variant == 1) {
+                    // Build precedence digraph (among unobserved vertices)
+                    ObservationGraph precedences;
+                    using VertexDescriptor = ObservationGraph::VertexDescriptor;
+                    using EdgeDesciptor = std::pair<VertexDescriptor,VertexDescriptor>;
+                    std::map<EdgeDesciptor, EdgeDesciptor> translation;
+                    for (auto v: lastSolution.graph().vertices()) {
+                        if (lastSolution.isObserved(v)) { continue; }
+                        precedences.getOrAddVertex(v);
+                        for (auto u: lastSolution.graph().neighbors(v)) {
+                            if (!lastSolution.isZeroInjection(u)) { continue; }
+                            if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
+                            if (!lastSolution.isObserved(u)) { 
+                                precedences.getOrAddVertex(u);
+                                precedences.addEdge(u,v);
+                                translation[std::make_pair(u,v)] = std::make_pair(u,v);
+                            }
+                            for (auto w: lastSolution.graph().neighbors(u)) {
+                                if (w == v || lastSolution.isObserved(w)) { continue; }
+                                precedences.getOrAddVertex(w);
+                                precedences.addEdge(w,v);
+                                translation[std::make_pair(w,v)] = std::make_pair(u,v);
                             }
                         }
-                        ++it;
-                        int u = it != cycle.rend() ? *it : cycle.back();
-                        cycleSum += ze.at(v).at(u);
                     }
-                    model.addConstr(cycleSum <= cycle.size() - 1);
-                    totalCycleSize += cycle.size();
-                    if (output > 1) {
-                        fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
-                    }
-                }
 
-                // Log cycle statics
-                if (output) {
-                    fmt::print("#cycles: {}, avg size: {:.2f}\n", cycles.size(), double(totalCycleSize) / double(cycles.size()));
-                }
+                    // Find cycles
+                    auto moreCycles = violatedCycles(precedences);
+
+                    // Add the cycles to the set of cycles
+                    // Recall that the callback may have encountered some cycles in intermediate solutions
+                    for (auto f: moreCycles) {
+                        cycles.emplace_back(std::move(f));
+                    }
+
+                    // If there is no cycle, the instance is infeasible
+                    if (cycles.empty()) { 
+                        return {state.graph().numVertices(), 0, SolveState::Infeasible};
+                    }
+                    
+                    // Add violated lazy contraints
+                    for (; processedCycles < cycles.size(); ++processedCycles) {
+                        GRBLinExpr cycleSum;
+                        auto& cycle = cycles[processedCycles];
+                        for (auto it = cycle.rbegin(); it != cycle.rend(); ) {
+                            auto v = *it;
+                            if (!state.graph().hasVertex(v)) {
+                                fmt::print("!!!invalid vertex {} in cycle: {}!!!\n", v, cycle);
+                            }
+                            if (lastSolution.isObserved(v)) {
+                                if (output) {
+                                    fmt::print("???observed vertex in cycle??? {} {} {}\n",
+                                                v, state.numObserved(), state.graph().numVertices());
+                                }
+                            }
+                            ++it;
+                            int u = it != cycle.rend() ? *it : cycle.back();
+                            cycleSum += ye.at(translation[std::make_pair(v,u)].first).at(translation[std::make_pair(v,u)].second);
+                        }
+                        model.addConstr(cycleSum <= cycle.size() - 1);
+                        totalCycleSize += cycle.size();
+                        if (output > 1) {
+                            fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
+                        }
+                    }
+
+                    // Log cycle statics
+                    if (output) {
+                        fmt::print("#cycles: {}, avg size: {:.2f}\n", cycles.size(), double(totalCycleSize) / double(cycles.size()));
+                    }
+                } else if (variant == 0) {
+                    // Build precedence digraph (among unobserved vertices)
+                    ObservationGraph precedences;
+                    for (auto v: lastSolution.graph().vertices()) {
+                        if (lastSolution.isObserved(v)) { continue; }
+                        precedences.getOrAddVertex(v);
+                        for (auto u: lastSolution.graph().neighbors(v)) {
+                            if (!lastSolution.isZeroInjection(u)) { continue; }
+                            if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
+                            if (!lastSolution.isObserved(u)) { 
+                                precedences.getOrAddVertex(u);
+                                precedences.addEdge(u,v); 
+                            }
+                            for (auto w: lastSolution.graph().neighbors(u)) {
+                                if (w == v || lastSolution.isObserved(w)) { continue; }
+                                precedences.getOrAddVertex(w);
+                                precedences.addEdge(w,v);
+                            }
+                        }
+                    }
+
+                    // Find cycles
+                    auto moreCycles = violatedCycles(precedences);
+
+                    // Add the cycles to the set of cycles
+                    // Recall that the callback may have encountered some cycles in intermediate solutions
+                    for (auto f: moreCycles) {
+                        cycles.emplace_back(std::move(f));
+                    }
+
+                    // If there is no cycle, the instance is infeasible
+                    if (cycles.empty()) { 
+                        return {state.graph().numVertices(), 0, SolveState::Infeasible};
+                    }
+                    
+                    // Add violated lazy contraints
+                    for (; processedCycles < cycles.size(); ++processedCycles) {
+                        GRBLinExpr cycleSum;
+                        auto& cycle = cycles[processedCycles];
+                        for (auto it = cycle.rbegin(); it != cycle.rend(); ) {
+                            auto v = *it;
+                            if (!state.graph().hasVertex(v)) {
+                                fmt::print("!!!invalid vertex {} in cycle: {}!!!\n", v, cycle);
+                            }
+                            if (lastSolution.isObserved(v)) {
+                                if (output) {
+                                    fmt::print("???observed vertex in cycle??? {} {} {}\n",
+                                                v, state.numObserved(), state.graph().numVertices());
+                                }
+                            }
+                            ++it;
+                            int u = it != cycle.rend() ? *it : cycle.back();
+                            cycleSum += ze.at(v).at(u);
+                        }
+                        model.addConstr(cycleSum <= cycle.size() - 1);
+                        totalCycleSize += cycle.size();
+                        if (output > 1) {
+                            fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
+                        }
+                    }
+
+                    // Log cycle statics
+                    if (output) {
+                        fmt::print("#cycles: {}, avg size: {:.2f}\n", cycles.size(), double(totalCycleSize) / double(cycles.size()));
+                    }                    
+                } 
             }
 
             // Current time
