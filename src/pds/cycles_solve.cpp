@@ -349,11 +349,6 @@ SolveResult solveCycles(
                 }
             }
 
-            // Add callback
-            Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
-                        feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
-            model.setCallback(&cb);
-
         } else if (variant == 0) {
 
             for (auto v: state.graph().vertices()) {
@@ -415,12 +410,12 @@ SolveResult solveCycles(
                 }
             }
 
-            // Add callback
-            Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
-                        feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
-            model.setCallback(&cb);
-
         }
+
+        // Add callback
+        Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
+                    feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
+        model.setCallback(&cb);
 
         // Start the clock
         auto startingTime = now();
