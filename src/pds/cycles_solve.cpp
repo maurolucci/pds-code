@@ -501,6 +501,10 @@ SolveResult solveCycles(
                         totalCycleSize += cycle.size();
                         if (output > 1) {
                             fmt::print("cycle {:4}: {} #{}\n", processedCycles, cycle, cycle.size());
+                            fmt::print("cycle {:4}: {} -> ", processedCycles, cycle);
+                            for (unsigned int i = 0; i < cycleSum.size(); ++i) 
+                                fmt::print("{} ", cycleSum.getVar(i).get(GRB_StringAttr_VarName));
+                            fmt::print("\n");
                         }
                     }
 
