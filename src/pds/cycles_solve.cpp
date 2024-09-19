@@ -268,9 +268,7 @@ SolveResult solveCycles(
 
 
         // TODO: remover estas lineas
-        cycleInit = 0;
-        variant = 0;
-        fmt::print("Ignorar {} {}\n", cycleInit, variant);
+        fmt::print("Ignorar; cycleInit {} {}\n", cycleInit);
 
         // Intitialize model
         GRBModel model(getEnv());
