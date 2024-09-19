@@ -268,7 +268,7 @@ SolveResult solveCycles(
 
 
         // TODO: remover estas lineas
-        fmt::print("Ignorar; cycleInit {} {}\n", cycleInit);
+        fmt::print("Ignorar; cycleInit {}\n", cycleInit);
 
         // Intitialize model
         GRBModel model(getEnv());
