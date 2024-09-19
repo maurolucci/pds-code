@@ -260,39 +260,18 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             double averageSize = double(totalFortSize) / double(forts.size());
             fortStats = {averageSize, forts.size(), solved};
         }
-        if (vm.count("write-forts")) {
-            {
-                auto hs_file = fmt::format("hs/{}-{}-hs-{:04}.hs", currentName, subproblemNumber, solved);
-                FILE* file = fopen(hs_file.c_str(), "w");
-                if (!file) throw std::ios_base::failure(strerror(errno), std::error_code(errno, std::system_category()));
-                fmt::print(file, "{} {}\n", state.graph().numVertices(), forts.size() + state.numActive());
-                // ensure that active vertices are selected to get the correct bound
-                for (auto v: state.graph().vertices()) {
-                    if (state.isActive(v)) {
-                        fmt::print(file, "1 {}\n", v);
-                    }
-                }
-                for (auto& f: forts) {
-                    VertexList fortBlank;
-                    bool skip = false;
-                    for (auto v: f) {
-                        if (!state.isInactive(v)) {
-                            fortBlank.push_back(v);
-                        }
-                    }
-                    if (!skip) {
-                        ranges::sort(fortBlank);
-                        fmt::print(file, "{} {}\n", fortBlank.size(), fmt::join(fortBlank, " "));
-                    }
-                }
-                fclose(file);
-            }
-        }
         ++solved;
     };
     cyclecallback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (cyclecallback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
-        // TODO: completar
-        return;
+        if (vm.count("fort-stats") && when == pds::cyclecallback::When::FINAL) {
+            size_t totalCycleSize = 0;
+            for (auto& cycle: cycles) {
+                totalCycleSize += cycle.size();
+            }
+            double averageSize = double(totalCycleSize) / double(cycles.size());
+            fortStats = {averageSize, cycles.size(), solved};
+        }
+        ++solved;
     };
     if (solverName == "branching") {
         return Solver{[](auto &state, double) { return solveBranching(state, true, greedy_strategies::largestDegree); }};
