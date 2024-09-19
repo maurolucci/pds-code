@@ -129,7 +129,9 @@ struct Callback : public GRBCallback {
                 // (without finishing proving optimality).
                 // TODO: no entiendo: (objBound > *lower || earlyStop > 2)
                 if (objVal <= *upper && !solution->allObserved() && earlyStop > 1 && (objBound > *lower || earlyStop > 2)) {
-                    fmt::print("early stop (exit 1) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                    if (output) {
+                        fmt::print("early stop (exit 1) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                    }
                     abort();
                 }
             }
@@ -184,7 +186,9 @@ struct Callback : public GRBCallback {
                     // (without finishing proving optimality).
                     // TODO: por que se pide objBound > *lower
                     if (earlyStop > 1 && objBound > *lower) { 
-                        fmt::print("early stop (exit 2) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                        if (output) {
+                            fmt::print("early stop (exit 2) {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper);
+                        }
                         abort(); 
                     }
     
@@ -194,7 +198,7 @@ struct Callback : public GRBCallback {
                     // i.e. Gurobi improved the upper bound for the power dominating number
                     *upper = objVal;
                     *upperBound = *solution;
-                    fmt::print("new power dominating set {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper, objVal);
+                    fmt::print("* new power dominating set #{}\n", objVal);
                 }
             }
         }
@@ -279,8 +283,8 @@ SolveResult solveCycles(
         model.set(GRB_DoubleParam_MIPGap, 1e-6);
         model.set(GRB_IntParam_Presolve, GRB_PRESOLVE_AGGRESSIVE);
 
+        // Set file for logging
         if (output) {
-            // Set file for logging
             model.set(GRB_StringParam_LogFile, "gurobi.log");
         }
 
@@ -370,7 +374,7 @@ SolveResult solveCycles(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
             
-            if (model.get(GRB_IntAttr_SolCount) > 0) {     
+            if (model.get(GRB_IntAttr_SolCount) > 0) {
                 // Add violated lazy contraints before reoptimization    
 
                 // Build precedence digraph (among unobserved vertices)
@@ -503,8 +507,12 @@ SolveResult solveCycles(
                     break;
             }
 
-            if (model.get(GRB_IntAttr_SolCount) > 0) {
-                // There is at least one solution
+            if (model.get(GRB_IntAttr_SolCount) > 0) { // There is at least one solution
+                // lastSolution can differ from the last solution found in the MIPSOL callback. Why?
+                // MIPSOL callback is only invoked when there is a new incumbent solution (a solution with a better cost).
+                // So, the callback won't be called for any other solution found after finding a solution with optimal cost
+                // (gurobi might not know that the solution is optimal until the dual bound is tightened).
+                // However, the optimal solutions found later will be in the solution pool, and lastSolution will be the last one.
 
                 //  Recover the new solution and update lastSolution
                 for (auto v: state.graph().vertices()) {
@@ -537,16 +545,17 @@ SolveResult solveCycles(
             }
 
             if (lowerBound == upperBound) {
-                // The new solution is an optimal power dominating set
-                // Update feasible solution with the new solution
+                // The power dominating set in feasibleSolution is optimal (found in the last MIPSOL callback)
+                // Update lastSolution to feasibleSolution
                 std::swap(lastSolution, feasibleSolution);
                 if (output) {
                     fmt::print("power dominating set is optimal\n");
                 }
             } else if (lastSolution.allObserved()) {
-                // The new solution is a feasible power dominating set
-                // Update the upper bound
-                // TODO: es necesario o ya lo hace el callback?
+                // lastSolution is a power dominating set, so it is optimal
+                // The upper bound can be updated
+                fmt::print("* new power dominating set #{}\n", lastSolution.numActive());
+                fmt::print("power dominating set is optimal\n");
                 upperBound = lastSolution.numActive();
             }
 
@@ -567,7 +576,7 @@ SolveResult solveCycles(
             if (remainingTimeout <= 1.0) status = GRB_TIME_LIMIT;
             
             if (lastSolution.allObserved()) {
-                // The new solution is an optimal power dominating set
+                // lastSolution is a power dominating set, so it is optimal
                 // Update feasible solution with the new solution
                 feasibleSolution = lastSolution;
                 cycleCB(cyclecallback::When::FINAL, state, cycles, lowerBound, upperBound);

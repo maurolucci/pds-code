@@ -689,16 +689,14 @@ struct Callback : public GRBCallback {
                             forts->push_back(std::move(f));
                         }
                     }
-
                     if (output > 1) {
                         fmt::print("new solution {} <= {}; {} <= {}; unobserved #{}\n", *lower, objBound, objVal, *upper, solution->numUnobserved());
                     }
-
                     if (earlyStop > 1 && objBound > *lower) { abort(); }
                 } else if (objVal < *upper) {
                     *upper = objVal;
                     *upperBound = *solution;
-                    fmt::print("new power dominating set {} <= {}; {} <= {}\n", *lower, objBound, objVal, *upper, objVal);
+                    fmt::print("* new power dominating set #{}\n", objVal);
                     //if (*upper <= *lower && earlyStop) { abort(); }
                 }
             }
@@ -868,9 +866,11 @@ SolveResult solveBozeman(
             if (lowerBound == upperBound) {
                 std::swap(lastSolution, feasibleSolution);
                 if (output) {
-                    fmt::print("greedy solution is optimal\n");
+                    fmt::print("power dominating set is optimal\n");
                 }
             } else if (lastSolution.allObserved()) {
+                fmt::print("* new power dominating set #{}\n", lastSolution.numActive());
+                fmt::print("power dominating set is optimal\n");
                 upperBound = lastSolution.numActive();
             }
             boundCallback(lowerBound, upperBound, forts.size());
