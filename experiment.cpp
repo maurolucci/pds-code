@@ -321,11 +321,6 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             return solveCycles(state, verbose, timeLimit, 0, cycleInit,
                                 greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 0 : -1);
         }};
-    } else if (solverName == "cycles2") {
-        return Solver{[=](auto &state, double timeLimit) {
-            return solveCycles(state, verbose, timeLimit, 1, cycleInit,
-                                greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 1 : -1);
-        }};
     } else {
         try {
             return Solver{[model = getModel(solverName), verbose,boundCB,fortInit](auto &state, double timeout) {
