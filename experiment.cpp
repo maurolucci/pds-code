@@ -14,7 +14,8 @@
 #include "pdssolve.hpp"
 #include "gurobi_solve.hpp"
 #include "fort_solve.hpp"
-#include "cycles_solve.hpp"
+#include "cycle_solve.hpp"
+#include "cycle_fort_solve.hpp"
 
 using namespace pds;
 
@@ -260,7 +261,6 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             double averageSize = double(totalFortSize) / double(forts.size());
             fortStats = {averageSize, forts.size(), solved};
         }
-        ++solved;
     };
     cyclecallback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (cyclecallback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
         if (vm.count("fort-stats") && when == pds::cyclecallback::When::FINAL) {
@@ -319,7 +319,12 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     } else if (solverName == "cycles") {
         return Solver{[=](auto &state, double timeLimit) {
             return solveCycles(state, verbose, timeLimit, 0, cycleInit,
-                                greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 0 : -1);
+                               greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 0 : -1);
+        }};
+    } else if (solverName == "cycles-forts") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solveCyclesForts(state, verbose, timeLimit, 0, cycleInit,
+                                    greedyBoundMode, earlyStop, fortCallback, cycleCallback, boundCB, -1);
         }};
     } else {
         try {
