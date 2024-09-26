@@ -347,6 +347,13 @@ SolveResult solveCycles(
             }
         }
 
+        // Constraints (3)
+        for (auto e: state.graph().edges()) {
+            auto u = state.graph().source(e);
+            auto v = state.graph().target(e);
+            model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
+        }
+
         // Add callback
         Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
                     feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
