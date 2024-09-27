@@ -437,23 +437,27 @@ SolveResult solveCyclesForts(
             }
         }
 
-        // Constraints (3)
-        for (auto e: state.graph().edges()) {
-            auto u = state.graph().source(e);
-            auto v = state.graph().target(e);
-            if (!state.isZeroInjection(u) || !state.isZeroInjection(v)) {continue;}
-            model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
-        }
+        if (variant == 0) {
 
-        // Constraints (4)
-        for (auto v: state.graph().vertices()) {
-            if (!state.isZeroInjection(v)) {continue;}
-            GRBLinExpr observers = 0;
-            for (auto e: state.graph().outEdges(v)) {
-                auto u = state.graph().target(e);
-                observers += ye.at(v).at(u);
+            // Constraints (3)
+            for (auto e: state.graph().edges()) {
+                auto u = state.graph().source(e);
+                auto v = state.graph().target(e);
+                if (!state.isZeroInjection(u) || !state.isZeroInjection(v)) {continue;}
+                model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
             }
-            model.addConstr(observers <= 1 - sv.at(v));
+
+            // Constraints (4)
+            for (auto v: state.graph().vertices()) {
+                if (!state.isZeroInjection(v)) {continue;}
+                GRBLinExpr observers = 0;
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    observers += ye.at(v).at(u);
+                }
+                model.addConstr(observers <= 1 - sv.at(v));
+            }
+
         }
 
         // Add callback
