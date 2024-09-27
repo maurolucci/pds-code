@@ -445,6 +445,17 @@ SolveResult solveCyclesForts(
             model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
         }
 
+        // Constraints (4)
+        for (auto v: state.graph().vertices()) {
+            if (!state.isZeroInjection(v)) {continue;}
+            GRBLinExpr observers = 0;
+            for (auto e: state.graph().outEdges(v)) {
+                auto u = state.graph().target(e);
+                observers += ye.at(v).at(u);
+            }
+            model.addConstr(observers <= 1 - sv.at(v));
+        }
+
         // Add callback
         Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
                     feasibleSolution, blankVertices, earlyStop, intermediateCycles, cycles, seen, output);
