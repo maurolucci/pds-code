@@ -543,11 +543,6 @@ SolveResult solveCyclesForts(
                 for (auto f: moreCycles) {
                     cycles.emplace_back(std::move(f));
                 }
-
-                // If there is no cycle, the instance is infeasible
-                if (cycles.empty()) { 
-                    return {state.graph().numVertices(), 0, SolveState::Infeasible};
-                }
                 
                 // Add violated lazy contraints
                 for (; processedCycles < cycles.size(); ++processedCycles) {
