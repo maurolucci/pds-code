@@ -253,7 +253,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     bool intermediateForts = vm.count("intermediate");
     bool intermediateCycles = vm.count("intermediate-cycles");
     callback::FortCallback fortCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
-        if (vm.count("fort-stats") && when == pds::callback::When::FINAL) {
+        if (vm.count("fort-stats") && (when == pds::callback::When::FINAL)) {
             size_t totalFortSize = 0;
             for (auto& fort: forts) {
                 totalFortSize += fort.size();
@@ -261,6 +261,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
             double averageSize = double(totalFortSize) / double(forts.size());
             fortStats = {averageSize, forts.size(), solved};
         }
+        ++solved;
     };
     cyclecallback::CycleCallback cycleCallback = [&,solved=size_t{0}]  (cyclecallback::When when, const PdsState& state, const std::vector<VertexList>& cycles, size_t lower, size_t upper) mutable {
         if (vm.count("fort-stats") && when == pds::cyclecallback::When::FINAL) {

@@ -348,6 +348,7 @@ SolveResult solveCycles(
         for (auto e: state.graph().edges()) {
             auto u = state.graph().source(e);
             auto v = state.graph().target(e);
+            if (!state.isZeroInjection(u) || !state.isZeroInjection(v)) {continue;}
             model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
         }
 
