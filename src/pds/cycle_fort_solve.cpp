@@ -129,7 +129,7 @@ std::set<VertexList> violatedCycles(ObservationGraph& graph, int limitCycle) {
                   | ranges::to<std::vector>;
     ranges::shuffle(vertices);
     for (auto v: vertices) {
-        if (cycles.size() > static_cast<size_t>(limitCycle)) { break; } 
+        if (cycles.size() >= static_cast<size_t>(limitCycle)) { break; } 
         VertexList cycle = findCycle(graph, v);
         if (cycle.empty()) { continue; }
         cycles.insert(cycle);
