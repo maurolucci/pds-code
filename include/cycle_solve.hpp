@@ -22,7 +22,8 @@ SolveResult solveCycles(PdsState &state,
                          int earlyStop,
                          cyclecallback::CycleCallback cycleCallback,
                          BoundCallback boundCallback,
-                         int intermediateCycles);
+                         int intermediateCycles,
+                         int cyclesLimit);
 } // namespace pds
 #endif
 

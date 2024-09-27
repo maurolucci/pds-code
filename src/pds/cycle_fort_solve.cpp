@@ -123,9 +123,13 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
     return cycle;
 }
 
-std::set<VertexList> violatedCycles(ObservationGraph& graph) {
-    std::set<VertexList> cycles; 
-    for (auto v: graph.vertices()) { 
+std::set<VertexList> violatedCycles(ObservationGraph& graph, int limitCycle) {
+    std::set<VertexList> cycles;
+    auto vertices = graph.vertices()
+                  | ranges::to<std::vector>;
+    ranges::shuffle(vertices);
+    for (auto v: vertices) {
+        if (cycles.size() > static_cast<size_t>(limitCycle)) { break; } 
         VertexList cycle = findCycle(graph, v);
         if (cycle.empty()) { continue; }
         cycles.insert(cycle);
@@ -299,7 +303,8 @@ SolveResult solveCyclesForts(
         callback::FortCallback fortCB,          // Callback 
         cyclecallback::CycleCallback cycleCB,   // Callback 
         BoundCallback boundCallback,            // TODO: ??
-        int intermediateCycles                  // Whether to add cycles for intermediate solutions
+        int intermediateCycles,                 // Whether to add cycles for intermediate solutions
+        int limitCycle                          // Maximum number of cycles add in each reoptimization
 ) {
 
     // Initialize lastSolution to be empty
@@ -531,7 +536,7 @@ SolveResult solveCyclesForts(
                 }
 
                 // Find cycles
-                auto moreCycles = violatedCycles(precedences);
+                auto moreCycles = violatedCycles(precedences, limitCycle);
 
                 // Add the cycles to the set of cycles
                 // Recall that the callback may have encountered some cycles in intermediate solutions

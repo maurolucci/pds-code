@@ -242,7 +242,7 @@ using Solver = std::function<SolveResult(PdsState&, double)>;
 namespace po = boost::program_options;
 namespace fs = std::filesystem;
 
-auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& currentName, size_t run, size_t subproblemNumber, BoundCallback boundCB) {
+auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat, const std::string& currentName, size_t run, size_t subproblemNumber, BoundCallback boundCB) {
     using std::string;
     string solverName = vm["solve"].as<string>();
     int verbose = vm.count("verbose") ? vm["verbose"].as<int>() : 0;
@@ -250,6 +250,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
     int fortInit = vm["fort-init"].as<int>();
     int cycleInit = vm["cycle-init"].as<int>();
+    int cycleLimit = vm["cycle-limit"].as<int>();
     bool intermediateForts = vm.count("intermediate");
     bool intermediateCycles = vm.count("intermediate-cycles");
     callback::FortCallback fortCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
@@ -270,7 +271,7 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
                 totalCycleSize += cycle.size();
             }
             double averageSize = double(totalCycleSize) / double(cycles.size());
-            fortStats = {averageSize, cycles.size(), solved};
+            cycleStat = {averageSize, cycles.size(), solved};
         }
         ++solved;
     };
@@ -320,12 +321,12 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, const std::string& c
     } else if (solverName == "cycles") {
         return Solver{[=](auto &state, double timeLimit) {
             return solveCycles(state, verbose, timeLimit, 0, cycleInit,
-                               greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 0 : -1);
+                               greedyBoundMode, earlyStop, cycleCallback, boundCB, intermediateCycles ? 0 : -1, cycleLimit);
         }};
     } else if (solverName == "cycles-forts") {
         return Solver{[=](auto &state, double timeLimit) {
             return solveCyclesForts(state, verbose, timeLimit, 0, cycleInit,
-                                    greedyBoundMode, earlyStop, fortCallback, cycleCallback, boundCB, -1);
+                                    greedyBoundMode, earlyStop, fortCallback, cycleCallback, boundCB, -1, cycleLimit);
         }};
     } else {
         try {
@@ -371,6 +372,7 @@ int main(int argc, const char** argv) {
             ("fort-stats", po::value<string>(), "file for fort statistics")
             ("fort-init,i", po::value<int>()->implicit_value(3)->default_value(0), "fort initialization method")
             ("cycle-init", po::value<int>()->implicit_value(0)->default_value(0), "cycle initialization method")
+            ("cycle-limit", po::value<int>()->implicit_value(1000000)->default_value(1000000), "maximum number of cycles added in each reoptimization")
             ("intermediate", "find violated forts in every new feasbile solution")
             ("intermediate-cycles", "find violated cycles in every new feasbile solution")
             ("early-stop", po::value<int>()->default_value(0)->implicit_value(2), "stop hitting set solver when violating hitting set is found [0: only optimal, 1: keep lower bound, 2: stop early]")
@@ -418,6 +420,7 @@ int main(int argc, const char** argv) {
         fs::create_directories(fs::absolute(fs::path(fortsDirName)));
     }
     FortStats fortStats;
+    FortStats cycleStats;
 
     std::optional<fs::path> drawdir;
 
@@ -552,7 +555,7 @@ int main(int argc, const char** argv) {
                                 fflush(boundsFile);
                             }
                         };
-                        Solver solve = getSolver(vm, fortStats, currentName, run, subproblemNumber, boundCB);
+                        Solver solve = getSolver(vm, fortStats, cycleStats, currentName, run, subproblemNumber, boundCB);
                         auto tSubproblem = now();
                         double remainingTimeout = std::max(1.0, timeout - std::chrono::duration_cast<std::chrono::seconds>(tSubproblem - checkpoint).count());
                         auto subresult = solve(substate, remainingTimeout);
@@ -575,7 +578,7 @@ int main(int argc, const char** argv) {
                         fflush(boundsFile);
                     }
                 };
-                Solver solve = getSolver(vm, fortStats, currentName, run, 0, boundCB);
+                Solver solve = getSolver(vm, fortStats, cycleStats, currentName, run, 0, boundCB);
                 result = solve(state, timeout);
                 boundCB(result.lower, result.upper, -1);
             }
@@ -633,6 +636,7 @@ int main(int argc, const char** argv) {
             }
             if (fortStatFile != nullptr) {
                 writeFortStats(filename, run, fortStats, fortStatFile);
+                writeFortStats(filename, run, cycleStats, fortStatFile);
             }
         }
     }

@@ -19,7 +19,8 @@ SolveResult solveCyclesForts(
                          callback::FortCallback fortCallback,
                          cyclecallback::CycleCallback cycleCallback,
                          BoundCallback boundCallback,
-                         int intermediateCycles);
+                         int intermediateCycles,
+                         int cyclesLimit);
 } // namespace pds
 #endif
 
