@@ -438,7 +438,15 @@ SolveResult solvePaths(
                     model.addConstr(pathSum <= path.size() - 1);
                     totalPathSize += path.size();
                     if (output > 1) {
-                        fmt::print("path {:4}: {} #{}\n", processedPaths, path, path.size());
+                        fmt::print("path {:4}: {} #{} -> ", processedPaths, path, path.size());
+                        for (auto it = path.rbegin(); it != path.rend();) {
+                            auto v = *it;
+                            ++it;
+                            int u = it != path.rend() ? *it : path.back();
+                            auto p = translation.at(std::make_pair(v,u));
+                            fmt::print("+ y_({},{}) ", p.first, p.second);
+                        }
+                        fmt::print("<= {}\n", path.size() - 1);
                     }
                 }
 
