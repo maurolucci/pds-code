@@ -372,19 +372,16 @@ SolveResult solvePaths(
             int newPropagations = 0;
             if (model.get(GRB_IntAttr_SolCount) > 0 && variant == 0) {
                 for (auto v: lastSolution.graph().vertices()) {
-                    if (!lastSolution.isZeroInjection(v)) { continue; }
+                    if (lastSolution.isObserved(v) || !lastSolution.isZeroInjection(v)) { continue; }
                     int nPropagations = 0;
+                    GRBLinExpr observed;
                     for (auto u: lastSolution.graph().neighbors(v)) {
                         if (ye.at(v).at(u).get(GRB_DoubleAttr_X) < 0.5) { continue; }
                         nPropagations++;
+                        observed += ye.at(v).at(u);
                     }
-                    if ((sv.at(v).get(GRB_DoubleAttr_X) > 0.5 && nPropagations > 0) ||
-                        (sv.at(v).get(GRB_DoubleAttr_X) < 0.5 && nPropagations > 1)) {
-                        GRBLinExpr observed;
-                        for (auto u: lastSolution.graph().neighbors(v)) {
-                            observed += ye.at(v).at(u);
-                        }
-                        model.addConstr(observed <= 1 - sv.at(v));
+                    if (nPropagations > 1) {
+                        model.addConstr(observed <= 1);
                         processedPropagations++;
                         newPropagations++;
                         if (output > 1)
