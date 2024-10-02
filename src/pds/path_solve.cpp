@@ -369,6 +369,7 @@ SolveResult solvePaths(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
 
+            int newPropagations = 0;
             if (model.get(GRB_IntAttr_SolCount) > 0 && variant == 0) {
                 for (auto v: lastSolution.graph().vertices()) {
                     if (!lastSolution.isObserved(v) || !lastSolution.isZeroInjection(v)) { continue; }
@@ -385,6 +386,7 @@ SolveResult solvePaths(
                         }
                         model.addConstr(observed <= 1 - sv.at(v));
                         processedPropagations++;
+                        newPropagations++;
                         if (output > 1)
                             fmt::print("propagation {:4}: {}\n", processedPropagations, v);
                     }
@@ -398,7 +400,7 @@ SolveResult solvePaths(
             }
 
 
-            if (model.get(GRB_IntAttr_SolCount) > 0) {
+            if (model.get(GRB_IntAttr_SolCount) > 0 && newPropagations == 0) {
                 // Add violated lazy contraints before reoptimization    
 
                 // Build precedence digraph among:
