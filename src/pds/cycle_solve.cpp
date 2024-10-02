@@ -21,10 +21,22 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
     ObservationGraph::VertexDescriptor lastVertex = v;
     while (!precededBy.contains(lastVertex)) {
         if (graph.inDegree(lastVertex) == 0) { return cycle; }
-        // Choose a random in-neighbor
-        auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
-	    precededBy.emplace(lastVertex, u);
-        lastVertex = u;
+        // Check if lastVertex has an already visited in-neighbor
+        bool stop = false;
+        for (auto u: graph.inNeighbors(lastVertex)) {
+            if (precededBy.contains(u)) {
+                precededBy.emplace(lastVertex, u);
+                lastVertex = u;
+                stop = true;
+                break;
+            }
+        }  
+        if (!stop) {
+            // Choose a random in-neighbor
+            auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
+            precededBy.emplace(lastVertex, u);
+            lastVertex = u;
+        }
     }
     // Traverse de cycle
     auto u = lastVertex;
