@@ -372,7 +372,7 @@ SolveResult solvePaths(
             int newPropagations = 0;
             if (model.get(GRB_IntAttr_SolCount) > 0 && variant == 0) {
                 for (auto v: lastSolution.graph().vertices()) {
-                    if (!lastSolution.isObserved(v) || !lastSolution.isZeroInjection(v)) { continue; }
+                    if (!lastSolution.isZeroInjection(v)) { continue; }
                     int nPropagations = 0;
                     for (auto u: lastSolution.graph().neighbors(v)) {
                         if (ye.at(v).at(u).get(GRB_DoubleAttr_X) < 0.5) { continue; }
