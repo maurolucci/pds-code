@@ -6,6 +6,7 @@
 #include <cstdlib> 
 #include <ctime> 
 #include <set>
+#include <map>
 
 #include "pdssolve.hpp"
 #include "gurobi_common.hpp"
@@ -21,10 +22,22 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
     ObservationGraph::VertexDescriptor lastVertex = v;
     while (!precededBy.contains(lastVertex)) {
         if (graph.inDegree(lastVertex) == 0) { return cycle; }
-        // Choose a random in-neighbor
-        auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
-	    precededBy.emplace(lastVertex, u);
-        lastVertex = u;
+        // Check if lastVertex has an already visited in-neighbor
+        bool stop = false;
+        for (auto u: graph.inNeighbors(lastVertex)) {
+            if (precededBy.contains(u)) {
+                precededBy.emplace(lastVertex, u);
+                lastVertex = u;
+                stop = true;
+                break;
+            }
+        }  
+        if (!stop) {
+            // Choose a random in-neighbor
+            auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
+            precededBy.emplace(lastVertex, u);
+            lastVertex = u;
+        }
     }
     // Traverse de cycle
     auto u = lastVertex;
@@ -359,7 +372,6 @@ SolveResult solvePaths(
         // Initialize statics for paths
         size_t processedPaths = 0;
         size_t totalPathSize = 0;
-        size_t processedPropagations = 0;
 
         while (true) {
 
@@ -369,54 +381,29 @@ SolveResult solvePaths(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
 
-            int newPropagations = 0;
-            if (model.get(GRB_IntAttr_SolCount) > 0 && variant == 0) {
-                for (auto v: lastSolution.graph().vertices()) {
-                    if (lastSolution.isObserved(v) || !lastSolution.isZeroInjection(v)) { continue; }
-                    int nPropagations = 0;
-                    GRBLinExpr observed;
-                    for (auto u: lastSolution.graph().neighbors(v)) {
-                        if (ye.at(v).at(u).get(GRB_DoubleAttr_X) < 0.5) { continue; }
-                        nPropagations++;
-                        observed += ye.at(v).at(u);
-                    }
-                    if (nPropagations > 1) {
-                        model.addConstr(observed <= 1);
-                        processedPropagations++;
-                        newPropagations++;
-                        if (output > 1)
-                            fmt::print("propagation {:4}: {}\n", processedPropagations, v);
-                    }
-                }
-            }
-
-            if (newPropagations > 0) {
-                if (output) {
-                    fmt::print("#propagations: {}\n", processedPropagations);
-                }
-            }
-
-            else if (model.get(GRB_IntAttr_SolCount)) {
+            if (model.get(GRB_IntAttr_SolCount)) {
                 // Add violated lazy contraints before reoptimization    
 
-                // Build precedence digraph among:
-                // - unobserved vertices and
-                // - observed vertices u, such that y_uv = 1 for some unobserved vertex v
+                // Build precedence digraph (among unobserved vertices)
                 ObservationGraph precedences;
+                using Edge = std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>;
+                std::map<Edge,Edge> translation;
                 for (auto v: lastSolution.graph().vertices()) {
                     if (lastSolution.isObserved(v)) { continue; }
                     precedences.getOrAddVertex(v);
                     for (auto u: lastSolution.graph().neighbors(v)) {
                         if (!lastSolution.isZeroInjection(u)) { continue; }
                         if (ye.at(u).at(v).get(GRB_DoubleAttr_X) < 0.5) { continue; }
-                        precedences.getOrAddVertex(u);
-                        precedences.addEdge(u,v); 
-                        if (lastSolution.isObserved(u)) { 
-                            for (auto w: lastSolution.graph().neighbors(u)) {
-                                if (w == v || lastSolution.isObserved(w)) { continue; }
-                                precedences.getOrAddVertex(w);
-                                precedences.addEdge(w,u); 
-                            }
+                        if (!lastSolution.isObserved(u)) { 
+                            precedences.getOrAddVertex(u);
+                            precedences.addEdge(u,v);
+                            translation.at(std::make_pair(u,v)) =  std::make_pair(u,v);
+                        }
+                        for (auto w: lastSolution.graph().neighbors(u)) {
+                            if (w == v || lastSolution.isObserved(w)) { continue; }
+                            precedences.getOrAddVertex(w);
+                            precedences.addEdge(w,v);
+                            translation.at(std::make_pair(w,v)) =  std::make_pair(u,v);
                         }
                     }
                 }
@@ -438,7 +425,6 @@ SolveResult solvePaths(
                 // Add violated lazy contraints
                 for (; processedPaths < paths.size(); ++processedPaths) {
                     GRBLinExpr pathSum;
-                    int rhs = -1;
                     auto& path = paths[processedPaths];
                     for (auto it = path.rbegin(); it != path.rend(); ) {
                         auto v = *it;
@@ -447,11 +433,9 @@ SolveResult solvePaths(
                         }
                         ++it;
                         int u = it != path.rend() ? *it : path.back();
-                        if (lastSolution.isObserved(u)) { continue; }
-                        pathSum += ye.at(v).at(u);
-                        rhs++; 
+                        pathSum += ye.at(translation.at(std::make_pair(v,u)).first).at(translation.at(std::make_pair(v,u)).second);
                     }
-                    model.addConstr(pathSum <= rhs);
+                    model.addConstr(pathSum <= path.size() - 1);
                     totalPathSize += path.size();
                     if (output > 1) {
                         fmt::print("path {:4}: {} #{}\n", processedPaths, path, path.size());
