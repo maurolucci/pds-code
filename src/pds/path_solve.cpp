@@ -391,16 +391,15 @@ SolveResult solvePaths(
                             fmt::print("propagation {:4}: {}\n", processedPropagations, v);
                     }
                 }
+            }
 
-                // Log cycle statics
+            if (newPropagations > 0) {
                 if (output) {
                     fmt::print("#propagations: {}\n", processedPropagations);
                 }
-
             }
 
-
-            if (model.get(GRB_IntAttr_SolCount) > 0 && newPropagations == 0) {
+            else if (model.get(GRB_IntAttr_SolCount)) {
                 // Add violated lazy contraints before reoptimization    
 
                 // Build precedence digraph among:
