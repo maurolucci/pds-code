@@ -359,6 +359,7 @@ SolveResult solvePaths(
         // Initialize statics for paths
         size_t processedPaths = 0;
         size_t totalPathSize = 0;
+        size_t processedPropagations = 0;
 
         while (true) {
 
@@ -367,7 +368,36 @@ SolveResult solvePaths(
 
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
-            
+
+            if (model.get(GRB_IntAttr_SolCount) > 0 && variant == 0) {
+                for (auto v: lastSolution.graph().vertices()) {
+                    if (!lastSolution.isObserved(v) || !lastSolution.isZeroInjection(v)) { continue; }
+                    int nPropagations = 0;
+                    for (auto u: lastSolution.graph().neighbors(v)) {
+                        if (ye.at(v).at(u).get(GRB_DoubleAttr_X) < 0.5) { continue; }
+                        nPropagations++;
+                    }
+                    if ((sv.at(v).get(GRB_DoubleAttr_X) > 0.5 && nPropagations > 0) ||
+                        (sv.at(v).get(GRB_DoubleAttr_X) < 0.5 && nPropagations > 1)) {
+                        GRBLinExpr observed;
+                        for (auto u: lastSolution.graph().neighbors(v)) {
+                            observed += ye.at(v).at(u);
+                        }
+                        model.addConstr(observed <= 1 - sv.at(v));
+                        processedPropagations++;
+                        if (output > 1)
+                            fmt::print("propagation {:4}: {}\n", processedPropagations, v);
+                    }
+                }
+
+                // Log cycle statics
+                if (output) {
+                    fmt::print("#propagations: {}\n", processedPropagations);
+                }
+
+            }
+
+
             if (model.get(GRB_IntAttr_SolCount) > 0) {
                 // Add violated lazy contraints before reoptimization    
 
