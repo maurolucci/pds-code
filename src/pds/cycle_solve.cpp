@@ -349,7 +349,7 @@ SolveResult solveCycles(
             }
         }
 
-        if (variant == 0) {
+        if (variant == 1) {
 
             // Constraints (3)
             for (auto e: state.graph().edges()) {

@@ -437,7 +437,7 @@ SolveResult solveCyclesForts(
             }
         }
 
-        if (variant == 0) {
+        if (variant == 1) {
 
             // Constraints (3)
             for (auto e: state.graph().edges()) {
@@ -527,7 +527,7 @@ SolveResult solveCyclesForts(
             }
 
 
-            if (model.get(GRB_IntAttr_SolCount) > 0) {
+            if (model.get(GRB_IntAttr_SolCount) > 0 && limitCycle > 0) {
                 // Add violated lazy contraints before reoptimization    
 
                 // Build precedence digraph (among unobserved vertices)
