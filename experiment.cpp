@@ -16,6 +16,7 @@
 #include "fort_solve.hpp"
 #include "cycle_solve.hpp"
 #include "cycle_fort_solve.hpp"
+#include "path_solve.hpp"
 
 using namespace pds;
 
@@ -242,7 +243,7 @@ using Solver = std::function<SolveResult(PdsState&, double)>;
 namespace po = boost::program_options;
 namespace fs = std::filesystem;
 
-auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat, const std::string& currentName, size_t run, size_t subproblemNumber, BoundCallback boundCB) {
+auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat, FortStats& pathStat, const std::string& currentName, size_t run, size_t subproblemNumber, BoundCallback boundCB) {
     using std::string;
     string solverName = vm["solve"].as<string>();
     int verbose = vm.count("verbose") ? vm["verbose"].as<int>() : 0;
@@ -250,9 +251,12 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
     int greedyBoundMode = vm["greedy-bounds"].as<int>();
     int fortInit = vm["fort-init"].as<int>();
     int cycleInit = vm["cycle-init"].as<int>();
+    int pathInit = vm["path-init"].as<int>();
     int cycleLimit = vm["cycle-limit"].as<int>();
+    int pathLimit = vm["path-limit"].as<int>();
     bool intermediateForts = vm.count("intermediate");
     bool intermediateCycles = vm.count("intermediate-cycles");
+    bool intermediatePaths = vm.count("intermediate-paths");
     callback::FortCallback fortCallback = [&,solved=size_t{0}]  (callback::When when, const PdsState& state, const std::vector<VertexList>& forts, size_t lower, size_t upper) mutable {
         if (vm.count("fort-stats") && (when == pds::callback::When::FINAL)) {
             size_t totalFortSize = 0;
@@ -272,6 +276,17 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
             }
             double averageSize = double(totalCycleSize) / double(cycles.size());
             cycleStat = {averageSize, cycles.size(), solved};
+        }
+        ++solved;
+    };
+    pathcallback::PathCallback pathCallback = [&,solved=size_t{0}]  (pathcallback::When when, const PdsState& state, const std::vector<VertexList>& paths, size_t lower, size_t upper) mutable {
+        if (vm.count("fort-stats") && when == pds::pathcallback::When::FINAL) {
+            size_t totalPathSize = 0;
+            for (auto& path: paths) {
+                totalPathSize += path.size();
+            }
+            double averageSize = double(totalPathSize) / double(paths.size());
+            pathStat = {averageSize, paths.size(), solved};
         }
         ++solved;
     };
@@ -337,6 +352,16 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
         return Solver{[=](auto &state, double timeLimit) {
             return solveCyclesForts(state, verbose, timeLimit, 1, cycleInit,
                                     greedyBoundMode, earlyStop, fortCallback, cycleCallback, boundCB, -1, cycleLimit);
+        }};
+    } else if (solverName == "paths") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 0, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths2") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 1, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
         }};
     } else {
         try {
@@ -431,6 +456,7 @@ int main(int argc, const char** argv) {
     }
     FortStats fortStats;
     FortStats cycleStats;
+    FortStats pathStats;
 
     std::optional<fs::path> drawdir;
 
@@ -565,7 +591,7 @@ int main(int argc, const char** argv) {
                                 fflush(boundsFile);
                             }
                         };
-                        Solver solve = getSolver(vm, fortStats, cycleStats, currentName, run, subproblemNumber, boundCB);
+                        Solver solve = getSolver(vm, fortStats, cycleStats, pathStats, currentName, run, subproblemNumber, boundCB);
                         auto tSubproblem = now();
                         double remainingTimeout = std::max(1.0, timeout - std::chrono::duration_cast<std::chrono::seconds>(tSubproblem - checkpoint).count());
                         auto subresult = solve(substate, remainingTimeout);
@@ -588,7 +614,7 @@ int main(int argc, const char** argv) {
                         fflush(boundsFile);
                     }
                 };
-                Solver solve = getSolver(vm, fortStats, cycleStats, currentName, run, 0, boundCB);
+                Solver solve = getSolver(vm, fortStats, cycleStats, pathStats, currentName, run, 0, boundCB);
                 result = solve(state, timeout);
                 boundCB(result.lower, result.upper, -1);
             }
@@ -647,6 +673,7 @@ int main(int argc, const char** argv) {
             if (fortStatFile != nullptr) {
                 writeFortStats(filename, run, fortStats, fortStatFile);
                 writeFortStats(filename, run, cycleStats, fortStatFile);
+                writeFortStats(filename, run, pathStats, fortStatFile);
             }
         }
     }
