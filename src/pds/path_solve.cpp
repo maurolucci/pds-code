@@ -397,13 +397,13 @@ SolveResult solvePaths(
                         if (!lastSolution.isObserved(u)) { 
                             precedences.getOrAddVertex(u);
                             precedences.addEdge(u,v);
-                            translation.at(std::make_pair(u,v)) =  std::make_pair(u,v);
+                            translation.emplace(std::make_pair(u,v), std::make_pair(u,v));
                         }
                         for (auto w: lastSolution.graph().neighbors(u)) {
                             if (w == v || lastSolution.isObserved(w)) { continue; }
                             precedences.getOrAddVertex(w);
                             precedences.addEdge(w,v);
-                            translation.at(std::make_pair(w,v)) =  std::make_pair(u,v);
+                            translation.emplace(std::make_pair(w,v), std::make_pair(u,v));
                         }
                     }
                 }
