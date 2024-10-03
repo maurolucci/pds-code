@@ -429,8 +429,10 @@ SolveResult solvePaths(
                 
                 // Add violated lazy contraints
                 for (; processedPaths < paths.size(); ++processedPaths) {
+
                     GRBLinExpr pathSum;
                     auto& path = paths[processedPaths];
+                    std::vector<Edge> translated;
                     for (auto it = path.rbegin(); it != path.rend(); ) {
                         auto v = *it;
                         if (!state.graph().hasVertex(v)) {
@@ -438,9 +440,32 @@ SolveResult solvePaths(
                         }
                         ++it;
                         int u = it != path.rend() ? *it : path.back();
-                        pathSum += ye.at(translation.at(std::make_pair(v,u)).first).at(translation.at(std::make_pair(v,u)).second);
+                        auto [ w, z ] = translation.at(std::make_pair(v,u));
+                        pathSum += ye.at(w).at(z);
+                        translated.push_back(std::make_pair(w,z));
                     }
-                    model.addConstr(pathSum <= path.size() - 1);
+
+                    // Count number of discontinuities
+                    int nShortDisc = 0;
+                    int nLongDisc = 0;
+                    for (auto it = translated.begin(); it != translated.end(); ) {
+                        auto e1 = *it;
+                        auto u = e1.second;
+                        ++it;
+                        auto e2 = it != translated.end() ? *it : translated.front();
+                        auto v = e2.first;
+                        if (u == v) { continue; }
+                        if (lastSolution.graph().hasEdge(u,v)) { nShortDisc++; }
+                        else { nLongDisc++; }
+                    }
+
+                    int rhs = path.size() - 1;
+                    if (nLongDisc > 0) {
+                        fmt::print("!!!long discontinuity in path: {}!!!\n", translated);
+                    }
+                    else if (nShortDisc <= 1) { rhs = path.size() - 2; }
+
+                    model.addConstr(pathSum <= rhs);
                     totalPathSize += path.size();
                     if (output > 1) {
                         fmt::print("path {:4}: {} #{} -> ", processedPaths, path, path.size());
@@ -451,7 +476,7 @@ SolveResult solvePaths(
                             auto p = translation.at(std::make_pair(v,u));
                             fmt::print("+ y_({},{}) ", p.first, p.second);
                         }
-                        fmt::print("<= {}\n", path.size() - 1);
+                        fmt::print("<= {}\n", rhs);
                     }
                 }
 
