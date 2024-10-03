@@ -430,9 +430,12 @@ SolveResult solvePaths(
                 // Add violated lazy contraints
                 for (; processedPaths < paths.size(); ++processedPaths) {
 
-                    GRBLinExpr pathSum;
+                    // Translate the cycle into a path
                     auto& path = paths[processedPaths];
                     std::vector<Edge> translated;
+                    int nShortDisc = 0;
+                    Edge lastShortDisc;
+                    int nLongDisc = 0;
                     for (auto it = path.rbegin(); it != path.rend(); ) {
                         auto v = *it;
                         if (!state.graph().hasVertex(v)) {
@@ -440,43 +443,45 @@ SolveResult solvePaths(
                         }
                         ++it;
                         int u = it != path.rend() ? *it : path.back();
-                        auto [ w, z ] = translation.at(std::make_pair(v,u));
-                        pathSum += ye.at(w).at(z);
-                        translated.push_back(std::make_pair(w,z));
+                        auto [ x, y ] = translation.at(std::make_pair(v,u));
+                        if (!translated.empty()) {
+                            auto z = translated.back().second;
+                            if (z == x) ;
+                            else if (lastSolution.graph().hasEdge(z,x)) { 
+                                nShortDisc++;
+                                lastShortDisc = std::make_pair(z,x);
+                            }
+                            else { nLongDisc++; }
+                        }
+                        translated.push_back(std::make_pair(x,y));
+                        if (it == path.rend()) {
+                            auto z = translated.front().first;
+                            if (y == z) ;
+                            else if (lastSolution.graph().hasEdge(y,z)) { 
+                                nShortDisc++;
+                                lastShortDisc = std::make_pair(y,z);
+                            }
+                            else { nLongDisc++; }                 
+                        }
                     }
-
-                    // Count number of discontinuities
-                    int nShortDisc = 0;
-                    int nLongDisc = 0;
-                    for (auto it = translated.begin(); it != translated.end(); ) {
-                        auto e1 = *it;
-                        auto u = e1.second;
-                        ++it;
-                        auto e2 = it != translated.end() ? *it : translated.front();
-                        auto v = e2.first;
-                        if (u == v) { continue; }
-                        if (lastSolution.graph().hasEdge(u,v)) { nShortDisc++; }
-                        else { nLongDisc++; }
-                    }
-
-                    int rhs = path.size() - 1;
+                    
                     if (nLongDisc > 0) {
                         fmt::print("!!!long discontinuity in path: {}!!!\n", translated);
                     }
-                    else if (nShortDisc == 1) { rhs = path.size() - 2; }
 
+                    GRBLinExpr pathSum;
+                    int rhs = path.size() - 1;
+                    if (nLongDisc == 0 && nShortDisc == 1) { translated.push_back(lastShortDisc); }
+                    for (auto [u, v]: translated) { pathSum += ye.at(u).at(v); }
                     model.addConstr(pathSum <= rhs);
+
                     totalPathSize += path.size();
                     if (output > 1) {
                         fmt::print("path {:4}: {} #{} -> ", processedPaths, path, path.size());
-                        for (auto it = path.rbegin(); it != path.rend();) {
-                            auto v = *it;
-                            ++it;
-                            int u = it != path.rend() ? *it : path.back();
-                            auto p = translation.at(std::make_pair(v,u));
-                            fmt::print("+ y_({},{}) ", p.first, p.second);
+                        for (auto [u, v]: translated) {
+                            fmt::print("+ y_({},{}) ", u, v);
                         }
-                        fmt::print("<= {}\n", rhs);
+                        fmt::print("<= {} -> nShortDisc: {}, nLongDisct: {}\n", rhs, nShortDisc, nLongDisc);
                     }
                 }
 
