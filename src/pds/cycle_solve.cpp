@@ -17,32 +17,40 @@ namespace {
 
 VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor v) {
     VertexList cycle;
-    VertexMap<ObservationGraph::VertexDescriptor> precededBy;
+    VertexMap<std::pair<ObservationGraph::VertexDescriptor,int>> precededBy;
     ObservationGraph::VertexDescriptor lastVertex = v;
-    while (!precededBy.contains(lastVertex)) {
+
+    for (int i = 0; !precededBy.contains(lastVertex); ++i) {
         if (graph.inDegree(lastVertex) == 0) { return cycle; }
+
         // Check if lastVertex has an already visited in-neighbor
-        bool stop = false;
+        // Select the last visited in-neighbor
+        int max_neighbor = -1;
         for (auto u: graph.inNeighbors(lastVertex)) {
-            if (precededBy.contains(u)) {
-                precededBy.emplace(lastVertex, u);
-                lastVertex = u;
-                stop = true;
-                break;
-            }
+            if (!precededBy.contains(u)) { continue; }
+            auto p = precededBy.at(u);
+            if (p.second <= max_neighbor) { continue; } 
+            max_neighbor = p.first;
         }  
-        if (!stop) {
+
+        if (max_neighbor >= 0) {
+            precededBy.emplace(lastVertex, std::make_pair(max_neighbor, i));
+            lastVertex = max_neighbor;
+        }
+
+        else {
             // Choose a random in-neighbor
             auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
-            precededBy.emplace(lastVertex, u);
+            precededBy.emplace(lastVertex, std::make_pair(u, i));
             lastVertex = u;
         }
     }
+
     // Traverse de cycle
     auto u = lastVertex;
     do {
         cycle.push_back(u);
-        u = precededBy.at(u);
+        u = precededBy.at(u).first;
     } while (u != lastVertex);
     // Rotate the cycle so the minium element is in the front
     ranges::rotate(cycle, ranges::min_element(cycle));
