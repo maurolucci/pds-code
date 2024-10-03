@@ -25,25 +25,22 @@ VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor
 
         // Check if lastVertex has an already visited in-neighbor
         // Select the last visited in-neighbor
-        int max_neighbor = -1;
+        ObservationGraph::VertexDescriptor next;
+        int max_i = -1;
         for (auto u: graph.inNeighbors(lastVertex)) {
             if (!precededBy.contains(u)) { continue; }
             auto p = precededBy.at(u);
-            if (p.second <= max_neighbor) { continue; } 
-            max_neighbor = p.first;
-        }  
-
-        if (max_neighbor >= 0) {
-            precededBy.emplace(lastVertex, std::make_pair(max_neighbor, i));
-            lastVertex = max_neighbor;
+            if (p.second <= max_i) { continue; } 
+            next = u;
+            max_i = p.second;
         }
 
-        else {
+        if (max_i == -1) {
             // Choose a random in-neighbor
-            auto u = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
-            precededBy.emplace(lastVertex, std::make_pair(u, i));
-            lastVertex = u;
+            next = *(std::next(graph.inNeighbors(lastVertex).begin(), rand() % graph.inDegree(lastVertex)));
         }
+        precededBy.emplace(lastVertex, std::make_pair(next, i));
+        lastVertex = next;
     }
 
     // Traverse de cycle
