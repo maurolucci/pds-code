@@ -463,7 +463,7 @@ SolveResult solvePaths(
                     if (nLongDisc > 0) {
                         fmt::print("!!!long discontinuity in path: {}!!!\n", translated);
                     }
-                    else if (nShortDisc <= 1) { rhs = path.size() - 2; }
+                    else if (nShortDisc == 1) { rhs = path.size() - 2; }
 
                     model.addConstr(pathSum <= rhs);
                     totalPathSize += path.size();
