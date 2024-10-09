@@ -17,6 +17,7 @@
 #include "cycle_solve.hpp"
 #include "cycle_fort_solve.hpp"
 #include "path_solve.hpp"
+#include "path_fort_solve.hpp"
 
 using namespace pds;
 
@@ -362,6 +363,16 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
     return Solver{[=](auto &state, double timeLimit) {
         return solvePaths(state, verbose, timeLimit, 1, pathInit,
                             greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 0, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};     
+    } else if (solverName == "paths-forts2") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 1, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
         }};
     } else {
         try {
