@@ -285,7 +285,7 @@ SolveResult solvePaths(
             for (auto w: state.graph().neighbors(u)) {
                 if (w == v) { continue; }
                 auto e2 = std::make_pair(w, v);
-                 if (translation.find(e) == translation.end()) { translation.emplace(e2, std::vector<Edge> ()); }
+                 if (translation.find(e2) == translation.end()) { translation.emplace(e2, std::vector<Edge> ()); }
                  else { translation.at(e2).push_back(e); }
             }
         }
