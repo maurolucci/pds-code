@@ -273,6 +273,20 @@ SolveResult solvePaths(
     // Set a random seed for the random generator
     srand((unsigned)time(0));
 
+    // Translation map function
+    using Edge = std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>;
+    std::map<Edge, std::vector<Edge>> translation;
+    for (auto v: state.graph().vertices()) {
+        for (auto u: state.graph().neighbors(v)) {
+            if (!state.isZeroInjection(u)) { continue; }
+            translation.at(std::make_pair(u,v)).push_back(std::make_pair(u,v));
+            for (auto w: state.graph().neighbors(u)) {
+                if (w == v) { continue; }
+                translation.at(std::make_pair(w,v)).push_back(std::make_pair(u,v));
+            }
+        }
+    }
+
     try {
 
         // TODO: ??
@@ -391,8 +405,6 @@ SolveResult solvePaths(
 
                 // Build precedence digraph (among unobserved vertices)
                 ObservationGraph precedences;
-                using Edge = std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>;
-                std::map<Edge,Edge> translation;
                 for (auto v: lastSolution.graph().vertices()) {
                     if (lastSolution.isObserved(v)) { continue; }
                     precedences.getOrAddVertex(v);
@@ -402,13 +414,11 @@ SolveResult solvePaths(
                         if (!lastSolution.isObserved(u)) { 
                             precedences.getOrAddVertex(u);
                             precedences.addEdge(u,v);
-                            translation.emplace(std::make_pair(u,v), std::make_pair(u,v));
                         }
                         for (auto w: lastSolution.graph().neighbors(u)) {
                             if (w == v || lastSolution.isObserved(w)) { continue; }
                             precedences.getOrAddVertex(w);
                             precedences.addEdge(w,v);
-                            translation.emplace(std::make_pair(w,v), std::make_pair(u,v));
                         }
                     }
                 }
@@ -433,9 +443,6 @@ SolveResult solvePaths(
                     // Translate the cycle into a path
                     auto& path = paths[processedPaths];
                     std::vector<Edge> translated;
-                    int nShortDisc = 0;
-                    Edge lastShortDisc;
-                    int nLongDisc = 0;
                     for (auto it = path.rbegin(); it != path.rend(); ) {
                         auto v = *it;
                         if (!state.graph().hasVertex(v)) {
@@ -443,45 +450,18 @@ SolveResult solvePaths(
                         }
                         ++it;
                         int u = it != path.rend() ? *it : path.back();
-                        auto [ x, y ] = translation.at(std::make_pair(v,u));
-                        if (!translated.empty()) {
-                            auto z = translated.back().second;
-                            if (z == x) ;
-                            else if (lastSolution.graph().hasEdge(z,x)) { 
-                                nShortDisc++;
-                                lastShortDisc = std::make_pair(z,x);
-                            }
-                            else { nLongDisc++; }
-                        }
-                        translated.push_back(std::make_pair(x,y));
-                        if (it == path.rend()) {
-                            auto z = translated.front().first;
-                            if (y == z) ;
-                            else if (lastSolution.graph().hasEdge(y,z)) { 
-                                nShortDisc++;
-                                lastShortDisc = std::make_pair(y,z);
-                            }
-                            else { nLongDisc++; }                 
-                        }
-                    }
-                    
-                    if (nLongDisc > 0) {
-                        fmt::print("!!!long discontinuity in path: {}!!!\n", translated);
+                        for (auto e: translation.at(std::make_pair(v,u)))
+                            translated.push_back(e);
                     }
 
                     GRBLinExpr pathSum;
-                    int rhs = path.size() - 1;
-                    if (nLongDisc == 0 && nShortDisc == 1) { translated.push_back(lastShortDisc); }
                     for (auto [u, v]: translated) { pathSum += ye.at(u).at(v); }
-                    model.addConstr(pathSum <= rhs);
+                    model.addConstr(pathSum <= path.size() - 1);
 
                     totalPathSize += path.size();
                     if (output > 1) {
-                        fmt::print("path {:4}: {} #{} -> ", processedPaths, path, path.size());
-                        for (auto [u, v]: translated) {
-                            fmt::print("+ y_({},{}) ", u, v);
-                        }
-                        fmt::print("<= {} -> nShortDisc: {}, nLongDisct: {}\n", rhs, nShortDisc, nLongDisc);
+                        fmt::print("cycle {:4}: {} #{}\n", processedPaths, path, path.size());
+                        fmt::print("\ttranslation: {} #{}\n", translated, translated.size());
                     }
                 }
 
