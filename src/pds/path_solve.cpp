@@ -275,14 +275,18 @@ SolveResult solvePaths(
 
     // Translation map function
     using Edge = std::pair<PowerGrid::VertexDescriptor, PowerGrid::VertexDescriptor>;
-    std::map<Edge, std::vector<Edge>> translation;
+    std::map<Edge, std::vector<Edge>> translation;   
     for (auto v: state.graph().vertices()) {
         for (auto u: state.graph().neighbors(v)) {
             if (!state.isZeroInjection(u)) { continue; }
-            translation.at(std::make_pair(u,v)).push_back(std::make_pair(u,v));
+            auto e = std::make_pair(u,v);
+            if (translation.find(e) == translation.end()) { translation.emplace(e, std::vector<Edge> ()); }
+            else { translation.at(e).push_back(e); }
             for (auto w: state.graph().neighbors(u)) {
                 if (w == v) { continue; }
-                translation.at(std::make_pair(w,v)).push_back(std::make_pair(u,v));
+                auto e2 = std::make_pair(w, v);
+                 if (translation.find(e) == translation.end()) { translation.emplace(e2, std::vector<Edge> ()); }
+                 else { translation.at(e2).push_back(e); }
             }
         }
     }
