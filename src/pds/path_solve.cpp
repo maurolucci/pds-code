@@ -463,7 +463,7 @@ SolveResult solvePaths(
                     totalPathSize += path.size();
                     if (output > 1) {
                         fmt::print("cycle {:4}: {} #{}\n", processedPaths, path, path.size());
-                        fmt::print("\ttranslation: {} #{}\n", translated, translated.size());
+                        fmt::print("\ttranslation: {} #{} <= {}\n", translated, translated.size(), path.size() - 1);
                     }
                 }
 
