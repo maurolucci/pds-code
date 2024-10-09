@@ -280,13 +280,11 @@ SolveResult solvePaths(
         for (auto u: state.graph().neighbors(v)) {
             if (!state.isZeroInjection(u)) { continue; }
             auto e = std::make_pair(u,v);
-            if (translation.find(e) == translation.end()) { translation.emplace(e, std::vector<Edge> ()); }
-            else { translation.at(e).push_back(e); }
+            translation[e].push_back(e);
             for (auto w: state.graph().neighbors(u)) {
                 if (w == v) { continue; }
                 auto e2 = std::make_pair(w, v);
-                 if (translation.find(e2) == translation.end()) { translation.emplace(e2, std::vector<Edge> ()); }
-                 else { translation.at(e2).push_back(e); }
+                translation[e2].push_back(e);
             }
         }
     }
