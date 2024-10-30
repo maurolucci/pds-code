@@ -414,9 +414,54 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
             return solvePathsForts(state, verbose, timeLimit, 0, pathInit,
                                     greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
         }};     
-    } else if (solverName == "paths-forts2") {
+    } else if (solverName == "paths-forts11") {
         return Solver{[=](auto &state, double timeLimit) {
-            return solvePathsForts(state, verbose, timeLimit, 1, pathInit,
+            return solvePathsForts(state, verbose, timeLimit, 11, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts12") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 12, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts13") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 13, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts21") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 21, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts22") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 22, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts31") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 31, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts32") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 32, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts33") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 33, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts1221") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 1221, pathInit,
+                                    greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths-forts1321") {
+        return Solver{[=](auto &state, double timeLimit) {
+            return solvePathsForts(state, verbose, timeLimit, 1321, pathInit,
                                     greedyBoundMode, earlyStop, fortCallback, pathCallback, boundCB, -1, pathLimit);
         }};
     } else {

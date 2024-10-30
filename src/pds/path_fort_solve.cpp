@@ -444,17 +444,49 @@ SolveResult solvePathsForts(
             }
         }
 
-        if (variant == 1) {
-
-            // Constraints (3)
+        if (variant == 11) {
+            // y_uv + y_vu <= 1, for all uv in E(G)
             for (auto e: state.graph().edges()) {
                 auto u = state.graph().source(e);
                 auto v = state.graph().target(e);
                 if (!state.isZeroInjection(u) || !state.isZeroInjection(v)) {continue;}
                 model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
             }
+        } 
+        if (variant == 12 || variant == 1221) {
+            // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G)
+            for (auto e: state.graph().edges()) {
+                auto u = state.graph().source(e);
+                auto v = state.graph().target(e);
+                auto it1 = translation.find(std::make_pair(u,v));
+                auto it2 = translation.find(std::make_pair(v,u));
+                if (it1 == translation.end() || it2 == translation.end()) {continue;}
+                GRBLinExpr propagations = 0;
+                for (auto const& [w, x]: it1->second)
+                    propagations += ye.at(w).at(x);
+                for (auto const& [w, x]: it2->second)
+                    propagations += ye.at(w).at(x);                    
+                model.addConstr(propagations <= 1);
+            }
+        }
+        if (variant == 13 || variant == 1321) {
+            // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G^2)
+            for (auto const& x: translation) {
+                auto const& [u, v] = x.first;
+                if (v >= u) {continue;}
+                auto it = translation.find(std::make_pair(v,u));
+                if (it == translation.end()) {continue;}
+                GRBLinExpr propagations = 0;
+                for (auto const& [w, x]: x.second)
+                    propagations += ye.at(w).at(x);
+                for (auto const& [w, x]: it->second)
+                    propagations += ye.at(w).at(x);                    
+                model.addConstr(propagations <= 1);
+            }
+        }
 
-            // Constraints (4)
+        if (variant == 21  || variant == 1221 || variant == 1321) {
+            // sum_{u in N(v)} y_vu <= 1, for all v in V
             for (auto v: state.graph().vertices()) {
                 if (!state.isZeroInjection(v)) {continue;}
                 GRBLinExpr observers = 0;
@@ -462,9 +494,72 @@ SolveResult solvePathsForts(
                     auto u = state.graph().target(e);
                     observers += ye.at(v).at(u);
                 }
-                model.addConstr(observers <= 1 - sv.at(v));
+                model.addConstr(observers <= 1);
             }
+        }
+        if (variant == 22) {
+            // sum_{u in N(v)} y_vu <= 1 - s_v, for all v in V
+            for (auto v: state.graph().vertices()) {
+                if (!state.isZeroInjection(v)) {continue;}
+                GRBLinExpr observers = 0;
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    observers += ye.at(v).at(u);
+                }
+                if (state.isActive(v) || state.isBlank(v))
+                    model.addConstr(observers <= 1 - sv.at(v));
+                else
+                    model.addConstr(observers <= 1);
+            }
+        }
 
+        if (variant == 31) {
+            // sum_{u in N(v)} y_uv <= 1, for all v in V
+            for (auto v: state.graph().vertices()) {
+                GRBLinExpr observers = 0;
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    if (!state.isZeroInjection(u)) {continue;}
+                    observers += ye.at(u).at(v);
+                }
+                model.addConstr(observers <= 1);
+            }
+        }
+        if (variant == 32) {
+            // sum_{u in N(v)} y_uv <= 1 - s_v, for all v in V
+            for (auto v: state.graph().vertices()) {
+                GRBLinExpr observers = 0;
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    if (!state.isZeroInjection(u)) {continue;}
+                    observers += ye.at(u).at(v);
+                }
+                if (state.isActive(v) || state.isBlank(v))
+                    model.addConstr(observers <= 1 - sv.at(v));
+                else
+                    model.addConstr(observers <= 1);
+            }
+        }
+        if (variant == 33) {
+            // sum_{u in N(v)} y_uv <= 1 - s_w, for all v in V, w in N[v]
+            for (auto v: state.graph().vertices()) {
+                GRBLinExpr observers = 0;
+                for (auto e: state.graph().outEdges(v)) {
+                    auto u = state.graph().target(e);
+                    if (!state.isZeroInjection(u)) {continue;}
+                    observers += ye.at(u).at(v);
+                }
+                if (state.isActive(v) || state.isBlank(v))
+                    model.addConstr(observers <= 1 - sv.at(v));
+                else
+                    model.addConstr(observers <= 1);
+                for (auto w: state.graph().neighbors(v)) {
+                    if (state.isActive(w) || state.isBlank(w))
+                        model.addConstr(observers <= 1 - sv.at(w));
+                    else
+                        model.addConstr(observers <= 1);
+                }
+            }
         }
 
         // Add callback
