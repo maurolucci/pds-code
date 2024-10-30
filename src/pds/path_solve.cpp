@@ -485,7 +485,7 @@ SolveResult solvePaths(
                 if (state.isActive(v) || state.isBlank(v)) {observers += sv.at(v);}
                 for (auto u: state.graph().neighbors(v))
                     if (state.isActive(u) || state.isBlank(u)) {observers += sv.at(u);}
-                model.addConstr(observers <= ssv.at(v));
+                model.addConstr(observers <= (state.graph().degree(v) + 1) * ssv.at(v));
             }
 
             // sum_{u in N(v)} y_uv <= 1 - ss_v, for all v in V
