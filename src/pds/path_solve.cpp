@@ -365,7 +365,7 @@ SolveResult solvePaths(
                 model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
             }
         } 
-        else if (variant == 12) {
+        else if (variant == 12 || variant == 1221) {
             // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G)
             for (auto e: state.graph().edges()) {
                 auto u = state.graph().source(e);
@@ -397,7 +397,7 @@ SolveResult solvePaths(
             }
         }
 
-        else if (variant == 21  || variant == 1321) {
+        else if (variant == 21  || variant == 1221 || variant == 1321) {
             // sum_{u in N(v)} y_vu <= 1, for all v in V
             for (auto v: state.graph().vertices()) {
                 if (!state.isZeroInjection(v)) {continue;}
@@ -471,32 +471,6 @@ SolveResult solvePaths(
                     else
                         model.addConstr(observers <= 1);
                 }
-            }
-        }
-        else if (variant == 34) {
-
-            VertexMap<GRBVar> ssv;
-            for (auto v: state.graph().vertices())
-                ssv.emplace(v, model.addVar(0.0, 1.0, 1.0, GRB_BINARY, fmt::format("ss_{}", v)));
-
-            // s_v + sum_{u in N(v)} s_u <= |N[v]| * ss_v, for all v in V
-            for (auto v: state.graph().vertices()) {
-                GRBLinExpr observers = 0;
-                if (state.isActive(v) || state.isBlank(v)) {observers += sv.at(v);}
-                for (auto u: state.graph().neighbors(v))
-                    if (state.isActive(u) || state.isBlank(u)) {observers += sv.at(u);}
-                model.addConstr(observers <= (state.graph().degree(v) + 1) * ssv.at(v));
-            }
-
-            // sum_{u in N(v)} y_uv <= 1 - ss_v, for all v in V
-            for (auto v: state.graph().vertices()) {
-                GRBLinExpr observers = 0;
-                for (auto e: state.graph().outEdges(v)) {
-                    auto u = state.graph().target(e);
-                    if (!state.isZeroInjection(u)) {continue;}
-                    observers += ye.at(u).at(v);
-                }
-                model.addConstr(observers <= 1 - ssv.at(v));
             }
         }
 

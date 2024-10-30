@@ -399,9 +399,9 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
         return solvePaths(state, verbose, timeLimit, 33, pathInit,
                             greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
         }};
-    } else if (solverName == "paths34") {
+    } else if (solverName == "paths1221") {
     return Solver{[=](auto &state, double timeLimit) {
-        return solvePaths(state, verbose, timeLimit, 34, pathInit,
+        return solvePaths(state, verbose, timeLimit, 1221, pathInit,
                             greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
         }};
     } else if (solverName == "paths1321") {
