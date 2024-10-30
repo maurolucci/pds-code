@@ -365,7 +365,7 @@ SolveResult solvePaths(
                 model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
             }
         } 
-        else if (variant == 12 || variant == 1221) {
+        if (variant == 12 || variant == 1221) {
             // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G)
             for (auto e: state.graph().edges()) {
                 auto u = state.graph().source(e);
@@ -381,7 +381,7 @@ SolveResult solvePaths(
                 model.addConstr(propagations <= 1);
             }
         }
-        else if (variant == 13 || variant == 1321) {
+        if (variant == 13 || variant == 1321) {
             // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G^2)
             for (auto const& x: translation) {
                 auto const& [u, v] = x.first;
@@ -397,7 +397,7 @@ SolveResult solvePaths(
             }
         }
 
-        else if (variant == 21  || variant == 1221 || variant == 1321) {
+        if (variant == 21  || variant == 1221 || variant == 1321) {
             // sum_{u in N(v)} y_vu <= 1, for all v in V
             for (auto v: state.graph().vertices()) {
                 if (!state.isZeroInjection(v)) {continue;}
@@ -409,7 +409,7 @@ SolveResult solvePaths(
                 model.addConstr(observers <= 1);
             }
         }
-        else if (variant == 22) {
+        if (variant == 22) {
             // sum_{u in N(v)} y_vu <= 1 - s_v, for all v in V
             for (auto v: state.graph().vertices()) {
                 if (!state.isZeroInjection(v)) {continue;}
@@ -425,7 +425,7 @@ SolveResult solvePaths(
             }
         }
 
-        else if (variant == 31) {
+        if (variant == 31) {
             // sum_{u in N(v)} y_uv <= 1, for all v in V
             for (auto v: state.graph().vertices()) {
                 GRBLinExpr observers = 0;
@@ -437,7 +437,7 @@ SolveResult solvePaths(
                 model.addConstr(observers <= 1);
             }
         }
-        else if (variant == 32) {
+        if (variant == 32) {
             // sum_{u in N(v)} y_uv <= 1 - s_v, for all v in V
             for (auto v: state.graph().vertices()) {
                 GRBLinExpr observers = 0;
@@ -452,7 +452,7 @@ SolveResult solvePaths(
                     model.addConstr(observers <= 1);
             }
         }
-        else if (variant == 33) {
+        if (variant == 33) {
             // sum_{u in N(v)} y_uv <= 1 - s_w, for all v in V, w in N[v]
             for (auto v: state.graph().vertices()) {
                 GRBLinExpr observers = 0;
