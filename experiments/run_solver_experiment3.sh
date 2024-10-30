@@ -11,7 +11,7 @@ for OTHER_ARGS in '-z'; do
         if [ "$SOLVER" = "paths-forts" ]; then   
             CASES="cases-z.txt" 
         fi
-        for INIT in '11' '12' '13' '21' '22' '31' '32' '33' '1221' '1321'; do
+        for INIT in '' '11' '12' '13' '21' '22' '31' '32' '33' '1221' '1321'; do
             time ./experiment -s $SOLVER$INIT -n $NRUN $OTHER_ARGS --timeout=$TIMEOUT -o "results/solver/$SOLVER$INIT$OTHER_ARGS.csv" --fort-stats results/solver/$SOLVER$INIT$OTHER_ARGS-fort.csv -w results/solver/$SOLVER$INIT$OTHER_ARGS/sol $(cat $CASES)
             date
         done
