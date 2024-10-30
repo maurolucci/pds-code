@@ -381,7 +381,7 @@ SolveResult solvePaths(
                 model.addConstr(propagations <= 1);
             }
         }
-        else if (variant == 13) {
+        else if (variant == 13 || variant == 1321) {
             // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G^2)
             for (auto const& x: translation) {
                 auto const& [u, v] = x.first;
@@ -397,7 +397,7 @@ SolveResult solvePaths(
             }
         }
 
-        else if (variant == 21) {
+        else if (variant == 21  || variant == 1321) {
             // sum_{u in N(v)} y_vu <= 1, for all v in V
             for (auto v: state.graph().vertices()) {
                 if (!state.isZeroInjection(v)) {continue;}
