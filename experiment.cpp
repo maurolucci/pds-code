@@ -359,9 +359,49 @@ auto getSolver(po::variables_map& vm, FortStats& fortStats, FortStats& cycleStat
         return solvePaths(state, verbose, timeLimit, 0, pathInit,
                             greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
         }};
-    } else if (solverName == "paths2") {
+    } else if (solverName == "paths11") {
     return Solver{[=](auto &state, double timeLimit) {
-        return solvePaths(state, verbose, timeLimit, 1, pathInit,
+        return solvePaths(state, verbose, timeLimit, 11, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths12") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 12, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths13") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 13, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths21") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 21, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths22") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 22, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths31") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 31, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths32") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 32, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths33") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 33, pathInit,
+                            greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
+        }};
+    } else if (solverName == "paths34") {
+    return Solver{[=](auto &state, double timeLimit) {
+        return solvePaths(state, verbose, timeLimit, 34, pathInit,
                             greedyBoundMode, earlyStop, pathCallback, boundCB, -1, pathLimit);
         }};
     } else if (solverName == "paths-forts") {
