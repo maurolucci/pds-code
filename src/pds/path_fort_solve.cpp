@@ -400,7 +400,7 @@ SolveResult solvePathsForts(
             model.set(GRB_StringParam_LogFile, "gurobi.log");
         }
 
-        if (fortInit) { continue; }
+        if (fortInit) { ; }
 
         // Add variables
         VertexMap<GRBVar> sv;
