@@ -13,7 +13,7 @@ SolveResult solvePathsForts(
                          int output,
                          double timeLimit,
                          int pathGenerator,
-                         int pathInit,
+                         int fortInit,
                          int greedyUpper,
                          int earlyStop,
                          callback::FortCallback fortCallback,

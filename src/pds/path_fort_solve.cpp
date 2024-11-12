@@ -316,7 +316,6 @@ SolveResult solvePathsForts(
         double timeLimit,                       // Time limit
         int variant,                            // TODO: ??
         int fortInit,                           // Wheter to initialize forts 
-        int pathInit,                           // Wheter to initialize paths 
         int greedyUpper,                        // Whether to apply a greedy heuristic to find a pds
         int earlyStop,                          // Whether to stop early
         callback::FortCallback fortCB,          // Callback 
