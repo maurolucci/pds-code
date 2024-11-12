@@ -400,6 +400,8 @@ SolveResult solvePathsForts(
             model.set(GRB_StringParam_LogFile, "gurobi.log");
         }
 
+        if (fortInit) { continue; }
+
         // Add variables
         VertexMap<GRBVar> sv;
         EdgeMap<GRBVar> ye;
@@ -583,48 +585,45 @@ SolveResult solvePathsForts(
             // Remaining time for timeout
             double remainingTimeout = std::max(0.0, timeLimit - std::chrono::duration_cast<std::chrono::duration<double>>(currentTime - startingTime).count());
 
-            if (model.get(GRB_IntAttr_SolCount) || fortInit == 3) {
-
-                auto moreForts = violatedForts(lastSolution, seen);
-                for (auto f: moreForts) {
-                    forts.emplace_back(std::move(f));
-                }
-                if (forts.empty()) {
-                    return {state.graph().numVertices(), 0, SolveState::Infeasible};
-                }
-                if (forts.back().empty()) break;
-                for (; processedForts < forts.size(); ++processedForts) {
-                    GRBLinExpr fortSum;
-                    size_t blank = 0;
-                    for (auto& v: forts[processedForts]) {
-                        if (!state.graph().hasVertex(v)) {
-                            fmt::print("!!!invalid vertex {} in fort: {}!!!\n", v, forts[processedForts]);
-                        }
-                        if (state.isActive(v)) {
-                            if (output) {
-                                fmt::print("???active vertex in neighborhood??? {} {} {}\n",
-                                        v,
-                                        lastSolution.numObserved(),
-                                        lastSolution.graph().numVertices());
-                            }
-                        }
-                        if (state.isBlank(v)) {
-                            fortSum += sv.at(v);
-                            ++blank;
+            auto moreForts = violatedForts(lastSolution, seen);
+            for (auto f: moreForts) {
+                forts.emplace_back(std::move(f));
+            }
+            if (forts.empty()) {
+                return {state.graph().numVertices(), 0, SolveState::Infeasible};
+            }
+            if (forts.back().empty()) break;
+            for (; processedForts < forts.size(); ++processedForts) {
+                GRBLinExpr fortSum;
+                size_t blank = 0;
+                for (auto& v: forts[processedForts]) {
+                    if (!state.graph().hasVertex(v)) {
+                        fmt::print("!!!invalid vertex {} in fort: {}!!!\n", v, forts[processedForts]);
+                    }
+                    if (state.isActive(v)) {
+                        if (output) {
+                            fmt::print("???active vertex in neighborhood??? {} {} {}\n",
+                                    v,
+                                    lastSolution.numObserved(),
+                                    lastSolution.graph().numVertices());
                         }
                     }
-                    if (blank == 0) {
-                        fmt::print("??? infeasible fort: {} has no blank vertices\n", forts[processedForts]);
-                    }
-                    model.addConstr(fortSum >= 1);
-                    totalFortSize += forts[processedForts].size();
-                    if (output > 1) {
-                        fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
+                    if (state.isBlank(v)) {
+                        fortSum += sv.at(v);
+                        ++blank;
                     }
                 }
-                if (output) {
-                    fmt::print("#forts: {}, avg size: {:.2f}\n", forts.size(), double(totalFortSize) / double(forts.size()));
+                if (blank == 0) {
+                    fmt::print("??? infeasible fort: {} has no blank vertices\n", forts[processedForts]);
                 }
+                model.addConstr(fortSum >= 1);
+                totalFortSize += forts[processedForts].size();
+                if (output > 1) {
+                    fmt::print("fort {:4}: {} #{}({})\n", processedForts, forts[processedForts], forts[processedForts].size(), blank);
+                }
+            }
+            if (output) {
+                fmt::print("#forts: {}, avg size: {:.2f}\n", forts.size(), double(totalFortSize) / double(forts.size()));
             }
 
             if (model.get(GRB_IntAttr_SolCount) && pathLimit > 0) {
