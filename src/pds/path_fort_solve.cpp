@@ -385,10 +385,6 @@ SolveResult solvePathsForts(
         std::vector<VertexList> forts;
         std::vector<VertexList> paths;
 
-        // TODO: remover estas lineas
-        if (output > 1)
-            fmt::print("Ignorar; pathInit {} {}\n", pathInit, variant);
-
         // Intitialize model
         GRBModel model(getEnv());
 
