@@ -215,6 +215,20 @@ struct Callback : public GRBCallback {
                 }
             }
         }
+
+        if (where == GRB_CB_MIPNODE) {
+
+            if (getIntInfo(GRB_CB_MIPNODE_STATUS) == GRB_OPTIMAL) {
+        
+                std::cout << sv->size() << std::endl;
+                std::cout << sv->capacity() << std::endl;
+                //std::vector<double> weight ();
+
+                abort();
+
+            }
+
+        }
     }
 };
 
