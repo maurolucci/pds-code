@@ -17,6 +17,7 @@ namespace pds {
 namespace {
 
 double EPSILON = 0.000001;
+double CTHRESHOLD = 0.1;
 
 VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor v) {
     VertexList cycle;
@@ -236,14 +237,14 @@ struct Callback : public GRBCallback {
 
                     double val_v = getNodeRel(sv->at(v));
 
-                    if (variant == 21 && out_val.at(v) > 1 + EPSILON) {
+                    if (variant == 21 && out_val.at(v) > 1 + EPSILON + CTHRESHOLD) {
                         GRBLinExpr cut = 0;
                         for (auto u: base->graph().neighbors(v))
                             cut += ye->at(v).at(u);
                         addCut(cut <= 1);
                     }
                     
-                    else if (variant == 22 && out_val.at(v) + val_v > 1 + EPSILON) {
+                    else if (variant == 22 && out_val.at(v) + val_v > 1 + EPSILON + CTHRESHOLD) {
                         GRBLinExpr cut = 0;
                         for (auto u: base->graph().neighbors(v))
                             cut += ye->at(v).at(u);
@@ -251,14 +252,14 @@ struct Callback : public GRBCallback {
                         addCut(cut <= 1);
                     }
 
-                    else if (variant == 31 && in_val.at(v) < 1 - EPSILON) {
+                    else if (variant == 31 && in_val.at(v) < 1 - EPSILON - CTHRESHOLD) {
                         GRBLinExpr cut = 0;
                         for (auto u: base->graph().neighbors(v))
                             cut += ye->at(u).at(v);
                         addCut(cut <= 1);   
                     }
 
-                    else if (variant == 32 && in_val.at(v) + val_v < 1 - EPSILON) {
+                    else if (variant == 32 && in_val.at(v) + val_v < 1 - EPSILON - CTHRESHOLD) {
                         GRBLinExpr cut = 0;
                         for (auto u: base->graph().neighbors(v))
                             cut += ye->at(u).at(v);
@@ -268,7 +269,7 @@ struct Callback : public GRBCallback {
 
                     else if (variant == 33) {
 
-                        if (in_val.at(v) + val_v < 1 - EPSILON) {
+                        if (in_val.at(v) + val_v < 1 - EPSILON - CTHRESHOLD) {
                             GRBLinExpr cut = 0;
                             for (auto u: base->graph().neighbors(v))
                                 cut += ye->at(u).at(v);
@@ -280,7 +281,7 @@ struct Callback : public GRBCallback {
 
                             double val_w = getNodeRel(sv->at(w));
 
-                            if (in_val.at(v) + val_w < 1 - EPSILON) {
+                            if (in_val.at(v) + val_w < 1 - EPSILON - CTHRESHOLD) {
                                 GRBLinExpr cut = 0;
                                 for (auto u: base->graph().neighbors(v))
                                     cut += ye->at(u).at(v);
