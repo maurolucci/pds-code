@@ -16,6 +16,8 @@ namespace pds {
 
 namespace {
 
+double EPSILON = 0.000001;
+
 VertexList findCycle(ObservationGraph& graph, ObservationGraph::VertexDescriptor v) {
     VertexList cycle;
     VertexMap<std::pair<ObservationGraph::VertexDescriptor,int>> precededBy;
@@ -107,7 +109,7 @@ struct Callback : public GRBCallback {
     std::vector<VertexList>* paths;
     
     // ???
-    VertexSet* seen;
+    int variant;
 
     // Verbosity
     int output;
@@ -115,11 +117,11 @@ struct Callback : public GRBCallback {
     Callback(size_t& lower, size_t& upper, VertexMap<GRBVar>& sv, 
              EdgeMap<GRBVar>& ye, const PdsState& base, 
              PdsState& solution, PdsState & upperBound, std::span<PdsState::Vertex> blank, 
-             int earlyStop, int intermediatePaths, std::vector<VertexList>& paths, VertexSet& seen,
+             int earlyStop, int intermediatePaths, std::vector<VertexList>& paths, int variant,
              int output)
             : lower(&lower), upper(&upper), sv(&sv), ye(&ye), base(&base), 
               solution(&solution), upperBound(&upperBound), blank(blank), earlyStop(earlyStop),
-              intermediatePaths(intermediatePaths), paths(&paths), seen(&seen), output(output)
+              intermediatePaths(intermediatePaths), paths(&paths), variant(variant), output(output)
     { }
 
     void callback() override {
@@ -220,11 +222,76 @@ struct Callback : public GRBCallback {
 
             if (getIntInfo(GRB_CB_MIPNODE_STATUS) == GRB_OPTIMAL) {
         
-                std::cout << sv->size() << std::endl;
-                std::cout << sv->capacity() << std::endl;
-                //std::vector<double> weight ();
+                std::vector<double> in_val (sv->size(), 0.0);
+                std::vector<double> out_val (sv->size(), 0.0);
 
-                abort();
+                for (auto e: base->graph().edges()) {
+                    auto u = base->graph().source(e);
+                    auto v = base->graph().target(e);
+                    in_val.at(v) += getNodeRel(ye->at(u).at(v));
+                    out_val.at(u) += getNodeRel(ye->at(u).at(v));
+                }
+
+                for (auto v: base->graph().vertices()) {
+
+                    double val_v = getNodeRel(sv->at(v));
+
+                    if (variant == 21 && out_val.at(v) > 1 + EPSILON) {
+                        GRBLinExpr cut = 0;
+                        for (auto u: base->graph().neighbors(v))
+                            cut += ye->at(v).at(u);
+                        addCut(cut <= 1);
+                    }
+                    
+                    else if (variant == 22 && out_val.at(v) + val_v > 1 + EPSILON) {
+                        GRBLinExpr cut = 0;
+                        for (auto u: base->graph().neighbors(v))
+                            cut += ye->at(v).at(u);
+                        cut += sv->at(v);
+                        addCut(cut <= 1);
+                    }
+
+                    else if (variant == 31 && in_val.at(v) < 1 - EPSILON) {
+                        GRBLinExpr cut = 0;
+                        for (auto u: base->graph().neighbors(v))
+                            cut += ye->at(u).at(v);
+                        addCut(cut <= 1);   
+                    }
+
+                    else if (variant == 32 && in_val.at(v) + val_v < 1 - EPSILON) {
+                        GRBLinExpr cut = 0;
+                        for (auto u: base->graph().neighbors(v))
+                            cut += ye->at(u).at(v);
+                        cut += sv->at(v);
+                        addCut(cut <= 1);   
+                    }
+
+                    else if (variant == 33) {
+
+                        if (in_val.at(v) + val_v < 1 - EPSILON) {
+                            GRBLinExpr cut = 0;
+                            for (auto u: base->graph().neighbors(v))
+                                cut += ye->at(u).at(v);
+                            cut += sv->at(v);
+                            addCut(cut <= 1);   
+                        }
+
+                        for (auto w: base->graph().neighbors(v)) {
+
+                            double val_w = getNodeRel(sv->at(w));
+
+                            if (in_val.at(v) + val_w < 1 - EPSILON) {
+                                GRBLinExpr cut = 0;
+                                for (auto u: base->graph().neighbors(v))
+                                    cut += ye->at(u).at(v);
+                                cut += sv->at(w);
+                                addCut(cut <= 1);   
+                            }
+                        }
+
+                    }
+
+                }
 
             }
 
@@ -379,7 +446,7 @@ SolveResult solvePaths(
                 model.addConstr(ye.at(u).at(v) + ye.at(v).at(u) <= 1);
             }
         } 
-        if (variant == 12 || variant == 1221) {
+        if (variant == 12) {
             // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G)
             for (auto e: state.graph().edges()) {
                 auto u = state.graph().source(e);
@@ -395,7 +462,7 @@ SolveResult solvePaths(
                 model.addConstr(propagations <= 1);
             }
         }
-        if (variant == 13 || variant == 1321) {
+        if (variant == 13) {
             // f^-1(z_uv) + f^-1(z_vu) <= 1, for all uv in E(G^2)
             for (auto const& x: translation) {
                 auto const& [u, v] = x.first;
@@ -411,7 +478,9 @@ SolveResult solvePaths(
             }
         }
 
-        if (variant == 21  || variant == 1221 || variant == 1321) {
+/*
+
+        if (variant == 21) {
             // sum_{u in N(v)} y_vu <= 1, for all v in V
             for (auto v: state.graph().vertices()) {
                 if (!state.isZeroInjection(v)) {continue;}
@@ -487,10 +556,11 @@ SolveResult solvePaths(
                 }
             }
         }
+*/
 
         // Add callback
         Callback cb(lowerBound, upperBound, sv, ye, state, lastSolution, 
-                    feasibleSolution, blankVertices, earlyStop, intermediatePaths, paths, seen, output);
+                    feasibleSolution, blankVertices, earlyStop, intermediatePaths, paths, variant, output);
         model.setCallback(&cb);
 
         // Start the clock
