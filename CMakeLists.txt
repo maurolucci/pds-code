@@ -25,9 +25,9 @@ FetchContent_Declare(
 )
 FetchContent_Declare(
         OGDF
-        URL https://ogdf.uos.de/wp-content/uploads/2022/02/ogdf.v2022.02.zip
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         PATCH_COMMAND patch -Np 1 -i "${CMAKE_CURRENT_SOURCE_DIR}/patch/0001-removed-redundant-template-parameters-in-DualGraphBa.patch"
+        URL https://ogdf.uos.de/wp-content/uploads/2022/02/ogdf.v2022.02.zip
 )
 FetchContent_MakeAvailable(OGDF unordered_dense fmt htd)
 # No warnings from OGDF headers
@@ -54,7 +54,7 @@ target_link_libraries(pdslib PUBLIC range-v3 fmt::fmt)
 target_link_libraries(pdslib PUBLIC mpgraphs unordered_dense::unordered_dense PRIVATE OGDF)
 enable_warnings(pdslib)
 
-add_library(pdslib-gurobi src/pds/gurobi_solve.cpp src/pds/fort_solve.cpp src/pds/cycle_solve.cpp src/pds/cycle_fort_solve.cpp src/pds/path_solve.cpp src/pds/path_fort_solve.cpp)
+add_library(pdslib-gurobi src/pds/gurobi_solve.cpp src/pds/fort_solve.cpp src/pds/cycle_solve.cpp src/pds/cycle_fort_solve.cpp src/pds/path_solve.cpp src/pds/path_fort_solve.cpp src/pds/efps_solve.cpp)
 target_link_libraries(pdslib-gurobi PUBLIC pdslib PRIVATE gurobi::gurobi_cxx)
 enable_warnings(pdslib-gurobi)
 
