@@ -153,8 +153,8 @@ EdgeList get_efps(VertexList &cycle, const EdgeMap<EdgeList> &prec2props) {
   for (auto it = cycle.rbegin(); it != cycle.rend();) {
     Node v = *it++;
     int u = it != cycle.rend() ? *it : cycle.back();
-    for (auto &e : prec2props.at(v).at(u))
-      efps.push_back(e);
+    for (auto &p : prec2props.at(v).at(u))
+      efps.push_back(p);
   }
   return efps;
 }
@@ -495,13 +495,12 @@ SolveResult solveEFPS(
     for (auto v : state.graph().vertices()) {
       if (!state.isZeroInjection(v))
         continue;
-      for (auto e : state.graph().outEdges(v)) {
-        Node u = state.graph().target(e);
-        prec2props[v][u].push_back(e);
+      for (auto u : state.graph().neighbors(v)) {
+        prec2props[v][u].push_back(std::make_pair(v, u));
         for (auto w : state.graph().neighbors(v)) {
           if (w == u)
             continue;
-          prec2props[w][u].push_back(e);
+          prec2props[w][u].push_back(std::make_pair(v, u));
         }
       }
     }
@@ -590,8 +589,8 @@ SolveResult solveEFPS(
         for (; processedEfps < efpss.size(); ++processedEfps) {
           GRBLinExpr efpsSum;
           auto &efps = efpss[processedEfps];
-          for (auto e : efps.first)
-            efpsSum += ye.at(digraph.source(e)).at(digraph.target(e));
+          for (auto &p : efps.first)
+            efpsSum += ye.at(p.first).at(p.second);
           model.addConstr(efpsSum <= efps.second - 1);
           totalEfpsSize += efps.first.size();
           if (output > 1) {
