@@ -626,17 +626,24 @@ int main(int argc, const char **argv) {
       "cycle initialization method")(
       "path-init", po::value<int>()->implicit_value(0)->default_value(0),
       "path initialization method")(
+      "efps-init", po::value<int>()->implicit_value(0)->default_value(0),
+      "efps initialization method")(
       "cycle-limit",
       po::value<int>()->implicit_value(1000000)->default_value(1000000),
       "maximum number of cycles added in each reoptimization")(
       "path-limit",
       po::value<int>()->implicit_value(1000000)->default_value(1000000),
       "maximum number of paths added in each reoptimization")(
+      "efps-limit",
+      po::value<int>()->implicit_value(1000000)->default_value(1000000),
+      "maximum number of efpss added in each reoptimization")(
       "intermediate", "find violated forts in every new feasbile solution")(
       "intermediate-cycles",
       "find violated cycles in every new feasbile solution")(
       "intermediate-paths",
       "find violated paths in every new feasbile solution")(
+      "intermediate-efpss",
+      "find violated efpss in every new feasbile solution")(
       "early-stop", po::value<int>()->default_value(0)->implicit_value(2),
       "stop hitting set solver when violating hitting set is found [0: only "
       "optimal, 1: keep lower bound, 2: stop early]")(
